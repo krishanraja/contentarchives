@@ -60,7 +60,7 @@ def collect() -> dict:
     # audit passed it, because it compared that figure against a count made the
     # same wrong way. Count every chronology root.
     sides = {name: _walk_count(LIB / name)
-             for name in ("Personal", "Communal", "Library")}
+             for name in ("Personal", "Communal", "Library", "NoDate")}
 
     nod_n = nod_b = 0
     for base in (LIB, LIB / "Personal", LIB / "Communal"):

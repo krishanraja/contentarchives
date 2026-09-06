@@ -1,11 +1,11 @@
 {
-  "generated": "2026-09-06T21:59:21",
+  "generated": "2026-09-06T21:59:58",
   "library": {
-    "dated_files": 67944,
-    "dated_bytes": 530627141771,
+    "dated_files": 68883,
+    "dated_bytes": 530897054324,
     "nodate_files": 3785,
     "nodate_bytes": 4256499019,
-    "total_files": 71729,
+    "total_files": 72668,
     "chronology": {
       "personal": {
         "files": 67563,
@@ -18,6 +18,10 @@
       "library": {
         "files": 335,
         "bytes": 880709674
+      },
+      "nodate": {
+        "files": 939,
+        "bytes": 269912553
       }
     }
   },
