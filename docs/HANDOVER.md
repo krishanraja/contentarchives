@@ -83,6 +83,29 @@ Consequences anyone touching this must know:
 
 ---
 
+## Library layout as of 2026-09-06
+
+The chronology is split, and documents live outside it entirely.
+
+```
+PhotoLibrary/
+  Personal/YYYY/YYYY-MM/    56,928
+  Communal/YYYY/YYYY-MM/     3,796
+  NoDate/                      853
+  Library/                     328   origins with no side assigned
+  _Review/                  10,540   classified not-a-memory, nothing deleted
+Archive/
+  Personal/   01-Identity 02-Financial 03-Property 04-Medical 05-Education 06-Work
+  Communal/   01-Identity 02-Financial 03-Property
+  99-Unsorted/
+ContentProduction/              18
+```
+
+Rules that produced it are in [ORGANISING.md](ORGANISING.md); the split was decided
+per origin folder, never per file.
+
+---
+
 ## Origin map — how batches get chosen
 
 Every file in the library is traceable to the folder it came from. `tools/origin_map.py`
