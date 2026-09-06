@@ -129,20 +129,33 @@ the largest group of files. Rely on dimensions and ratio there, and set the bar 
 
 ## The archive schema
 
+**The archive splits Personal and Communal too.** Documents are not only your own:
+a parent's passport scan, a sibling's residency paperwork, a death certificate.
+Those are precisely what you would want to hand over, or hold back, as a batch —
+the same reason the chronology splits. Filed together, separating them later means
+per-file judgement over other people's records.
+
 ```
 Archive\
-  01-Identity\        passports, visas, residency, birth and marriage certificates,
-                      citizenship, national IDs, driving licences
-  02-Financial\       tax returns, payslips, banking, investments, insurance
-  03-Property\        mortgage, tenancy, deeds, utilities, home documents
-  04-Medical\         records, results, prescriptions, correspondence
-  05-Education\       transcripts, degree certificates, course material
-  06-Work\<era>\      one folder per employer or period: own output, mail archives
-  07-Personal-Admin\  correspondence, subscriptions, warranties, official misc
-  08-Music\
-  09-Reference\       material kept to read or watch later
-  99-Unsorted\        awaiting classification
+  Personal\
+    01-Identity\        passports, visas, residency, birth and marriage
+                        certificates, citizenship, national IDs, licences
+    02-Financial\       tax returns, payslips, banking, investments, insurance
+    03-Property\        mortgage, tenancy, deeds, utilities
+    04-Medical\         records, results, prescriptions, correspondence
+    05-Education\       transcripts, degree certificates, course material
+    06-Work\<era>\      one folder per employer or period: own output, mail
+    07-Personal-Admin\  correspondence, subscriptions, warranties, official misc
+    08-Music\
+    09-Reference\       material kept to read or watch later
+  Communal\
+    01-Identity\ ...    the same categories, for other people's records
+  99-Unsorted\          side or category not established
 ```
+
+Work sits *inside* `Personal\` rather than beside it. Work output is unambiguously
+yours, and leaving it at the top level makes the two sides look like they do not
+cover everything — which invites the next person to add a third.
 
 **Numbered on purpose.** It fixes the order to something meaningful instead of
 alphabetical accident, and the numbers survive renaming.

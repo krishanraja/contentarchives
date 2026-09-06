@@ -475,3 +475,51 @@ Guards worth having, because container metadata is not uniformly trustworthy:
 Wrong dates lose nothing, which is why this survived so long. In a chronology it is
 still the central failure: putting a memory in the wrong year defeats the one thing
 the structure exists to do.
+
+---
+
+## 20. `\b` is the wrong word boundary for filenames
+
+Classifying documents by filename produced two nonsense results:
+
+```
+202-2024981_ganesha-vector-ganesh-visarjan-clipart.png   -> 01-Identity
+ASSET- logo usable as icon or favicon, social shares.jpg -> 01-Identity
+```
+
+`visa` matched inside **visa**rjan. `oci` matched inside s**oci**al. A substring
+decided a file's fate, which is rule 1 wearing different clothes: there it deleted
+files, here it only misfiled them, but the reasoning error is identical.
+
+The obvious fix — wrap every term in `\b` — then broke the true positives:
+
+```
+Screenshot_20181205-141138_CommBank.jpg   ->  no match
+AUSPASSPORT.jpg                           ->  no match
+```
+
+**Underscore is a word character.** There is no `\b` between `_` and `C`, so
+`\bcommbank\b` cannot match a name that plainly says CommBank. Filenames separate
+words with underscores, hyphens and digits; `\b` respects none of them.
+
+The boundary that actually applies to filenames is *not a letter*:
+
+```python
+def W(*terms):
+    return r"(?<![A-Za-z])(" + "|".join(terms) + r")(?![A-Za-z])"
+```
+
+That rejects visarjan and social, accepts `_CommBank` and `-passport`, and for
+multi-word terms the separator class must be `[\s_-]*` rather than `\s*`, or
+`marriage_certificate.jpg` slips through. Concatenations with no separator at all
+(`AUSPASSPORT`) still need an explicit alternative.
+
+Two things worth carrying:
+
+**Test the classifier against the names that actually exist**, not invented ones.
+Every failure above came from real filenames and none would have appeared in a
+hand-written test case.
+
+**When a term is weak, find a stronger one.** The fix for `bank` was not a cleverer
+boundary but the names of banks — `commbank`, `natwest`, `barclays`. A specific term
+needs no boundary tricks because it cannot be a substring of something innocent.
