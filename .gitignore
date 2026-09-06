@@ -1,0 +1,16 @@
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+.pytest_cache/
+
+# never commit real profiles - they contain personal terms and machine paths
+profiles/*.yaml
+!profiles/example.yaml
+
+# working artefacts
+*.log
+*.csv
+!docs/*.csv
+_scratch/

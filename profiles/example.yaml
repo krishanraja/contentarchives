@@ -1,0 +1,102 @@
+# contentarchives profile
+#
+# One file per consolidation job. Copy this, edit, keep it next to the library so
+# the next run — or the next machine — inherits the same decisions.
+#
+# Nothing personal is hardcoded anywhere in the codebase. Terms that protect your
+# material live here, because they differ per person and per project.
+
+name: example-consolidation
+
+library:
+  # Where the organised library is built. Files land in:
+  #   <root>/Library/YYYY/YYYY-MM/
+  #   <root>/NoDate/          - date could not be established; never guessed
+  #   <root>/_Catalog/        - manifests, journals, provenance
+  root: "D:/PhotoLibrary"
+
+  # Media whose date cannot be established goes to NoDate rather than being filed
+  # under its mtime. An invented date is worse than an absent one.
+  never_guess_dates: true
+
+sources:
+  - path: "D:/"
+    label: external-archive
+  - path: "C:/Users/YOU/OneDrive"
+    label: onedrive
+    # OneDrive placeholders carry FILE_ATTRIBUTE_REPARSE_POINT. Skipping reparse
+    # points returns ZERO files and reports success. Reading one hydrates it and
+    # consumes local disk, so release afterwards.
+    release_after_read: true
+  - path: "G:/My Drive"
+    label: google-drive
+    # Drive stream mounts do not expose hydration state at all, and report the
+    # LOCAL CACHE volume's free space rather than cloud quota. Never read quota here.
+
+scratch: "D:/_contentarchives_tmp"     # must NOT be inside library.root
+
+safety:
+  # Terms that mark material as personal. These OVERRIDE every exclusion rule.
+  # Add family names, place names, trip names, pet names — anything whose presence
+  # in a path means "this matters".
+  personal_terms:
+    - whatsapp
+    - family
+    # - <family names>
+    # - <trip and place names>
+
+  # Weak hints only. Never sufficient to delete, only to flag for human review.
+  review_hints:
+    - screen recording
+    - captures
+    - downloads
+    - masterclass
+    - webinar
+
+  # Confidently disposable: content that is replaceable and identifiable.
+  # Still quarantined rather than deleted unless confirm_deletions is false.
+  likely_disposable:
+    - "**/node_modules/**"
+    - "**/AppData/**"
+    - "**/Android/data/**"      # app cache: thousands of files, negligible bytes
+
+  # When true, nothing is deleted — disposable material is MOVED to quarantine
+  # and a human decides. Leave this on.
+  confirm_deletions: true
+  quarantine: "D:/_quarantine"
+
+filetypes:
+  photo: [".jpg", ".jpeg", ".png", ".heic", ".heif", ".gif", ".bmp", ".tif",
+          ".tiff", ".webp", ".dng", ".cr2", ".cr3", ".nef", ".arw"]
+  video: [".mp4", ".mov", ".avi", ".m2ts", ".3gp", ".mkv", ".wmv", ".m4v",
+          ".mpg", ".mpeg", ".webm"]
+
+  # Extensions that lie. Check size before believing them.
+  #   .mts is normally AVCHD video. Encountered in the wild: 6,782 files averaging
+  #   1.5 KB (app junk) and 45,028 TypeScript declaration files (emnapi.d.mts).
+  suspicious:
+    - ext: ".mts"
+      min_bytes: 1048576        # below this it is not video
+
+compression:
+  enabled: false                # turn on only after running the pilot
+  min_bytes: 209715200          # 200 MB - smaller files are not worth the risk
+
+  gate:
+    ssim_min: 0.98              # measured against the source, per file
+    vmaf_min: 95                # optional, needs an ffmpeg built with libvmaf
+    min_saving: 0.20            # not worth a lossy round trip below this
+    duration_tolerance_sec: 0.5
+
+  # Measured, not assumed. Run the pilot on YOUR footage before trusting these.
+  #   phone 4K   CRF 22 -> SSIM 0.9859, 77% saved
+  #   Sony HD    CRF 16 -> SSIM 0.9824, VMAF 94.2, 45% saved
+  #   GoPro      fails at EVERY CRF; VMAF 89.8 even at CRF 16 - grain, not bitrate
+  #   DJI 1080p  CRF 22 -> SSIM 0.9672 and only 35% saved
+  by_source:
+    phone: 22
+    camcorder: 16
+    default: 20
+  never_compress:
+    - gopro
+    - drone

@@ -1,0 +1,9 @@
+# Core safety, dating and dedupe paths have NO dependencies, deliberately -
+# they must be droppable onto any machine with a bare Python install.
+#
+# Optional:
+PyYAML>=6.0        # profile parsing
+#
+# External binaries (not pip-installable):
+#   ffmpeg / ffprobe  - video dates and compression
+#                       build with libvmaf for perceptual scoring
