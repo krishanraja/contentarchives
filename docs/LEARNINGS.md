@@ -400,3 +400,35 @@ records reviewed absences into `state/accepted-absences.csv` with a note and a d
 so the check returns to green and *any new absence stands out immediately*. The
 accepted file is committed: it is the record of what was looked at and by when, not
 a way to make the warning go away.
+
+---
+
+## 18. Journal before the destructive act, not after
+
+A purge script deleted verified-duplicate files in a loop and wrote its journal
+after the loop finished. That is backwards.
+
+The journal exists for the case where something goes wrong. A crash, a kill by the
+memory watchdog, a power cut — any of them leaves files deleted and the record of
+what they were never written. The one moment the journal is genuinely needed is the
+exact moment that design fails to produce one.
+
+Write the record first, flush it, then delete:
+
+```python
+journal_one(path, size, keep)   # append + flush + fsync
+os.remove(path)
+```
+
+`flush()` alone is not enough; the buffer can still be sitting in the OS page cache
+when the process dies. `os.fsync()` is what puts it on the disk.
+
+The asymmetry decides the ordering. A journal entry for a deletion that then failed
+is a harmless over-record — it says a file went that is still there, and the next
+reconciliation (`check_manifest.py`) will notice and say so. A deletion with no
+entry is unrecoverable ignorance: nothing left to compare against, and no way to
+know what was lost.
+
+Same reasoning as rule 6 — verify the thing, not a proxy — applied to bookkeeping.
+An end-of-run journal records what a *successful* run did. It says nothing about the
+runs that matter.
