@@ -54,8 +54,23 @@ def _free(drive: str) -> float:
 def collect() -> dict:
     now = dt.datetime.now().isoformat(timespec="seconds")
 
-    lib_n, lib_b = _walk_count(LIB / "Library")
-    nod_n, nod_b = _walk_count(LIB / "NoDate")
+    # The chronology is split into Personal/ and Communal/; Library/ now holds
+    # only origins not yet assigned a side. Counting the pre-split paths alone
+    # made STATE.json report 1,274 files for a 73,000-file library - and the
+    # audit passed it, because it compared that figure against a count made the
+    # same wrong way. Count every chronology root.
+    sides = {name: _walk_count(LIB / name)
+             for name in ("Personal", "Communal", "Library")}
+
+    nod_n = nod_b = 0
+    for base in (LIB, LIB / "Personal", LIB / "Communal"):
+        n, b = _walk_count(base / "NoDate")
+        nod_n += n
+        nod_b += b
+
+    total_n = sum(n for n, _ in sides.values())
+    total_b = sum(b for _, b in sides.values())
+    lib_n, lib_b = total_n - nod_n, total_b - nod_b
 
     # archives: what has been fully consumed, per the autopilot's own state file
     consumed = []
@@ -107,6 +122,8 @@ def collect() -> dict:
             "nodate_files": nod_n,
             "nodate_bytes": nod_b,
             "total_files": lib_n + nod_n,
+            "chronology": {k.lower(): {"files": v[0], "bytes": v[1]}
+                           for k, v in sides.items()},
         },
         "ingest": {
             "files_added_total": _count_lines(AUDIT / "autopilot-added.csv"),

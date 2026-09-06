@@ -1,11 +1,25 @@
 {
-  "generated": "2026-09-06T21:56:45",
+  "generated": "2026-09-06T21:59:21",
   "library": {
-    "dated_files": 335,
-    "dated_bytes": 880709674,
-    "nodate_files": 939,
-    "nodate_bytes": 269912553,
-    "total_files": 1274
+    "dated_files": 67944,
+    "dated_bytes": 530627141771,
+    "nodate_files": 3785,
+    "nodate_bytes": 4256499019,
+    "total_files": 71729,
+    "chronology": {
+      "personal": {
+        "files": 67563,
+        "bytes": 509857544709
+      },
+      "communal": {
+        "files": 3831,
+        "bytes": 24145386407
+      },
+      "library": {
+        "files": 335,
+        "bytes": 880709674
+      }
+    }
   },
   "ingest": {
     "files_added_total": 25664,

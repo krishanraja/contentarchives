@@ -42,10 +42,16 @@ def lp(p: str) -> str:
 try:
     state = json.loads((REPO / "state" / "STATE.json").read_text(encoding="utf-8"))
     claimed = state["library"]["total_files"]
+    # Count every chronology root. Checking only the pre-split paths made this
+    # agree with a STATE.json that reported 1,274 files for a 73,000-file
+    # library: two counts made the same wrong way confirm each other and prove
+    # nothing. An independent check has to enumerate what is actually there.
     actual = 0
-    for sub in ("Library", "NoDate"):
-        for dp, _, fns in os.walk(LIB / sub):
-            actual += len(fns)
+    for sub in ("Personal", "Communal", "Library", "NoDate"):
+        root = LIB / sub
+        if root.is_dir():
+            for dp, _, fns in os.walk(root):
+                actual += len(fns)
     drift = abs(actual - claimed)
     check("state/STATE.json matches the library on disk",
           drift <= max(50, claimed * 0.001),
@@ -72,10 +78,17 @@ else:
 
 # --- 4. nothing is still running --------------------------------------------
 try:
+    # This audit is itself a Python process, so a naive check for "python.exe"
+    # always fails and teaches the reader to ignore it. Count instances and
+    # discount our own.
     out = subprocess.run(["tasklist"], capture_output=True, text=True).stdout.lower()
-    busy = [n for n in ("python.exe", "robocopy.exe", "ffmpeg.exe") if n in out]
+    busy = []
+    for name, allowance in (("python.exe", 1), ("robocopy.exe", 0),
+                            ("ffmpeg.exe", 0)):
+        if out.count(name) > allowance:
+            busy.append(f"{name} x{out.count(name) - allowance}")
     check("no jobs left running from the previous session", not busy,
-          f"running: {', '.join(busy)}" if busy else "clean")
+          f"running: {', '.join(busy)}" if busy else "clean (this audit excluded)")
 except Exception as e:
     check("process check", False, str(e))
 
@@ -97,11 +110,24 @@ check("screenshot review bucket exists", review,
 
 sensitive = AUDIT / "SENSITIVE-FILES.csv"
 if sensitive.exists():
+    # The question is whether they are still IN the chronology, not whether the
+    # recorded path exists. Once moved, the recorded path is an absolute path
+    # under Archive\, and joining that onto the library root returns it
+    # unchanged - so a naive existence test answers "yes, still there" about a
+    # file that has already been filed correctly.
+    chronology = [str(LIB / d).lower() for d in
+                  ("Personal", "Communal", "Library", "NoDate")]
     with open(sensitive, newline="", encoding="utf-8", errors="ignore") as f:
-        still = [r for r in csv.DictReader(f)
-                 if os.path.exists(lp(str(LIB / r["LibraryPath"])))]
+        still = []
+        for r in csv.DictReader(f):
+            p = r["LibraryPath"]
+            full = p if os.path.isabs(p) else str(LIB / p)
+            if any(full.lower().startswith(c) for c in chronology) \
+                    and os.path.exists(lp(full)):
+                still.append(full)
     check("identity documents moved out of the chronology", not still,
-          f"{len(still)} still in the library" if still else "none remain")
+          f"{len(still)} still in the chronology" if still
+          else "none remain in Personal/, Communal/, Library/ or NoDate/")
 
 # --- 6. scratch that should not survive -------------------------------------
 scratch = [p for p in (r"D:\_zip_extract", r"D:\_lorimer_tmp", r"D:\_takeout_tmp",
