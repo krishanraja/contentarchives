@@ -72,7 +72,7 @@ python tests/test_safety_and_dedupe.py     # 9 tests, no dependencies
 ```
 
 Copy `profiles/example.yaml`, point it at your sources and library, and work through
-[`docs/RUNBOOK.md`](docs/RUNBOOK.md).
+[`docs/HANDOVER.md`](docs/HANDOVER.md).
 
 **Requirements:** Python 3.10+. `ffmpeg`/`ffprobe` on PATH for video dates and
 compression (build with `libvmaf` if you want perceptual scoring). No other
