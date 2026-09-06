@@ -252,3 +252,42 @@ description of a file list contradicted the list's own contents.
 Both refusals cost a few minutes. Both would have cost far more had they complied.
 Tell collaborating agents explicitly that refusing a wrong-looking instruction is the
 desired behaviour, and give them the context to judge.
+
+---
+
+## 14. A file list built by extension describes the machine, not the memories
+
+The second machine was surveyed for media by extension and produced 1,525 candidate
+files. That sounded like a photo collection. It was not.
+
+Triaged by origin folder, the batch was:
+
+| | files | size |
+|---|---|---|
+| software screenshots — QA shots, prerendered UI, audit evidence | 1,055 | 424 MB |
+| media | 460 | 6.6 GB |
+
+And most of the 6.6 GB was produced content — a podcast recording, drone footage
+exported for YouTube, marketing video — not memories either. The genuinely personal
+material was a small fraction of a list that a size-and-extension filter had
+presented as uniformly worth ingesting.
+
+**A developer's machine is full of PNGs.** `shots/`, `screenshots/`, `.prerender/`,
+`evidence/`, `profile/` — none of it is a photograph, all of it passes an extension
+filter, and 1,055 of them dropped into a personal library would have made the
+subsequent personal-versus-communal sort materially harder.
+
+Two things follow.
+
+**Triage by origin folder before ingesting, not after.** The folder a file came from
+carries most of the signal about what it is. Extension carries almost none. This is
+the same lesson as rule 4 from the other direction: there, an extension made real
+media look like something else; here, an extension made project output look like
+media.
+
+**Where classification is genuinely ambiguous, preserve the origin folder instead of
+guessing.** Deciding "podcast recording" versus "reference video someone downloaded"
+from a filename is inference, and inference is what cost this project files (rule 1).
+Files whose category is uncertain go to a holding tree with their origin folder as
+the subfolder, where a person can settle it in seconds by looking at the grouping.
+Sorting stays possible; guessing wrong stops being.
