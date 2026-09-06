@@ -7,9 +7,24 @@ moved.**
 ```bash
 cd C:\Users\krish\dev\contentarchives
 git pull
-python tools/refresh.py --check     # verify, write nothing
-python tools/check_manifest.py      # every manifest row still points at a file
+python tools/audit_previous_session.py   # FIRST - verify, do not assume
+python tools/refresh.py --check          # verify state, write nothing
 ```
+
+**Start with the audit, and report its failures to the user before doing anything
+else.** The previous session graded its own work, at the time, while inclined to see
+it as finished — the worst vantage point there is. The audit checks the claims
+against the filesystem instead.
+
+A FAIL is not automatically a mistake: work deliberately deferred fails the same
+checks as work forgotten. What a FAIL means is *do not treat this as done, and do
+not build on it*. Tell the user which items failed, and why, before extending any of
+them.
+
+This step exists because a schema was written to this repo and then described as
+complete when only the documentation had been produced. `docs/ORGANISING.md` defined
+an Archive layout; `D:\Archive` did not exist. Documenting a structure and applying
+it are different acts, and only one of them is visible on disk.
 
 Then read, in order:
 
