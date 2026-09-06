@@ -568,3 +568,102 @@ A classifier that moves rather than deletes makes false positives cheap — whic
 the point of rule 1 — but cheap is not free. Three thousand photographs quietly
 relocated out of a chronology are not destroyed, and are still lost to anyone
 browsing for them.
+
+---
+
+## 22. Equal size is not equal content, and some formats make collisions ordinary
+
+**The incident.** A Norton 360 backup set kept several generations of each file. An
+extractor wrote every generation to the same destination path, so they overwrote each
+other. When this was found, 55 of the 58 affected groups were written off as harmless
+because *all generations were the same number of bytes* — clearly just repeated backups
+of an unchanged file.
+
+Once each generation was given its own destination and hashed, two of those groups held
+genuinely different content at **identical size**:
+
+```
+Tax 82a accounts 2015 2016.xls   50,688 B, 4 generations, 2 distinct contents
+Ba Will allocation.xls           79,872 B, 4 generations, 2 distinct contents
+```
+
+Legacy `.xls` allocates in fixed-size sectors. Editing a cell frequently does not change
+the file length at all. The same is true of many container formats that pad or
+pre-allocate: `.doc`, disk images, database files, some TIFFs.
+
+One of those two documents allocates a will.
+
+**The rule.** Size equality is not evidence of content equality, and it is at its most
+dangerous where it is most convincing — a byte-exact match on a large file *feels* like
+proof. If two files must be shown to be the same, hash them.
+
+**Why this is not a contradiction of rule 7.** Rule 7 uses size to rule duplicates
+*out*: a file whose size appears nowhere in the library cannot be a duplicate of
+anything in it, which is sound and costs no I/O. The converse does not follow. A size
+match narrows the candidates; it never closes the question.
+
+**The deeper failure.** The two versions would have overwritten each other *and passed
+verification*, because verification compared sizes. A check that shares an assumption
+with the thing it checks confirms the assumption, not the data.
+
+---
+
+## 23. A destination map must be proven injective before the first write
+
+**The incident.** The extractor above keyed each output on the payload's original path.
+Norton's multiple generations, and any live file sharing that path, all resolved to one
+destination. 62 destinations absorbed 304 files. Last writer won, in silence.
+
+29 of those writes came from containers that turned out to be 201–203 byte headers with
+no payload at all. They extracted to zero bytes *over files that were already correct*,
+destroying 29 family photographs, one of them a 47 MB video.
+
+The copy job reported `0 failures`, and it was telling the truth. Every write succeeded.
+
+**The rule.** Before writing anything, build the full source→destination map and assert
+that no two sources share a destination. Abort on collision. Do this even when the
+naming scheme "obviously" cannot collide.
+
+```python
+seen = {}
+for src, dst in jobs:
+    if dst.lower() in seen:
+        raise SystemExit("collision: %s and %s -> %s" % (seen[dst.lower()], src, dst))
+    seen[dst.lower()] = src
+```
+
+**The deeper failure.** The eventual fix had three parts: give recovered payloads their
+own subtree, suffix colliding names with a generation id, and assert uniqueness up
+front. The first two make a collision *unlikely*. Only the third makes a silent
+overwrite **unrepresentable** — and unlikely is not a safety property, because the
+failure is silent and the report still says success.
+
+Corollary: **a copy job's "0 failures" counts write errors. It says nothing about files
+a later write destroyed.** Count distinct destinations against source rows, and treat a
+shortfall as a defect.
+
+---
+
+## 24. When the source is being destroyed, a skip needs the same proof as a delete
+
+**The incident.** Rescuing a drive that was to be physically destroyed afterwards, an
+extractor skipped 19,209 backup payloads whose **path and size** matched a file already
+being copied off the live filesystem. Skipping them was framed as an optimisation:
+those files were already coming across, so re-extracting them was waste.
+
+Hashing all 156 GB of the skipped set took 45 minutes and found the assumption false for
+**174 of them**: 16 differed in content despite an identical path and size, and 158 had
+no live counterpart being copied at all. Every one of those would have ceased to exist
+when the drive was destroyed.
+
+**The rule.** Once the source is going away, *declining to copy is deleting*. A skip
+therefore needs the same standard of proof as rule 1 demands for deletion: identical
+bytes, proven by hash, present somewhere that survives.
+
+**The deeper failure.** Deletion gets scrutiny because it looks dangerous. A skip looks
+like efficiency, is invisible in the output, produces no log line, and shows up in the
+metrics as *speed*. There is no artefact to audit afterwards — the missing file leaves
+no trace anywhere.
+
+If the copy set was filtered, verify the **filter**, not just the files that made it
+through.
