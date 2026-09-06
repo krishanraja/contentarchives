@@ -1,15 +1,15 @@
 # Consolidation progress
 
-_Generated 2026-09-06T22:00:45 by `track.py`. Every figure is counted from a
+_Generated 2026-09-06T22:57:47 by `track.py`. Every figure is counted from a
 file on disk, not asserted from memory._
 
 ## Library
 
 | | files | GB |
 |---|---|---|
-| Dated (`Library/YYYY/YYYY-MM`) | 68,883 | 494.4 |
-| Undated (`NoDate/`) | 3,785 | 4.0 |
-| **Total** | **72,668** | **498.4** |
+| Dated (`Library/YYYY/YYYY-MM`) | 58,388 | 488.9 |
+| Undated (`NoDate/`) | 3,517 | 3.9 |
+| **Total** | **61,905** | **492.7** |
 
 ## Ingestion
 
