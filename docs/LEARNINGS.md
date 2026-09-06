@@ -336,3 +336,38 @@ output from a superseded classifier. **After cancelling a long job, confirm the
 process is actually gone** — `Get-CimInstance Win32_Process -Filter "Name='python.exe'"`
 lists command lines and start times, which is enough to tell the orphan from the
 replacement.
+
+---
+
+## 16. Reconcile the manifest against the disk, or removals go unrecorded
+
+The manifest maps every library file to where it came from, and the origin map is
+built from it. Checking it against reality found 12 rows pointing at files that no
+longer exist:
+
+| | rows |
+|---|---|
+| journalled at the library, with a reason | 2 |
+| not journalled anywhere | 10 |
+
+The 10 are DVD cover art and a torrent-site logo — worthless, and almost certainly
+removed by the same cleanup that took the ripped films they belonged to. But
+**nothing recorded their removal**, and that is the part that matters. Their sources
+were not in the deletion journals either, so there is no record establishing what
+took them.
+
+If ten worthless files can leave the library unrecorded, so can ten irreplaceable
+ones, and the only reason this was noticed at all is that something reconciled the
+record against the disk. Rule 1 stops the wrong file being deleted. This is the
+check that notices when something was deleted anyway.
+
+**Run `tools/check_manifest.py` after any pass that removes or moves files.** It
+exits non-zero on an unexplained absence, so it belongs in the end-of-session
+routine next to `refresh.py` — a count of "present" is not evidence when nobody
+compared it to what should be there.
+
+Note the deliberate distinction it draws: a library file whose *source* was
+journalled is reported as weaker evidence, not as accounted for. A hardlinked
+library entry survives its source being deleted, so "we deleted the original" does
+not explain the library copy vanishing — and quietly treating it as an explanation
+would hide exactly the case worth seeing.
