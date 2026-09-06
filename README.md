@@ -25,6 +25,7 @@ where the work is paused, what to do next, and which decisions are already settl
 | [`state/STATE.json`](state/STATE.json) | current state, generated — cannot have drifted |
 | [`state/PROGRESS.md`](state/PROGRESS.md) | the same, readable |
 | [`state/origin-folders.csv`](state/origin-folders.csv) | where every library file came from |
+| [`docs/ORGANISING.md`](docs/ORGANISING.md) | how to organise a personal drive — schema and retention rubric |
 | [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | storage model, and the protocol for sessions |
 | [`docs/HANDOVER.md`](docs/HANDOVER.md) | what is done, what is open |
 
@@ -64,6 +65,7 @@ duplicate may only be declared on a whole-file hash match.
 | File into a library | `ingest` | hardlinks on the same volume, copies across |
 | Consume cloud exports | `archives` | streams zip/tar members, never unpacks whole |
 | Reduce size | `compress` | per-source settings, gated on measured SSIM/VMAF |
+| Organise a drive | [`docs/ORGANISING.md`](docs/ORGANISING.md) | chronology vs archive, what to keep, applied per machine |
 
 Nothing is ever deleted to make a stage succeed.
 

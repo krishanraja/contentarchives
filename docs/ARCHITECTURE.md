@@ -28,7 +28,11 @@ Three tiers, each with one job:
 **`D:` — the ultimate local endpoint.** Everything converges here. `PhotoLibrary/`
 holds personal media organised by date; `ContentProduction/` holds work output
 (podcasts, interviews, published video) and is deliberately outside the library
-ontology. `D:` is the source of truth for what has been consolidated.
+ontology; `Archive/` holds everything else worth keeping, filed by what it is rather
+than when it arrived. `D:` is the source of truth for what has been consolidated.
+
+The schema and the retention rules are in [ORGANISING.md](ORGANISING.md), written to
+be applied to every other machine, drive and cloud account in turn.
 
 **`H:` — staging now, mirror later.** Two distinct roles, in sequence:
 
