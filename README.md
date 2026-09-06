@@ -16,8 +16,12 @@ permanently lost files. **Read that document before changing the safety rules.**
 It is not only a toolkit. It is the shared brain for an in-flight consolidation that
 several sessions, on more than one machine, read and write.
 
+**Resuming the consolidation? → [`RESUME.md`](RESUME.md).** It is the front door:
+where the work is paused, what to do next, and which decisions are already settled.
+
 | Read first | |
 |---|---|
+| [`RESUME.md`](RESUME.md) | start here — current position and next actions |
 | [`state/STATE.json`](state/STATE.json) | current state, generated — cannot have drifted |
 | [`state/PROGRESS.md`](state/PROGRESS.md) | the same, readable |
 | [`state/origin-folders.csv`](state/origin-folders.csv) | where every library file came from |

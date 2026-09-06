@@ -42,6 +42,19 @@ ontology. `D:` is the source of truth for what has been consolidated.
 **`G:`** is a separate, smaller cloud account. Used for small-file messaging between
 machines. Not a storage tier.
 
+### Never read free space from a Drive mount
+
+`Get-PSDrive H:` reports the free space of the **local cache volume**, not the cloud
+quota. Both mounts echo `C:`'s figure, which is off by more than an order of
+magnitude and in the wrong direction — it makes a 2 TB destination look like it has
+a hundred gigabytes. Capacity for these mounts comes from the account, not the
+filesystem.
+
+The reverse trap sits on the upload side: Drive for Desktop **stages uploads through
+that local cache on `C:`**. So the destination has room and the source has room, and
+a single large copy still fills the system drive and fails midway. Batch it, with a
+cache check between batches.
+
 ---
 
 ## The sequence, and why the order matters
@@ -80,12 +93,16 @@ writing.
 
 ### Protocol for a session picking this up
 
+Start at [`RESUME.md`](../RESUME.md) — it carries the current position and the open
+work. This section is the underlying discipline.
+
 1. `git pull`
 2. Read `state/STATE.json` first — it is generated, so it cannot have drifted.
 3. Read `docs/HANDOVER.md` for context the numbers do not carry.
 4. Read `docs/LEARNINGS.md` **before changing any exclusion or deletion rule.**
 5. Do the work.
-6. Run `python tools/refresh.py`, commit `state/`, push.
+6. Run `python tools/refresh.py` and `python tools/check_manifest.py`, update
+   `RESUME.md` if the position changed, commit `state/`, push.
 
 ### Protocol for finishing a session
 

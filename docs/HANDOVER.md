@@ -153,6 +153,10 @@ In rough priority order:
    controller errors in a single day. This is the largest open risk. The mirror to
    `H:` is deliberately gated on the audit — see [ARCHITECTURE.md](ARCHITECTURE.md) —
    but that gate is a reason to finish the audit, not a reason to stay unbacked.
+
+   Capacity is not the constraint: `H:` is a 2 TB account with roughly 1.65 TB free,
+   against a ~517 GB library. The mount *reports* about 133 GB because it echoes the
+   local cache volume — do not plan from that number.
 2. **Three Takeout archives** (002/003/004) downloading into `D:\Takeout`; ingest
    resumes automatically per-member when they land.
 3. **1,525 files from the second machine** await dedupe and ingest. Their basenames

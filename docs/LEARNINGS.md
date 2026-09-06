@@ -371,3 +371,24 @@ journalled is reported as weaker evidence, not as accounted for. A hardlinked
 library entry survives its source being deleted, so "we deleted the original" does
 not explain the library copy vanishing — and quietly treating it as an explanation
 would hide exactly the case worth seeing.
+
+---
+
+## 17. A cloud mount's free space is the local cache's free space
+
+`Get-PSDrive` on a Google Drive for Desktop mount reports the free space of the
+**local cache volume**, not the cloud account. Two mounts backed by entirely
+different accounts both echoed the system drive's figure.
+
+The error is not small and it points the dangerous way: a 2 TB destination with
+~1.65 TB free reported about 133 GB. Planning from that number rules out a backup
+that is comfortably possible.
+
+There is a matching trap on the way out. Drive for Desktop **stages uploads through
+that same local cache**. So the destination has room, the source has room, and one
+large copy still fills the system drive and dies partway. Batch the upload and check
+the cache volume between batches.
+
+**Capacity for a cloud mount comes from the account, not the filesystem.** This is
+the same lesson as rule 5 — these mounts present themselves as ordinary drives and
+are not — applied to space rather than to presence.
