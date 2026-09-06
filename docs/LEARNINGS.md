@@ -523,3 +523,48 @@ hand-written test case.
 **When a term is weak, find a stronger one.** The fix for `bank` was not a cleverer
 boundary but the names of banks — `commbank`, `natwest`, `barclays`. A specific term
 needs no boundary tricks because it cannot be a substring of something innocent.
+
+---
+
+## 21. A resolution is only evidence when a camera could not have produced it
+
+Classifying screenshots by exact screen dimensions flagged 14,826 files. Broken
+down by which signal fired, 4,302 of those rested on "screen resolution + no camera
+EXIF" with nothing else — and that bucket was full of photographs:
+
+```
+1,425  768x1024      IMAG0647.jpg, IMAG0961.jpg   (Windows Phone camera)
+  870  1536x2048     IMG-20140806-WA0001.jpg      (WhatsApp, 2014)
+  548  1024x768      IMG_20161229_160711.jpg
+```
+
+Those resolutions are iPad screen sizes. They are also standard **camera**
+resolutions — 1536x2048 is a 3MP photograph. Every 4:3 frame in the library was a
+candidate for being called a screenshot.
+
+**Aspect ratio is the discriminator, not the pixel count.** Cameras produce 4:3,
+3:2 and 16:9. Phone screens are 19.5:9 or 20:9. A file at 1080x2400 cannot be a
+photograph; a file at 1024x768 tells you nothing at all. Screen resolutions that
+overlap camera shapes belong in an explicitly *ambiguous* set that never counts as
+evidence on its own.
+
+The second error compounded it: a screen-size match was allowed to **override a
+camera filename**. Messenger platforms strip EXIF, so a forwarded photograph has no
+camera tags; if its resolution then collided with a screen size, the filename lost
+and the file was reclassified. Nothing about a resolution should outrank the fact
+that a camera named the file.
+
+### The part that generalises
+
+The total looked plausible. 14,826 screenshots in a 65,000-image library is exactly
+what you would expect, and it was wrong by 3,000 files.
+
+**Break a classifier's output down by which signal fired, and inspect the weakest
+combination.** The 10,244 files with `Screenshot` literally in the name were never
+in doubt. All the error lived in the bucket that rested on inference, and that
+bucket is invisible in a summary count.
+
+A classifier that moves rather than deletes makes false positives cheap — which is
+the point of rule 1 — but cheap is not free. Three thousand photographs quietly
+relocated out of a chronology are not destroyed, and are still lost to anyone
+browsing for them.
