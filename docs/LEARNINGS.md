@@ -432,3 +432,46 @@ know what was lost.
 Same reasoning as rule 6 — verify the thing, not a proxy — applied to bookkeeping.
 An end-of-run journal records what a *successful* run did. It says nothing about the
 runs that matter.
+
+---
+
+## 19. Read the video's own clock, or a folder name will date it for you
+
+The date chain was filename, then EXIF, then a sidecar JSON, then the folder name,
+then NoDate. EXIF parsing only handles JPEG headers. Nothing ever called `ffprobe`.
+
+So every video without a date in its filename was dated by **the name of the folder
+it happened to arrive in**. 1,707 videos in an 8,310-video library.
+
+What that produced, from one phone backup:
+
+| file | filed as | actually shot |
+|---|---|---|
+| `…phone upto sept 2019 030.mp4` | 2019-07 | **2014-06** |
+| `…phone upto sept 2019 120.mp4` | 2019-07 | **2017-12** |
+| `…phone upto sept 2019 814.mp4` | 2019-07 | **2019-08** |
+
+Five years of one phone's video history collapsed into a single month, because the
+containing folder was named `2019-07-23 …`. Probing the containers found 392
+misfiled and 18 recoverable from `NoDate`; 750 were already right, which is exactly
+what made the problem invisible.
+
+**A container's `creation_time` is written by the camera when it records.** It is
+evidence. A folder name is somebody's filing decision from years later, and it dates
+the *arrival* of a file, not its creation — an archive called
+`drive-download-20220107…` says when it was exported, and diving footage inside it
+was filed under that January.
+
+Guards worth having, because container metadata is not uniformly trustworthy:
+
+- **Reject known-bogus epochs.** Muxers that cannot read a clock write `1970-01-01`,
+  `1904-01-01`, `1601-01-01`. They are not dates.
+- **Never override a filename date.** A camera-assigned name like
+  `20180310_161838.mp4` outranks the container; re-muxing tools rewrite
+  `creation_time` to the moment of the re-mux.
+- **Take no timestamp over a bad one.** 518 files had nothing usable and were left
+  alone. `NoDate` is an honest answer.
+
+Wrong dates lose nothing, which is why this survived so long. In a chronology it is
+still the central failure: putting a memory in the wrong year defeats the one thing
+the structure exists to do.
