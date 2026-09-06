@@ -392,3 +392,11 @@ the cache volume between batches.
 **Capacity for a cloud mount comes from the account, not the filesystem.** This is
 the same lesson as rule 5 — these mounts present themselves as ordinary drives and
 are not — applied to space rather than to presence.
+
+**Baseline what you have reviewed, or the check stops working.** Those 10 rows would
+report red on every future run, and a check that is permanently red is one people
+learn to skip — which is exactly when a real absence slips through. `--accept`
+records reviewed absences into `state/accepted-absences.csv` with a note and a date,
+so the check returns to green and *any new absence stands out immediately*. The
+accepted file is committed: it is the record of what was looked at and by when, not
+a way to make the warning go away.

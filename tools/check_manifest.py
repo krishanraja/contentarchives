@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import argparse
 import csv
+import datetime as dt
 import os
 import sys
 from pathlib import Path
@@ -59,6 +60,42 @@ def journalled(audit: Path) -> dict[str, str]:
     return out
 
 
+ACCEPTED = Path(__file__).resolve().parent.parent / "state" / "accepted-absences.csv"
+
+
+def load_accepted() -> dict[str, str]:
+    """Absences a person has looked at and signed off.
+
+    Without this the check reports the same known-benign rows forever, and a check
+    that is always red is a check nobody reads - which is precisely when a real
+    absence slips past. Baselining the reviewed ones is what keeps a new absence
+    visible.
+    """
+    if not ACCEPTED.exists():
+        return {}
+    with open(ACCEPTED, newline="", encoding="utf-8", errors="ignore") as f:
+        return {r["LibraryPath"]: f'{r.get("Note", "")} (accepted {r.get("Accepted", "?")})'
+                for r in csv.DictReader(f) if r.get("LibraryPath")}
+
+
+def save_accepted(rows: list[tuple[str, str]], note: str) -> None:
+    ACCEPTED.parent.mkdir(exist_ok=True)
+    existing = []
+    if ACCEPTED.exists():
+        with open(ACCEPTED, newline="", encoding="utf-8", errors="ignore") as f:
+            existing = list(csv.DictReader(f))
+    known = {r["LibraryPath"] for r in existing}
+    today = dt.date.today().isoformat()
+    with open(ACCEPTED, "w", newline="", encoding="utf-8") as f:
+        w = csv.DictWriter(f, fieldnames=["LibraryPath", "OriginPath", "Accepted", "Note"])
+        w.writeheader()
+        w.writerows(existing)
+        for dest, src in rows:
+            if dest not in known:
+                w.writerow({"LibraryPath": dest, "OriginPath": src,
+                            "Accepted": today, "Note": note})
+
+
 def source_journalled(audit: Path) -> dict[str, str]:
     out: dict[str, str] = {}
     for name, col, reason_col in SOURCE_JOURNALS:
@@ -78,8 +115,13 @@ def main() -> None:
     ap.add_argument("--manifest", type=Path, default=DEFAULT_MANIFEST)
     ap.add_argument("--audit", type=Path, default=DEFAULT_AUDIT)
     ap.add_argument("--quiet", action="store_true")
+    ap.add_argument("--accept", metavar="NOTE",
+                    help="record the current unexplained absences as reviewed and "
+                         "accepted, with this note. Use only after actually "
+                         "looking at them.")
     a = ap.parse_args()
 
+    accepted = load_accepted()
     reasons = journalled(a.audit)
     src_reasons = source_journalled(a.audit)
     total = 0
@@ -97,10 +139,25 @@ def main() -> None:
                 continue
             if dest in reasons:
                 explained.append((dest, src))
+            elif dest in accepted:
+                explained.append((dest, src))
+                reasons[dest] = accepted[dest]
             elif src in src_reasons:
                 by_source.append((dest, src))
             else:
                 unexplained.append((dest, src))
+
+    if a.accept:
+        if not unexplained:
+            print("Nothing unexplained to accept.")
+            sys.exit(0)
+        save_accepted(unexplained, a.accept)
+        print(f"Accepted {len(unexplained)} absence(s) into "
+              f"{ACCEPTED.relative_to(ACCEPTED.parent.parent)}:")
+        for dest, _ in unexplained:
+            print(f"  {os.path.basename(dest)}")
+        print("\nCommit that file - it is the record of what was reviewed.")
+        sys.exit(0)
 
     if not a.quiet:
         print(f"{total:,} manifest rows")
