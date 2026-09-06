@@ -2,7 +2,14 @@
 
 Enough for another session, or another person, to pick this up without re-deriving
 anything. Figures are counted from artefacts on disk by `track.py`, not asserted
-from memory. Regenerate with `python track.py --print`.
+from memory.
+
+**This repo is the canon.** Read `state/STATE.json` before anything here — it is
+generated, so it cannot have drifted. [ARCHITECTURE.md](ARCHITECTURE.md) has the
+storage model and the read/write protocol for sessions.
+
+    python tools/track.py            # recount state from disk
+    python tools/publish_state.py    # redact it and update state/
 
 **Last verified:** 2026-09-06
 
@@ -71,7 +78,41 @@ Consequences anyone touching this must know:
 | Google Takeout ingest | 3 of 6 archives consumed; 3 downloading |
 | Second machine | surveyed; 1,525 non-duplicate candidates transferred, not yet ingested |
 | Compression | **abandoned** — see below |
+| Origin map | done — every library file traced to its origin folder |
 | Backup | **not started** — the library has no second copy |
+
+---
+
+## Origin map — how batches get chosen
+
+Every file in the library is traceable to the folder it came from. `tools/origin_map.py`
+reads the ingest manifest and produces two views; the folder view is the one decisions
+are made at.
+
+| | rows | where |
+|---|---|---|
+| per-file map | 59,504 | library machine only — filenames leak, see ARCHITECTURE.md |
+| folder view | 637 | [`state/origin-folders.csv`](../state/origin-folders.csv), redacted |
+
+Largest origins, which is where a quarantine pass should start:
+
+| files | GB | source | origin |
+|---|---|---|---|
+| 13,346 | 128.0 | OneDrive | `Samsung Gallery\DCIM\Camera` |
+| 872 | 70.4 | D: | `Laptop 2024 files` |
+| 3,794 | 34.7 | D: | `Samsung S9+ Backup - Sep 2020\DCIM\Camera` |
+| 2,607 | 20.3 | D: | `Phone backup Jan 22\DCIM\Camera` |
+| 2,231 | 11.9 | Drive | `Old Computer\...PERSON-A phone` — communal, not personal |
+| 82 | 15.1 | D: | a 2015 ski trip |
+| 57 | 19.8 | D: | a 2015 UK trip |
+
+Two things this immediately shows:
+
+- The bulk is a handful of phone-camera dumps. Personal-versus-communal is mostly a
+  question of *whose phone*, and the folder names answer it.
+- **34 files are identity or financial documents** — passports, OCI cards, visas,
+  birth certificates — swept in from `Downloads` and `Documents` folders. Listed in
+  `SENSITIVE-FILES.csv` on the library machine. They should leave the photo library.
 
 ---
 
@@ -106,15 +147,27 @@ the per-file gate.
 
 ## Known outstanding items
 
-- **No backup exists.** The library lives on one external drive that logged 14 disk
-  controller errors in a single day. This is the largest open risk.
-- ~10.6 GB of free wins identified, not yet actioned: a 7.21 GB pair that is the same
-  recording re-muxed (byte-different, so content dedup correctly keeps both), and two
-  non-personal video files sitting in `NoDate`.
-- 1,525 files transferred from the second machine await dedupe and ingest.
-- Content-production media should live **outside** the library ontology; a
-  `ContentProduction/` tree exists but is unpopulated.
-- 3,896 files in `NoDate` — mostly screenshots and web graphics, worth a review pass.
+In rough priority order:
+
+1. **No backup exists.** The library lives on one external drive that logged 14 disk
+   controller errors in a single day. This is the largest open risk. The mirror to
+   `H:` is deliberately gated on the audit — see [ARCHITECTURE.md](ARCHITECTURE.md) —
+   but that gate is a reason to finish the audit, not a reason to stay unbacked.
+2. **Three Takeout archives** (002/003/004) downloading into `D:\Takeout`; ingest
+   resumes automatically per-member when they land.
+3. **1,525 files from the second machine** await dedupe and ingest. Their basenames
+   were flattened by the transfer (`C_Users_krish_Downloads_foo.mp4`) and must be
+   restored from `lorimer-copy-log.csv` before dating, or filename-based dates are
+   lost.
+4. **`ContentProduction/` is unpopulated.** A TV interview and four large 2026 videos
+   belong there, not in the personal library.
+5. **34 identity/financial documents** to move out of the library.
+6. **3,896 files in `NoDate`** — mostly screenshots and web graphics. Review pass
+   deferred until the library is complete.
+
+Free wins already actioned: 8.99 GB reclaimed (a commercial film, and one half of a
+re-muxed pair proven identical by duration and creation time), journalled with
+evidence to `user-directed-deletions.csv`.
 
 ---
 
@@ -148,6 +201,10 @@ regressed into a state that previously lost data.**
 | `E-DRIVE-CONTENTS-AND-WHERE-THEY-ARE-NOW.csv` | rescued drive, per-file accounting |
 | `lib-hashes.csv` | persistent whole-file hash cache |
 | `arc-progress/` | per-archive member checkpoints |
+| `ORIGIN-MAP.csv` | per-file origin map, 59,504 rows |
+| `SENSITIVE-FILES.csv` | the 34 document-like files flagged by the tripwire |
+| `redaction-key.json` | reverses the pseudonyms in `state/` |
+| `user-directed-deletions.csv` | every user-directed deletion, with its evidence |
 
 These stay local because they contain real paths. Anyone continuing should read
 `STATE.json` first — it is generated from the artefacts, so it cannot drift from

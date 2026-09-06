@@ -11,6 +11,31 @@ permanently lost files. **Read that document before changing the safety rules.**
 
 ---
 
+## This repo is also the project's canon
+
+It is not only a toolkit. It is the shared brain for an in-flight consolidation that
+several sessions, on more than one machine, read and write.
+
+| Read first | |
+|---|---|
+| [`state/STATE.json`](state/STATE.json) | current state, generated — cannot have drifted |
+| [`state/PROGRESS.md`](state/PROGRESS.md) | the same, readable |
+| [`state/origin-folders.csv`](state/origin-folders.csv) | where every library file came from |
+| [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | storage model, and the protocol for sessions |
+| [`docs/HANDOVER.md`](docs/HANDOVER.md) | what is done, what is open |
+
+Finish by regenerating and committing state, even mid-task:
+
+```bash
+python tools/track.py          # recount from disk
+python tools/publish_state.py  # redact, verify, update state/
+```
+
+**Never write project state from memory.** `track.py` counts files that exist;
+a narrated summary drifts within minutes and the drift is invisible.
+
+---
+
 ## The one thing to understand
 
 > **A path is never sufficient grounds to delete.**

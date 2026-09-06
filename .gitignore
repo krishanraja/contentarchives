@@ -13,4 +13,15 @@ profiles/*.yaml
 *.log
 *.csv
 !docs/*.csv
+!state/*.csv
 _scratch/
+
+# the redaction key reverses the pseudonyms in state/ - it must never be committed
+redaction-key.json
+*redaction-key*
+
+# per-file maps and document shortlists name real people and real paperwork.
+# They stay on the machine that holds the library.
+ORIGIN-MAP.csv
+origin-map.csv*
+SENSITIVE-FILES.csv

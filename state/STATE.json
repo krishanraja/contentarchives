@@ -1,0 +1,50 @@
+{
+  "generated": "2026-09-06T17:17:16",
+  "library": {
+    "dated_files": 55553,
+    "dated_bytes": 547234222382,
+    "nodate_files": 3895,
+    "nodate_bytes": 7749222155,
+    "total_files": 59448
+  },
+  "ingest": {
+    "files_added_total": 10694,
+    "duplicates_rejected": 9644,
+    "units_consumed": [
+      "E-Drive-Rescue",
+      "takeout-20260905T201853Z-1-006.zip",
+      "takeout-20260905T201853Z-1-001.zip",
+      "takeout-20260905T201853Z-1-005.zip"
+    ],
+    "archives_pending": [
+      "D:\\Takeout\\Unconfirmed 159863.crdownload  (downloading)",
+      "D:\\Takeout\\Unconfirmed 289177.crdownload  (downloading)",
+      "D:\\Takeout\\Unconfirmed 400060.crdownload  (downloading)"
+    ],
+    "archive_member_progress": {
+      "takeout-20260905T201853Z-1-001.zip": 9209,
+      "takeout-20260905T201853Z-1-005.zip": 5309,
+      "takeout-20260905T201853Z-1-006.zip": 2977,
+      "takeout-test-001.tgz": 3
+    }
+  },
+  "rescue": {
+    "e_drive_files_rescued": 2363
+  },
+  "compression": {
+    "verdicts": {},
+    "bytes_freed": 0,
+    "candidates_planned": 322
+  },
+  "losses": {
+    "unrecoverable_files": 22410,
+    "personal_unrecoverable": 50,
+    "detail": "PERSONAL-losses.csv"
+  },
+  "disks_free_gb": {
+    "C": 141.5,
+    "D": 119.1,
+    "G": 94.0,
+    "H": 134.4
+  }
+}
