@@ -291,3 +291,48 @@ from a filename is inference, and inference is what cost this project files (rul
 Files whose category is uncertain go to a holding tree with their origin folder as
 the subfolder, where a person can settle it in seconds by looking at the grouping.
 Sorting stays possible; guessing wrong stops being.
+
+---
+
+## 15. A cloud stream mount hangs; it does not fail
+
+Hashing a batch of files directly off a Google Drive stream mount stopped dead
+partway through. No exception, no timeout, no error in any log — the process simply
+stopped making progress with the loop counter frozen.
+
+What proved it was a hang rather than slow I/O:
+
+```
+ReadTransferCount at T:      685,809,515
+ReadTransferCount at T+20s:  685,809,515
+```
+
+Zero bytes in twenty seconds. A slow mount still moves bytes; a hung one does not.
+**Check the process's I/O counters before concluding "it's just slow"** — on
+Windows, `Get-CimInstance Win32_Process | Select ReadTransferCount`. That single
+measurement separates "wait longer" from "this will never finish", and it takes
+twenty seconds.
+
+The cause is that a stream client presents remote files as local ones. When it
+cannot fetch a file's content, the read blocks rather than returning an error, and
+there is no timeout to trip. Rule 5 covered these mounts lying about *presence*;
+this is the same class of problem for *content*.
+
+**Copy the batch to local disk first, then work on it.** Not because copying is
+faster, but because a local read either succeeds or raises. A bounded copy with
+explicit retry limits (`robocopy /R:2 /W:5`) fails loudly in minutes where the
+direct read hangs forever.
+
+It is also usually free. If the staging copy lands on the same volume as the
+library, files enter the library as hardlinks — a second name for bytes already on
+disk, no copy, no wait (rule 11).
+
+### And kill the orphan
+
+The first hung run's Python process survived cancellation of the shell that
+started it. It sat there competing for the same saturated mount while the
+replacement run tried to make progress, and would have overwritten the report with
+output from a superseded classifier. **After cancelling a long job, confirm the
+process is actually gone** — `Get-CimInstance Win32_Process -Filter "Name='python.exe'"`
+lists command lines and start times, which is enough to tell the orphan from the
+replacement.
