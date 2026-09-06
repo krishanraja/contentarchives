@@ -72,6 +72,9 @@ State is *derived from artefacts*, then committed:
 | `state/STATE.json` | machine-readable state, all figures counted from disk | `tools/track.py` |
 | `state/PROGRESS.md` | the same, human-readable | `tools/track.py` |
 | `state/origin-folders.csv` | every origin folder, file counts, sizes, year spans | `tools/origin_map.py` |
+
+`tools/refresh.py` runs all three in the right order; `--check` verifies without
+writing.
 | `docs/HANDOVER.md` | narrative handover for a new session | a human or session, by hand |
 | `docs/LEARNINGS.md` | rules, each with the incident that produced it | append when something is learned the hard way |
 
@@ -82,7 +85,7 @@ State is *derived from artefacts*, then committed:
 3. Read `docs/HANDOVER.md` for context the numbers do not carry.
 4. Read `docs/LEARNINGS.md` **before changing any exclusion or deletion rule.**
 5. Do the work.
-6. Run `python tools/track.py`, commit `state/`, push.
+6. Run `python tools/refresh.py`, commit `state/`, push.
 
 ### Protocol for finishing a session
 

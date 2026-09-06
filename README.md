@@ -27,8 +27,7 @@ several sessions, on more than one machine, read and write.
 Finish by regenerating and committing state, even mid-task:
 
 ```bash
-python tools/track.py          # recount from disk
-python tools/publish_state.py  # redact, verify, update state/
+python tools/refresh.py    # rebuild origin map, recount, redact, update state/
 ```
 
 **Never write project state from memory.** `track.py` counts files that exist;
