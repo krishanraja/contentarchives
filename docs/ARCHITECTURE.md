@@ -59,6 +59,42 @@ that local cache on `C:`**. So the destination has room and the source has room,
 a single large copy still fills the system drive and fails midway. Batch it, with a
 cache check between batches.
 
+Expect that cache to hold the data for a while after the copy finishes. A 140 GB
+publish returned only ~130 GB of the ~189 GB freed on `C:`; the balance was Drive's
+cache, released on its own schedule. Do not plan the next job around space that a
+completed upload has not given back yet.
+
+### Never read sync state from a Drive mount either
+
+The same illusion, one layer along, and it is the more dangerous of the two: **a
+write into the mount lands in the local cache and uploads behind it.** Reading a file
+back from `H:` reads the cache. If you verify a publish by re-reading the mount, you
+have compared local bytes against local bytes and learned nothing about the cloud.
+
+This was measured, not theorised. After a 140 GB publish that verified 17,102/17,102
+by content hash *against the mount*, the files written last were **absent from the
+cloud entirely**, and a rewritten 12 KB file still served its previous version through
+the Drive API an hour later.
+
+Drive for Desktop keeps its backlog in SQLite:
+
+```
+%LOCALAPPDATA%\Google\DriveFS\<account_id>\metadata_sqlite_db
+```
+
+The `operations` table is work not yet committed to the cloud. Copy the file first
+(`-wal` and `-shm` too), then count rows; it drains to 0 when the client is genuinely
+finished. On the 140 GB publish it started at 21,615 and took about three hours at
+1.6–3.5 ops/s.
+
+**So: sync completion comes from the client's queue, and existence comes from the
+cloud's API. Neither answer is available from the mounted filesystem.** Sampling a
+few files through the API confirms presence and size; it is not content proof, since
+hashing the cloud copy means downloading it again.
+
+This matters most at exactly the moment it is easiest to skip — deciding a source is
+safe to erase. See [LEARNINGS.md](LEARNINGS.md) rule 25.
+
 ---
 
 ## The sequence, and why the order matters

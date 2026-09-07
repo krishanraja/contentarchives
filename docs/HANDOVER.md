@@ -180,16 +180,32 @@ In rough priority order:
    Capacity is not the constraint: `H:` is a 2 TB account with roughly 1.65 TB free,
    against a ~517 GB library. The mount *reports* about 133 GB because it echoes the
    local cache volume — do not plan from that number.
-2. **Three Takeout archives** (002/003/004) downloading into `D:\Takeout`; ingest
+2. **17,102 files / 140.62 GB rescued from the WD6400 childhood-PC drive**, staged at
+   `H:\My Drive\_photo-consolidation\from-wd6400\` and awaiting ingest. Verified by
+   content hash and confirmed uploaded to the cloud; the source drive can be destroyed.
+   Full account in [`rescues/2026-09-06-wd6400.md`](rescues/2026-09-06-wd6400.md).
+
+   Three things the ingest needs to know:
+   - Dedupe by the hashes in that folder's `push-manifest.csv` — do not re-read 140 GB.
+     The set is already internally deduplicated, but it has **not** been deduped
+     against `D:\PhotoLibrary`. Roughly 95 GB matches no size in the library at all;
+     ~45 GB shares a size with something held, which is a hint and not a verdict.
+   - It is **not all chronology.** It carries tax records, a will allocation document
+     and identity paperwork that belong in `Archive`, and it will trip the tripwire —
+     see item 6, this is the same class of material.
+   - Its folder names actively mislead. `ORGANISING.md` now carries the measured
+     examples.
+
+3. **Three Takeout archives** (002/003/004) downloading into `D:\Takeout`; ingest
    resumes automatically per-member when they land.
-3. **1,525 files from the second machine** await dedupe and ingest. Their basenames
+4. **1,525 files from the second machine** await dedupe and ingest. Their basenames
    were flattened by the transfer (`C_Users_krish_Downloads_foo.mp4`) and must be
    restored from `lorimer-copy-log.csv` before dating, or filename-based dates are
    lost.
-4. **`ContentProduction/` is unpopulated.** A TV interview and four large 2026 videos
+5. **`ContentProduction/` is unpopulated.** A TV interview and four large 2026 videos
    belong there, not in the personal library.
-5. **34 identity/financial documents** to move out of the library.
-6. **3,896 files in `NoDate`** — mostly screenshots and web graphics. Review pass
+6. **34 identity/financial documents** to move out of the library.
+7. **3,896 files in `NoDate`** — mostly screenshots and web graphics. Review pass
    deferred until the library is complete.
 
 Free wins already actioned: 8.99 GB reclaimed (a commercial film, and one half of a
