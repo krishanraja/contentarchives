@@ -11,6 +11,7 @@ This log records what the steward did to the documentation and when.
 
 ## 2026-09-07
 
+- reconciled at `07a81b2`: `main` gained Krish's commit "Guard every deletion, and fix the cache that manufactured 222 GB of duplicates" (learning 27, `guarded_delete.py`, `reclaim_duplicates.py`). NOW.md re-headed, given the bullet in the commit's own words, its duplicate counts marked as undercounts, the reclaim added to "What is next", and the rule count in "Read next" moved to 27. The steward-secret reminder was removed from "What is waiting on Krish" at Krish's instruction, the secret being in place.
 - reconciled at `ee3b550`: `main` moved by one non-steward commit ("Merge the full 2026-09-07 Takeout export, verified, and reclaim 21 GB") while the bootstrap was under review. `NOW.md` was re-pointed at `ee3b550` before the first push, its figures re-quoted from the regenerated `state/STATE.json` (2026-09-07T19:14:52), a bullet added for the merge, and `docs/SEGMENTATION.md` (new in that commit) added to "Read next" and the README index. The HANDOVER timeline paragraph gained one sentence for the same merge.
 - decision: docs steward adopted for this repo (Krish, 2026-09-07). Bootstrapped by hand at `08def7e`; `.github/workflows/docs-steward.yml` calls the shared workflow in `krishanraja/control-center` on every push to `main` and nightly at 20:35 UTC.
 - indexed: `docs/rescues/` is the per-source chronology, one dated file per source (`2026-09-06-wd6400.md` is the first and the model). The steward does not move or duplicate these files.
