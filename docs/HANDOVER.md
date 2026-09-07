@@ -13,6 +13,28 @@ storage model and the read/write protocol for sessions.
 
 **Last verified:** 2026-09-06
 
+**How it got here, from the commits.** On 2026-09-06 the toolkit was extracted from a
+live consolidation together with the learnings that produced it, and the same day the
+repo was made the canon: state generated from disk by `track.py` and committed, an
+origin map so that batches could be chosen by folder rather than by file, and a
+tripwire that refuses to publish anything still resembling identity, medical or
+financial material. Later on 2026-09-06 the chronology was split into Personal and
+Communal by origin folder, the archive was split the same way, and `RESUME.md` was
+added as the front door and then rewritten the same night because it still described a
+staging folder hours after that folder had been emptied. On 2026-09-07 the WD6400
+rescue was recorded in `docs/rescues/` with rules 22 to 25 paid for on that drive, and
+its reusable lessons were folded into `ORGANISING.md` and `ARCHITECTURE.md`. Also on
+2026-09-07 a fresh Takeout export showed that part numbers are not stable identities
+(rule 26), the `D:` to `H:` mirror was planned in `MIRROR.md`, and the machine-hygiene
+runbook arrived with the finding that DISM's CheckHealth and RestoreHealth both
+misreport component-store health. Late on 2026-09-07 all six parts of the fresh Takeout
+export were ingested and proven, each archive deleted only after its central directory
+had been matched against the per-member checkpoint, and `SEGMENTATION.md` recorded the
+next checkpoint. At `ee3b550` the generated `state/STATE.json` (2026-09-07T19:14:52)
+counts 90,408 files in the library, 60,397 added and 10,026 duplicates rejected on
+content hash; the tables below were verified on 2026-09-06 and are older than that state
+file, so read it first.
+
 ---
 
 ## What has been consolidated

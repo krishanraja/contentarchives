@@ -30,6 +30,10 @@ where the work is paused, what to do next, and which decisions are already settl
 | [`docs/HANDOVER.md`](docs/HANDOVER.md) | what is done, what is open |
 | [`docs/rescues/`](docs/rescues/) | per-source rescue histories — what came off each disk, and what it cost |
 | [`docs/MACHINE-HYGIENE.md`](docs/MACHINE-HYGIENE.md) | bring a Windows machine to the agreed clean state, and keep it there |
+| [`docs/MIRROR.md`](docs/MIRROR.md) | how `D:` and `H:` end up holding the same library, in what order, and where the human checks it |
+| [`docs/SEGMENTATION.md`](docs/SEGMENTATION.md) | what the library is allowed to contain, and the decisions needed before the clone |
+| [`NOW.md`](NOW.md) | the steward's router: what this is, where it stands at a named commit, what changed and why, where the detail lives |
+| [`docs/history/LOG.md`](docs/history/LOG.md) | what the docs steward did to the documentation, and when |
 
 Finish by regenerating and committing state, even mid-task:
 

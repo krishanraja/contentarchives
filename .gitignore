@@ -25,3 +25,6 @@ redaction-key.json
 ORIGIN-MAP.csv
 origin-map.csv*
 SENSITIVE-FILES.csv
+
+# docs steward working files (control-center checkout and digest, fetched per run)
+.steward/
