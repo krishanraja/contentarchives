@@ -14,11 +14,15 @@ generalised versions of the safety, dating and dedupe logic live in
 | `already_in_library.py` | find files whose content is already safely in the library |
 | `autopilot.py` | the ingest engine: streaming archive reader, dedupe, dating, placement |
 | `check_tiny.py` | check what a size threshold would have discarded, before it does |
+| `diagnose_new.py` | ask why an ingest is calling everything new, against a baseline that excludes itself |
 | `driver.py` | loops autopilot passes and survives the memory watchdog |
 | `extract_zip_media.py` | stream out only the members not already held |
+| `ingest_eta.py` | projected finish time weighted by bytes, not by member count |
 | `ingest_tree.py` | ingest any folder tree into the library, deduped and dated |
 | `inspect_old_zips.py` | read export archives without extracting them |
 | `machine_triage.py` | triage a machine's media by origin folder rather than extension |
+| `move_audio_to_h.py` | move files to a cloud mount, deleting only once the upload queue proves receipt |
+| `purge_downgrades.py` | delete those worse copies, re-verified at the moment of deletion |
 | `purge_redundant.py` | delete byte-identical copies, re-verified at the moment of deletion |
 | `redate_videos.py` | re-date videos from the container clock instead of a folder name |
 | `refresh_and_push.py` | regenerate the canon, verify it, push - refusing to push a false report |
@@ -26,5 +30,8 @@ generalised versions of the safety, dating and dedupe logic live in
 | `space_audit.py` | where a volume's bytes actually are, counted by inode not by name |
 | `space_tiers.py` | sort freeable bytes by how much judgement each tier needs |
 | `to_content_production.py` | move produced content out of the chronology, manifest following |
+| `triage_downgrades.py` | find re-encoded copies that are worse than what is already held |
+| `verify_takeout_complete.py` | prove every archive member reached the library before deleting the archive |
+| `watch_d_downloads.py` | alarm on a partial download that shrinks or stalls |
 | `whatsapp_breakdown.py` | characterise a messenger ingest before committing to it |
 | `zip_fingerprint.py` | triage which export parts hold files the library lacks, from the central directory alone |

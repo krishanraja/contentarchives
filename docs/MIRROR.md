@@ -118,7 +118,12 @@ appears to have it.
 | `from-wd6400` | 17,102 files / 140.6 GB | staged on H:, verified at rest, never ingested |
 | `from-lorimer` | 1,525 files / 6.96 GB on H:, **744 still to ingest** | the rest already ingested |
 | `from-boogles` | **2,340 files / 31.59 GB** | new 2026-09-07, never ingested |
-| `in` / `out` | sizing | purpose to be established before touching |
+| `in` / `out` | **5 files / ~0 GB** | not media - resolved, see below |
+
+`in\` and `out\` are **not a source**. Between them they hold five files - two `.csv`
+and two `.py` in `in\`, one `.csv` in `out\` - working files left by sessions on other
+machines. Nothing to ingest, nothing to mirror. Recorded here only so the next session
+does not spend time establishing it a third time.
 
 Two of these are not what their name suggests, and neither should be ingested blind:
 

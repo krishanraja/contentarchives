@@ -1,11 +1,11 @@
 {
-  "generated": "2026-09-07T12:19:54",
+  "generated": "2026-09-07T19:14:52",
   "library": {
-    "dated_files": 58389,
-    "dated_bytes": 525262135906,
-    "nodate_files": 3517,
-    "nodate_bytes": 4134255455,
-    "total_files": 61906,
+    "dated_files": 86785,
+    "dated_bytes": 815184617082,
+    "nodate_files": 3623,
+    "nodate_bytes": 4310753519,
+    "total_files": 90408,
     "chronology": {
       "personal": {
         "files": 56928,
@@ -16,34 +16,41 @@
         "bytes": 24127566370
       },
       "library": {
-        "files": 329,
-        "bytes": 1193319225
+        "files": 28725,
+        "bytes": 291115800401
       },
       "nodate": {
-        "files": 853,
-        "bytes": 259833610
+        "files": 959,
+        "bytes": 436331674
       }
     }
   },
   "ingest": {
-    "files_added_total": 25665,
-    "duplicates_rejected": 9644,
+    "files_added_total": 60397,
+    "duplicates_rejected": 10026,
     "units_consumed": [
       "E-Drive-Rescue",
       "takeout-20260905T201853Z-1-006.zip",
       "takeout-20260905T201853Z-1-001.zip",
-      "takeout-20260905T201853Z-1-005.zip"
+      "takeout-20260905T201853Z-1-005.zip",
+      "takeout-20260907T082613Z-1-001.zip",
+      "takeout-20260907T082613Z-1-002.zip",
+      "takeout-20260907T082613Z-1-003.zip",
+      "takeout-20260907T082613Z-1-004.zip",
+      "takeout-20260907T082613Z-1-006.zip",
+      "takeout-20260907T082613Z-1-005.zip"
     ],
-    "archives_pending": [
-      "C:\\Users\\krish\\Downloads\\takeout-20260907T082613Z-1-001.zip",
-      "C:\\Users\\krish\\Downloads\\takeout-20260907T082613Z-1-002.zip",
-      "C:\\Users\\krish\\Downloads\\Unconfirmed 226802.crdownload  (downloading)",
-      "C:\\Users\\krish\\Downloads\\Unconfirmed 391271.crdownload  (downloading)"
-    ],
+    "archives_pending": [],
     "archive_member_progress": {
       "takeout-20260905T201853Z-1-001.zip": 9209,
       "takeout-20260905T201853Z-1-005.zip": 5309,
       "takeout-20260905T201853Z-1-006.zip": 2977,
+      "takeout-20260907T082613Z-1-001.zip": 8462,
+      "takeout-20260907T082613Z-1-002.zip": 7152,
+      "takeout-20260907T082613Z-1-003.zip": 4806,
+      "takeout-20260907T082613Z-1-004.zip": 6778,
+      "takeout-20260907T082613Z-1-005.zip": 2846,
+      "takeout-20260907T082613Z-1-006.zip": 5070,
       "takeout-test-001.tgz": 3
     }
   },
@@ -61,9 +68,9 @@
     "detail": "PERSONAL-losses.csv"
   },
   "disks_free_gb": {
-    "C": 86.8,
-    "D": 311.4,
-    "G": 82.5,
-    "H": 82.5
+    "C": 172.7,
+    "D": 48.7,
+    "G": 93.9,
+    "H": 164.0
   }
 }

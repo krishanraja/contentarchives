@@ -27,6 +27,34 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import autopilot as ap                                          # noqa: E402
 
 
+CACHE = r"D:\_PhotoAudit\arc-sizes.json"
+
+
+def persist_ground_truth(path: str, sizes: dict) -> None:
+    """Record this archive's member list so the part stays VERIFIABLE after the
+    archive is deleted.
+
+    Reading a central directory and not saving it is a trap: the ingest deletes
+    each archive once it believes every member landed, and at that moment the
+    only surviving record of what the archive contained is this file. Without it
+    "did everything arrive?" becomes unanswerable, and a deletion justified by an
+    unanswerable question is how files get lost.
+    """
+    import json
+    try:
+        cache = json.load(open(CACHE, encoding="utf-8"))
+    except Exception:
+        cache = {}
+    key = f"{os.path.basename(path)}|{os.stat(path).st_size}"
+    if key not in cache:
+        cache[key] = sizes
+        try:
+            json.dump(cache, open(CACHE, "w", encoding="utf-8"))
+            print(f"  ground truth saved ({len(sizes):,} members) - survives deletion")
+        except Exception as e:
+            print(f"  WARNING: could not save ground truth: {e}")
+
+
 def fingerprint(path: str, ns: set) -> None:
     name = os.path.basename(path)
     print(f"\n{'='*70}\n{name}\n{'='*70}")
@@ -36,6 +64,7 @@ def fingerprint(path: str, ns: set) -> None:
         print(f"  UNREADABLE: {e}")
         return
 
+    sizes: dict[str, int] = {}
     media = held = 0
     unheld_bytes = held_bytes = 0
     unheld_by_folder: Counter = Counter()
@@ -49,6 +78,7 @@ def fingerprint(path: str, ns: set) -> None:
             nonmedia += 1
             continue
         media += 1
+        sizes[i.filename] = i.file_size
         if (base.lower(), i.file_size) in ns:
             held += 1
             held_bytes += i.file_size
@@ -57,6 +87,7 @@ def fingerprint(path: str, ns: set) -> None:
             parts = i.filename.split("/")
             unheld_by_folder[parts[2] if len(parts) > 2 else "(root)"] += 1
     z.close()
+    persist_ground_truth(path, sizes)
 
     unheld = media - held
     print(f"  media members      : {media:,}   (+{nonmedia:,} json/sidecar ignored)")
