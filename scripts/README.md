@@ -27,3 +27,4 @@ generalised versions of the safety, dating and dedupe logic live in
 | `space_tiers.py` | sort freeable bytes by how much judgement each tier needs |
 | `to_content_production.py` | move produced content out of the chronology, manifest following |
 | `whatsapp_breakdown.py` | characterise a messenger ingest before committing to it |
+| `zip_fingerprint.py` | triage which export parts hold files the library lacks, from the central directory alone |

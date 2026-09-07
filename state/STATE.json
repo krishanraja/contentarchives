@@ -1,11 +1,11 @@
 {
-  "generated": "2026-09-06T22:57:47",
+  "generated": "2026-09-07T12:19:54",
   "library": {
-    "dated_files": 58388,
-    "dated_bytes": 524938311727,
+    "dated_files": 58389,
+    "dated_bytes": 525262135906,
     "nodate_files": 3517,
     "nodate_bytes": 4134255455,
-    "total_files": 61905,
+    "total_files": 61906,
     "chronology": {
       "personal": {
         "files": 56928,
@@ -16,8 +16,8 @@
         "bytes": 24127566370
       },
       "library": {
-        "files": 328,
-        "bytes": 869495046
+        "files": 329,
+        "bytes": 1193319225
       },
       "nodate": {
         "files": 853,
@@ -26,7 +26,7 @@
     }
   },
   "ingest": {
-    "files_added_total": 25664,
+    "files_added_total": 25665,
     "duplicates_rejected": 9644,
     "units_consumed": [
       "E-Drive-Rescue",
@@ -34,7 +34,12 @@
       "takeout-20260905T201853Z-1-001.zip",
       "takeout-20260905T201853Z-1-005.zip"
     ],
-    "archives_pending": [],
+    "archives_pending": [
+      "C:\\Users\\krish\\Downloads\\takeout-20260907T082613Z-1-001.zip",
+      "C:\\Users\\krish\\Downloads\\takeout-20260907T082613Z-1-002.zip",
+      "C:\\Users\\krish\\Downloads\\Unconfirmed 226802.crdownload  (downloading)",
+      "C:\\Users\\krish\\Downloads\\Unconfirmed 391271.crdownload  (downloading)"
+    ],
     "archive_member_progress": {
       "takeout-20260905T201853Z-1-001.zip": 9209,
       "takeout-20260905T201853Z-1-005.zip": 5309,
@@ -56,9 +61,9 @@
     "detail": "PERSONAL-losses.csv"
   },
   "disks_free_gb": {
-    "C": 144.1,
-    "D": 311.7,
-    "G": 93.9,
-    "H": 136.9
+    "C": 86.8,
+    "D": 311.4,
+    "G": 82.5,
+    "H": 82.5
   }
 }

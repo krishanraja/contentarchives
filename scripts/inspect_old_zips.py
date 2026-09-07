@@ -24,9 +24,9 @@ import zipfile
 from collections import defaultdict
 
 OUT = r"D:\_PhotoAudit\OLD-ZIP-CONTENTS.csv"
-LIB_ROOTS = [r"D:\PhotoLibrary", r"D:\ContentProduction"]
+LIB_ROOTS = [r"D:\PhotoLibrary", r"D:\ContentProduction", r"D:\Archive"]
 SEARCH_ROOTS = ["D:\\"]
-SKIP_DIRS = {"steamlibrary", "$recycle.bin", "system volume information",
+SKIP_DIRS = {"steamlibrary", "$recycle.bin", "system volume information", "archive",
              "photolibrary", "contentproduction"}
 
 MEDIA_EXT = {".jpg", ".jpeg", ".png", ".heic", ".heif", ".gif", ".webp", ".bmp",

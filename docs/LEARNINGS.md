@@ -708,3 +708,45 @@ and read its depth — an ETA changes what a person can decide; a shrug does not
 **Related.** Rule 17 says a cloud mount's free space is the local cache's free space.
 This is the same illusion one layer along: a cloud mount's *contents* are the local
 cache's contents.
+
+---
+
+## 26. Export part numbers are not stable identities
+
+**The incident.** Three of six Takeout archives (002, 003, 004) had exhausted Google's
+five-download limit, so a fresh export of the same photo set was requested two days
+later. The plan was reasonable and nearly cost thousands of files: verify that the new
+`001` matched the already-ingested old `001`, and if so, ingest only the new 002-004.
+
+The new `001` did not match. Of the 5,857 files old `001` had contributed to the
+library, **4,260 were still there at the same path and byte size, 1,595 were absent
+from the new `001` entirely**, and 2 had merely moved path. Zero size mismatches — the
+bytes were stable. What moved was the **partitioning**.
+
+Fingerprinting then showed the new `001` carried **3,058 files the library did not
+have** (8.8 GB, 36% of the part), and the new `002` carried **4,291** (16.5 GB, 60%).
+Files from the never-ingested old 002/003/004 had scattered across the new archives.
+Skipping the new `001` as "already done" would have silently dropped 3,058 files.
+
+**Why.** An exporter packs a traversal into fixed-size parts and cuts a new part
+whenever the running total hits the cap. Every boundary therefore depends on the total
+size of everything before it, so **one file added or removed anywhere shifts that
+boundary and every boundary after it.** Two days of phone backups, plus trash aging out
+on its 60-day timer, is more than enough. Boundaries cascade forward, which is the
+cruel part: a change late in the traversal leaves part 001 pristine while moving
+everything downstream. The check most likely to be run is the one least able to detect
+the problem.
+
+**The rule.** A part number identifies a position in one export, never a set of files.
+Two exports are two different partitionings of overlapping content; **parts may never be
+matched across them by number.** Judge a part only by what it contains.
+
+**How.** `zip_fingerprint.py` reads the **central directory** only — member names and
+sizes, no extraction, no hashing — so a 50 GB archive is triaged in seconds against the
+library's `(name, size)` index. Run it on every part of every export and let the count
+of un-held files decide whether the part is worth ingesting. Content-hash dedup at
+ingest remains the authority; the fingerprint only decides where to spend the effort.
+
+**The cheap safe fallback.** Ingest every part of the new export and let the dedup
+absorb the overlap. Once the link was fixed this cost about two hours of unattended
+transfer — far less than the cost of being wrong about which parts mattered.

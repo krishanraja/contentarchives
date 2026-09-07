@@ -30,14 +30,14 @@ exclusion, deletion or classification rule.**
 
 ---
 
-## Where things stand (2026-09-06, late)
+## Where things stand (2026-09-07, midday)
 
 ```
 D:\PhotoLibrary\
   Personal\YYYY\YYYY-MM\    56,928   the chronology
   Communal\YYYY\YYYY-MM\     3,796   family and shared
   NoDate\                      853   date never guessed
-  Library\                     328   origins with no side assigned yet
+  Library\                     329   origins with no side assigned yet
   _Review\                  10,540   classified not-a-memory. NOT deleted.
 
 D:\Archive\                    1,988
@@ -47,10 +47,21 @@ D:\Archive\                    1,988
 
 D:\ContentProduction\             18   podcast, TV interview, 2026 videos, exports
 
-D: 312 GB free (was 172 GB)
+D: 311 GB free.  C: 67 GB free (Takeout landing there)
 ```
 
 `_Staging` no longer exists — everything in it was filed.
+
+**The link is fixed.** Wired Ethernet now measures **220-425 Mbps sustained**, against
+1.5 Mbps on 2026-09-06. Bandwidth is no longer the constraint on anything here.
+
+**`C:\GoogleTakeout\Photos.zip` is resolved and gone.** It held 20 MP4s and no photos.
+19 were verified identical to library copies **by hash**; the 20th, `20240808_172820.mp4`,
+existed in the library and in OneDrive only as a 15.9 MB truncated copy while the export
+held the full **323.8 MB** original. That one was ingested (now in `Library\2024\2024-08\`,
+the small twin left untouched in `Personal\`) and only then was the zip deleted, freeing
+15 GB. Filename and size agreed on all 20; only the hash - and then the size - found the
+one that mattered.
 
 ### New, not yet ingested: the WD6400 childhood-PC drive (2026-09-06)
 
@@ -90,9 +101,10 @@ $sw.Stop(); "{0:N2} MB/s" -f (($r.RawContentLength/1MB)/$sw.Elapsed.TotalSeconds
 ```
 
 On 2026-09-06 this measured **1.5 Mbps** on a 2.4 GHz Wi-Fi extender with a 1 Gbps
-Ethernet port sitting unplugged. The user planned to move to 5 GHz and wired on
-2026-09-07. **If it still reads ~1.5 Mbps the change did not take — say so, and do
-not start the transfers.**
+Ethernet port sitting unplugged. On 2026-09-07, wired, it measures **220-425 Mbps
+sustained** — a 150-280x improvement. Re-measure anyway: the point of this section is
+that every throughput guess made before measuring has been wrong, and that does not
+stop being true once one measurement came back good.
 
 ---
 
@@ -116,15 +128,33 @@ content-hash deduped.
 Afterwards `D:\_lorimer_stage` can go; its ingested files are hardlinks and the
 library keeps the bytes.
 
-### 2. Re-download Takeout 002, 003, 004
+### 2. Ingest the 2026-09-07 Takeout export - ALL SIX parts
 
 **To `C:`, never `D:`.** Three parallel downloads to `D:` made the partial files
 *shrink* — 19.8 GB back to 18.5 GB — while writing at 0 MB/min. That is the drive
 failing under sustained parallel write, the same signature as the retired E: drive.
 
-**C: fits two at a time**, ~50 GB each against ~140 GB free. Start the driver first;
-it watches `C:\Users\krish\Downloads` and `C:\GoogleTakeout`, consumes each archive
-and deletes it, freeing room for the third.
+**C: fits two at a time**, ~50 GB each. Start the driver first; it watches
+`C:\Users\krish\Downloads`, `C:\GoogleTakeout`, `D:\` and `D:\Takeout`, consumes each
+archive and deletes it - but only once every media member is provably in the library -
+freeing room for the next.
+
+**The old export is dead and its part numbers are meaningless.** 002/003/004 of the
+2026-09-05 export exhausted Google's five-download limit, so a fresh export was taken on
+2026-09-07 (`takeout-20260907T082613Z-1-00N.zip`, 6 parts, expires ~2026-09-14).
+
+**Do not carry old part numbers across.** The re-export repartitioned everything -
+1,595 of old `001`'s files are absent from new `001`. Measured with
+`zip_fingerprint.py`, which reads the central directory only (seconds, no extraction):
+
+| new part | media | already held | NOT in library |
+|---|---|---|---|
+| 001 | 8,462 | 5,404 | **3,058 (8.8 GB, 36%)** |
+| 002 | 7,152 | 2,861 | **4,291 (16.5 GB, 60%)** |
+
+Both were "already ingested" under the old numbering. Neither was. **Fingerprint every
+part of every export and judge it by what it holds - see learning 26.** Assume 005 and
+006 also carry un-ingested content until their fingerprints say otherwise.
 
 ```powershell
 Start-Process python -ArgumentList "-u","D:\_PhotoAudit\scripts\driver.py" `
