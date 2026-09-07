@@ -60,6 +60,28 @@ Where an origin genuinely contains both, it goes to whichever side dominates and
 exceptions get moved individually. Do not build a third bucket for "mixed" — it
 becomes the biggest one and nobody ever empties it.
 
+**But note precisely what the origin folder is evidence *of*.** It is strong evidence
+for *whose* material this is — that is the split above, and it holds up. It is weak
+evidence for *what the material is*, and treating it as both is how a name-based
+triage destroys things.
+
+Phone-dump folders are routinely named after whatever prompted the dump, not after
+what is in them. Measured on one drive:
+
+| Folder name says | Folder actually holds |
+|---|---|
+| `2019-07-23 Anya oci address page 3` | 953 files / **4.74 GB** of phone camera photos |
+| `2019-06-24 discharge letter june 2019\Camera` | 63 camera files |
+| `2019-07-22 sick note july aug2019\Camera` | 85 camera files |
+
+Someone photographed one document, then emptied the whole camera roll into a folder
+named after it. Sorted by name, that is gigabytes of family photographs filed as
+medical paperwork — or excluded as documents and never seen again. Sorted by origin
+for the personal/communal split, it is correct.
+
+Use the origin folder for *whose*. Use content — EXIF, dimensions, decode — for
+*what*.
+
 ---
 
 ## What belongs in a chronology
@@ -198,14 +220,53 @@ they buy the space to work in.
 1. **Audit before touching anything.** Walk the volume counting *inodes*, not names.
    Hardlinked files appear twice and are not duplicates — `tools/space_audit.py`
    splits bytes into library-only, hardlinked, and genuinely freeable.
-2. **Take tier D and E first.** No judgement needed, and it frees working space.
-3. **Find what is already safe.** Files whose content is byte-identical to something
+
+   **Reconcile the audit against the volume's used bytes before believing it.** On an
+   old drive, a folder you are denied access to enumerates as *empty*, not as an
+   error, so a scan can return "0 files" for the region holding everything. The disk
+   said 388.9 GB used while the scan found almost nothing, and the drive was written
+   off as corrupt on that basis. It was healthy. The cause was NTFS permissions owned
+   by accounts on a machine that no longer exists.
+
+   The fix is an elevated session plus backup-mode reads (`robocopy /B`, which uses
+   `SeBackupPrivilege` to bypass ACLs and writes nothing). **Not `takeown /R`** — that
+   rewrites security descriptors across the whole MFT of the disk you are trying to
+   rescue, which is hundreds of thousands of writes to failing-age hardware.
+
+   Any large gap between "bytes used" and "bytes found" is a permissions problem or a
+   container (below) until proven otherwise. It is never an empty disk.
+
+2. **Open any backup containers before deciding what the drive holds.** Old family
+   machines commonly carry a proprietary backup set — Norton 360, Acronis, Windows
+   Backup, Time Machine — and it can be most of the disk. On the drive above it was
+   208 GB of 389 GB, and it was invisible to every media scan because none of the
+   files had media extensions.
+
+   These formats are usually far simpler than they look: a short header naming the
+   original path, then the original file stored verbatim, uncompressed and
+   unencrypted. Read one in a hex viewer before assuming you need the vendor's
+   software.
+
+   Two things to plan for, both of which have bitten:
+
+   - **A backup set holds multiple generations of the same original path.** Extracting
+     them keyed on that path collapses every generation onto one destination, last
+     writer wins, in silence. Give each generation its own destination and collapse by
+     content hash afterwards. See `LEARNINGS.md` rule 23.
+   - **A container can be a header with no payload** — a filename recorded for a file
+     whose contents were never stored. Extracted naively, that writes a zero-byte file
+     over a perfectly good copy. 29 family photographs were destroyed this way.
+
+   Contents of a backup set are not automatically redundant with the live filesystem,
+   even where the path and size match exactly. See rule 24.
+3. **Take tier D and E first.** No judgement needed, and it frees working space.
+4. **Find what is already safe.** Files whose content is byte-identical to something
    already in the library can go — proven by whole-file hash, never by name or size.
-4. **Ingest the media** into the chronology, deduped and dated, splitting personal
+5. **Ingest the media** into the chronology, deduped and dated, splitting personal
    from communal by origin folder. Same volume means hardlinks, which cost nothing.
-5. **Classify the chronology** into memory / review / uncertain. Move, never delete.
-6. **File the rest** into the archive schema.
-7. **Regenerate and commit state.** `tools/refresh.py`, then
+6. **Classify the chronology** into memory / review / uncertain. Move, never delete.
+7. **File the rest** into the archive schema.
+8. **Regenerate and commit state.** `tools/refresh.py`, then
    `tools/check_manifest.py` to prove every recorded file still exists.
 
 ### Rules that apply throughout
@@ -217,6 +278,47 @@ they buy the space to work in.
   rule was paid for with 45 irreplaceable files.
 - **Verify by content.** Sizes and filenames are filters that make hashing cheap. They
   are never the verdict.
+- **Equal size is not equal content.** Rule 7 uses size to rule a duplicate *out*,
+  which is free and sound. The converse does not follow, and fixed-size formats make
+  the collision ordinary rather than exotic — two generations of a legacy `.xls` will
+  differ in content at an identical byte count, because editing a cell does not change
+  the file's length. See rule 22.
+- **Prove the destination map is injective before writing.** If two sources can resolve
+  to one destination, one silently overwrites the other and the job still reports zero
+  failures, because every write did succeed. See rule 23.
+
+### When the source will not survive the process
+
+Everything above assumes the original stays where it is. Sometimes it does not — a
+drive being destroyed, a machine being wiped, a cloud account being closed. That
+inverts the safety asymmetry the rest of this document is built on, and it needs
+saying explicitly because the change is easy to miss:
+
+> **Once the source is going away, declining to copy IS deleting.**
+
+Consequences worth planning for:
+
+- **A skip needs the same proof as a delete.** Filters that are merely optimisations
+  become irreversible decisions. On one rescue, 19,209 files were skipped because
+  their path and size matched something already being copied; hashing them found 174
+  where that was false. See rule 24.
+- **Copy anything not *proven* duplicate, and dedupe afterwards.** The library's ingest
+  already rejects true duplicates on content hash, so let the verdict happen after the
+  irreversible step rather than before it. Bandwidth is cheap; the file is not.
+- **Verify the keeper set somewhere else, by content, before destroying anything** —
+  and if the destination is a cloud mount, confirm it reached the *cloud* rather than
+  the mount. See `ARCHITECTURE.md`, and rule 25.
+- **Publish one file per distinct content, not one per path.** Build the publish tree
+  from hardlinks into the staging tree: same volume, so it costs no space and takes
+  seconds. Record which duplicate paths collapsed into each survivor, so nothing is
+  discarded unaccounted for.
+- **Ship the provenance with the data.** A future session sorting the material will
+  have none of the context that made the decisions obvious. Write down where it came
+  from, what was excluded and why, what is known-imperfect but kept anyway, and what
+  was permanently lost. A per-file manifest with hashes and original paths costs
+  nothing to produce and is the difference between an archive and a pile.
+
+`docs/rescues/` holds worked examples.
 
 ---
 

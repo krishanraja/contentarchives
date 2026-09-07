@@ -52,6 +52,28 @@ D: 312 GB free (was 172 GB)
 
 `_Staging` no longer exists — everything in it was filed.
 
+### New, not yet ingested: the WD6400 childhood-PC drive (2026-09-06)
+
+**17,102 files / 140.62 GB** are staged and verified at
+`H:\My Drive\_photo-consolidation\from-wd6400\`, one file per distinct content, each
+proven at rest by Blake2b-256. They are **not in the library yet**.
+
+Full account: [`docs/rescues/2026-09-06-wd6400.md`](docs/rescues/2026-09-06-wd6400.md).
+It earned learnings 22, 23 and 24 — read those before writing any dedupe or skip logic
+against this set.
+
+Before touching it:
+
+- **The source drive still exists and must not be destroyed** until Google Drive
+  reports sync complete. At-rest verification proves the bytes are right *in the Drive
+  mount*, not that they reached the cloud — and the mount was measured running ahead of
+  the cloud.
+- Ingest by the hashes in that folder's `push-manifest.csv`; do not re-read 140 GB.
+- The set is already internally deduplicated. It is **not** deduplicated against
+  `D:\PhotoLibrary` — roughly 95 GB matches no size in the library at all, and ~45 GB
+  shares a size with something held, which is a hint and not a verdict.
+- Its folder names are actively misleading; the rescue doc has measured examples.
+
 ---
 
 ## FIRST, ALWAYS: measure the link
