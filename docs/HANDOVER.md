@@ -180,7 +180,7 @@ In rough priority order:
    Capacity is not the constraint: `H:` is a 2 TB account with roughly 1.65 TB free,
    against a ~517 GB library. The mount *reports* about 133 GB because it echoes the
    local cache volume — do not plan from that number.
-2. **17,102 files / 140.62 GB rescued from the WD6400 childhood-PC drive**, staged at
+2. **17,101 files / 140.62 GB rescued from the WD6400 childhood-PC drive**, staged at
    `H:\My Drive\_photo-consolidation\from-wd6400\` and awaiting ingest. Verified by
    content hash and confirmed uploaded to the cloud; the source drive can be destroyed.
    Full account in [`rescues/2026-09-06-wd6400.md`](rescues/2026-09-06-wd6400.md).
