@@ -291,6 +291,21 @@ Interpreting the results:
   servicing while `C:\Windows\WinSxS\pending.xml` exists**, so the repair cannot
   complete. Reboot, then re-check, then repair again if needed. Removing an optional
   feature (e.g. Recall) creates exactly this state.
+
+- **`CheckHealth` and `RestoreHealth` both lie about this; only `ScanHealth` inspects.**
+  `-CheckHealth` reads a *recorded flag* from a previous scan — it examines nothing.
+  Worse, `-RestoreHealth` returns `Healthy` and sets that flag **even when it repaired
+  nothing**. On the reference machine `RestoreHealth` returned `Healthy`, `CheckHealth`
+  then agreed, and `-ScanHealth` (a real scan) still reported `Repairable`. The CBS log
+  settled it:
+
+  ```
+  CSI Payload Repaired:  0
+  Seconds between corruption and repair: -1
+  ```
+
+  Always confirm with `-ScanHealth` (minutes, not seconds) and corroborate in
+  `C:\Windows\Logs\CBS\CBS.log`. Never accept `RestoreHealth`'s return value as proof.
 - **Cumulative CPU is misleading.** Sample twice ~20s apart and difference it; a
   process that merely *accumulated* CPU during your file moves is not a live problem.
   Judge total load across all cores, not one process's counter.
