@@ -667,3 +667,44 @@ no trace anywhere.
 
 If the copy set was filtered, verify the **filter**, not just the files that made it
 through.
+
+---
+
+## 25. A cloud mount cannot tell you whether the cloud has your data
+
+**The incident.** 140.62 GB was published to a Google Drive mount and every file was
+re-read from that mount and verified by content hash. 17,102 of 17,102 matched. The
+obvious reading — the data is safely in the cloud — was wrong, and the source drive was
+about to be destroyed on the strength of it.
+
+A write into a Drive mount lands in the **local cache** and uploads behind it. Reading
+the mount reads the cache. The check and the thing being checked were the same local
+bytes.
+
+Two probes exposed it. A 12 KB README, rewritten and copied in, still served its
+*previous* version through the Drive API an hour later. And the files robocopy wrote
+last were absent from the cloud entirely — not delayed, simply not there.
+
+**The rule.** Verify a cloud destination through the **cloud's** API, and verify sync
+completion from the **client's own queue** — never from the mounted filesystem.
+
+Google Drive for Desktop keeps its state in SQLite:
+
+```
+%LOCALAPPDATA%\Google\DriveFS\<account_id>\metadata_sqlite_db
+```
+
+The `operations` table is the backlog of work not yet committed to the cloud. Copy the
+file before reading it, then count rows. It drains to 0 when the client is actually
+finished. Here it started at **21,615** and took roughly three hours to clear, at
+1.6–3.5 ops/s.
+
+**The deeper failure.** Progress was reported for over an hour as "waiting for Drive"
+while the one number that would have answered the question sat in a database on the same
+machine. Polling the API for one file's size and inferring the state of 140 GB from it
+is not measurement, it is anecdote. When something is "still syncing", find the queue
+and read its depth — an ETA changes what a person can decide; a shrug does not.
+
+**Related.** Rule 17 says a cloud mount's free space is the local cache's free space.
+This is the same illusion one layer along: a cloud mount's *contents* are the local
+cache's contents.
