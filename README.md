@@ -29,6 +29,7 @@ where the work is paused, what to do next, and which decisions are already settl
 | [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | storage model, and the protocol for sessions |
 | [`docs/HANDOVER.md`](docs/HANDOVER.md) | what is done, what is open |
 | [`docs/rescues/`](docs/rescues/) | per-source rescue histories — what came off each disk, and what it cost |
+| [`docs/MACHINE-HYGIENE.md`](docs/MACHINE-HYGIENE.md) | bring a Windows machine to the agreed clean state, and keep it there |
 
 Finish by regenerating and committing state, even mid-task:
 
