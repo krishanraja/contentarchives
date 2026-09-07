@@ -30,7 +30,29 @@ exclusion, deletion or classification rule.**
 
 ---
 
-## Where things stand (2026-09-07, midday)
+## Where things stand (2026-09-07, overnight)
+
+**The 2026-09-07 Takeout export is fully ingested and verified.** All six parts,
+35,114 media members, every one matched against its archive's central directory
+before that archive was deleted. `verify_takeout_complete.py` is the proof and
+re-runs any time.
+
+**A dedup bug admitted ~222 GB of byte-identical duplicates** - the library index
+was 62.9% stale because `apply_split.py` MOVES files and the cache only tracked
+additions, and an unreadable candidate hashes to None which compares unequal and
+reads as "not a duplicate". Learning 27. Fixed at the root; a reclaim pass was
+running overnight.
+
+**Nothing is deleted without a proven surviving copy.** `guarded_delete.py` is the
+only sanctioned path: different inode, equal size, identical blake2b-256 re-hashed
+at the instant of the unlink, survivor readable to its last byte - or membership of
+a deliberately tiny garbage list that excludes screenshots.
+
+**D: is 931 GB, not the terabyte-plus assumed.** 879.5 GB of real bytes, and
+322.5 GB of what a folder listing shows is hardlinks costing nothing (learning 28).
+After dedup the library should land near 540 GB, which means the whole end state
+plausibly fits the existing drive - an earlier claim that a bigger disk was needed
+was made before measuring and was wrong.
 
 ```
 D:\PhotoLibrary\

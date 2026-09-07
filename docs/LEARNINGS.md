@@ -801,3 +801,47 @@ sample by **inode** - not by path, because hardlinks make two names look like tw
 copies - showed 97.2% were genuinely duplicated content on separate inodes. The
 question "why is the disk full" audited the ingest more effectively than the
 ingest audited itself.
+
+---
+
+## 28. Two names for one file is not two copies, and hashing cannot tell you
+
+**The incident.** Twice in one evening, on the same question - "how much of this
+drive is duplicated?" - the same wrong answer was produced two different ways.
+
+*First:* a folder listing showed six backup folders totalling 264 GB, apparently
+free for the taking. They were **94-97% hardlinked** into the library. Deleting
+them would have freed **1-3 GB each**, not 264 GB. The consolidation had already
+banked that saving; the listing was double-counting bytes that exist once.
+
+*Second, worse:* a sample hashed pairs of same-size files and reported **96.8%
+byte-identical**, which reads as an enormous reclaim. But two hardlinks to one
+inode return the *same hash by construction* - it is the same file being read
+twice. The measurement could not have produced any other answer, and it was
+about to justify deleting "duplicates" that were the library's own entries.
+
+**The rule.** Identity of CONTENT is not identity of STORAGE.
+
+  - `hash(a) == hash(b)` proves the bytes match. It says nothing about whether
+    deleting one frees anything.
+  - `(st_dev, st_ino)` equality proves they are the same file. Deleting one name
+    frees **zero** bytes.
+  - Reclaimable duplication requires **both**: identical content AND distinct
+    inodes.
+
+So any deduplication measurement must key on `st_ino` before it hashes anything,
+and any "bytes on this volume" figure must count each inode once. Counting by
+name inflated 879.5 GB of real data to 1,202.0 GB - a phantom 322.5 GB.
+
+**Where it bites hardest.** A drive whose consolidation strategy was
+*hardlink rather than copy* - which was the right strategy, and is exactly why
+293 GB entered this library at zero cost - is a drive where every naive
+duplicate scan reports a fortune that does not exist. The better the earlier
+work, the more convincing the illusion.
+
+**The tell.** If a reclaim estimate is suspiciously close to the amount of data
+you know was consolidated, you are measuring the consolidation, not the waste.
+
+**Related.** Learning 17 (a cloud mount reports the wrong volume's free space)
+and learning 22 (equal size is not equal content) are the same family: a number
+that is easy to read standing in for one that is true.
