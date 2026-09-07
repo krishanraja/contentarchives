@@ -56,6 +56,9 @@ def lp(p):
     return p if p.startswith("\\\\?\\") else "\\\\?\\" + p
 
 
+_stale_candidates = 0   # index entries that would not hash: staleness detector
+
+
 class DeletionRefused(Exception):
     pass
 
@@ -129,10 +132,29 @@ def _walk_index():
 def build_index():
     """size -> [library paths] and set of (lowername, size).
 
-    Cached. A full walk of 54k+ files costs most of a pass's life when the
-    low-memory watchdog kills us every few minutes, so the cache is replayed
-    and then brought up to date from autopilot-added.csv - which is the ONLY
-    thing that adds to the library. Delete lib-index.pickle to force a rebuild.
+    Cached, because a full walk of 90k+ files costs most of a pass's life when
+    the low-memory watchdog kills us every few minutes. The cache is replayed
+    and then brought up to date from autopilot-added.csv.
+
+    THE CACHE IS ONLY VALID WHILE NOTHING MOVES FILES.
+
+    This used to say autopilot-added.csv is "the ONLY thing that adds to the
+    library", which is true and was the wrong question. Additions are not the
+    only thing that invalidates a path index - MOVES do too, and nothing
+    records them here. apply_split.py relocated tens of thousands of files out
+    of Library\ into Personal\ and Communal\; every cached path pointing at
+    them went stale, silently.
+
+    Measured 2026-09-07: 62.9% of cached paths pointed at files that no longer
+    existed. Dedup candidates that will not open hash to None, `None == th` is
+    False, and the member is filed as new. 35,114 Takeout members were checked
+    against that index and only 382 were caught, admitting roughly 222 GB of
+    byte-identical duplicates without a single error being raised.
+
+    So: delete lib-index.pickle after ANY operation that moves library files -
+    a split, a reclassification, a manual tidy. The staleness counter in the
+    archive dedup will complain if you forget, which is the safety net rather
+    than the plan.
     """
     added_n = 0
     if os.path.exists(ADDED):
@@ -562,8 +584,26 @@ def ingest_archive(path, by_size, ns, t0):
                 try: safe_remove(tmp, 'scratch')
                 except OSError: pass
                 return
+            # A candidate that will not hash is a STALE INDEX ENTRY, not a
+            # non-match. full_hash returns None there, and `None == th` is
+            # False, so the member was silently filed as new. On 2026-09-07
+            # the index was 62.9% stale - apply_split.py had MOVED tens of
+            # thousands of files out of Library\ and the cache is only
+            # replayed from autopilot-added.csv, which records additions and
+            # knows nothing about moves. 35,114 Takeout members were checked
+            # against it and only 382 were caught, admitting ~222 GB of
+            # byte-identical duplicates. Counting these is what makes a stale
+            # index announce itself instead of manufacturing duplicates.
             for c in candidates:
-                if full_hash(c) == th:
+                ch = full_hash(c)
+                if ch is None:
+                    global _stale_candidates
+                    _stale_candidates += 1
+                    if _stale_candidates in (1, 100, 1000, 10000):
+                        log(f"  WARNING: index candidate unreadable ({_stale_candidates} so far) "
+                            f"- library index may be STALE, duplicates will be missed: {c}")
+                    continue
+                if ch == th:
                     try: safe_remove(tmp, 'scratch')
                     except OSError: pass
                     dup += 1

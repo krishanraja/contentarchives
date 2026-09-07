@@ -750,3 +750,54 @@ ingest remains the authority; the fingerprint only decides where to spend the ef
 **The cheap safe fallback.** Ingest every part of the new export and let the dedup
 absorb the overlap. Once the link was fixed this cost about two hours of unattended
 transfer — far less than the cost of being wrong about which parts mattered.
+
+---
+
+## 27. A cache is invalidated by moves, not just by writes
+
+**The incident.** 35,114 Takeout members were checked against the library's dedup
+index. **382** were rejected as duplicates. The other 34,732 were filed as new, and
+roughly **222 GB of them were byte-identical to files the library already held**.
+Nothing errored, no check failed, and the ingest reported success.
+
+The index maps size to library paths. It is cached, and refreshed by replaying
+`autopilot-added.csv`, on a premise stated in its own docstring: that file is *"the
+ONLY thing that adds to the library"*. That premise is true. It is also the wrong
+question.
+
+`apply_split.py` had **moved** tens of thousands of files out of `Library\` into
+`Personal\` and `Communal\`. A move is not an addition, nothing recorded it, and
+every cached path pointing at those files went stale. Measured afterwards: **62.9%
+of cached paths pointed at files that no longer existed.**
+
+**Why it was silent.** The dedup asks `full_hash(candidate) == this_member`.
+`full_hash` returns `None` for a file it cannot open. `None == hash` is `False`.
+So a stale candidate is indistinguishable from a genuine non-match:
+
+```python
+for c in candidates:
+    if full_hash(c) == th:      # None == th  ->  False  ->  "not a duplicate"
+        ...
+```
+
+There is no exception to catch, no error to log, and no counter that moves. The
+only visible symptom was a suspiciously low duplicate count, which reads as good
+news.
+
+**The rule.** A path index is invalidated by anything that changes a path -
+**moves and renames included**, not only writes. If the refresh mechanism cannot
+see an operation, that operation must invalidate the whole cache. Delete
+`lib-index.pickle` after any split, reclassification or manual tidy.
+
+**The deeper rule.** *A comparison that returns a falsy sentinel on failure cannot
+distinguish "different" from "unreadable".* Wherever a lookup can fail, count the
+failures and report them; a dedup that cannot open its own candidates should say
+so loudly, not quietly conclude there is no duplicate. The counter added here fires
+at 1, 100, 1,000 and 10,000 stale candidates for exactly that reason.
+
+**How it was found.** Not by the ingest, which was content. By asking why a drive
+was full: a size-group scan showed 23,082 groups of same-size files, and hashing a
+sample by **inode** - not by path, because hardlinks make two names look like two
+copies - showed 97.2% were genuinely duplicated content on separate inodes. The
+question "why is the disk full" audited the ingest more effectively than the
+ingest audited itself.

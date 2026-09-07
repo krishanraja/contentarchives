@@ -17,6 +17,7 @@ generalised versions of the safety, dating and dedupe logic live in
 | `diagnose_new.py` | ask why an ingest is calling everything new, against a baseline that excludes itself |
 | `driver.py` | loops autopilot passes and survives the memory watchdog |
 | `extract_zip_media.py` | stream out only the members not already held |
+| `guarded_delete.py` | the only sanctioned delete: a proven surviving copy, or a named garbage category |
 | `ingest_eta.py` | projected finish time weighted by bytes, not by member count |
 | `ingest_tree.py` | ingest any folder tree into the library, deduped and dated |
 | `inspect_old_zips.py` | read export archives without extracting them |
@@ -24,6 +25,7 @@ generalised versions of the safety, dating and dedupe logic live in
 | `move_audio_to_h.py` | move files to a cloud mount, deleting only once the upload queue proves receipt |
 | `purge_downgrades.py` | delete those worse copies, re-verified at the moment of deletion |
 | `purge_redundant.py` | delete byte-identical copies, re-verified at the moment of deletion |
+| `reclaim_duplicates.py` | remove byte-identical duplicates, keeping the settled copy, verified at deletion |
 | `redate_videos.py` | re-date videos from the container clock instead of a folder name |
 | `refresh_and_push.py` | regenerate the canon, verify it, push - refusing to push a false report |
 | `runner.py` | run stages sequentially with measured, self-recalibrating ETAs |
