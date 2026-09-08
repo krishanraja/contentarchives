@@ -132,6 +132,29 @@ that cannot succeed unless the data is genuinely there.
 archive, open it and count entries. For a media file, decode it. Size and mtime are
 hints, not proof.
 
+### The fallback branch that verifies nothing
+
+A later run reproduced the same failure in a subtler place. A verifier dispatched on
+file type — JPEG decoded, PNG decoded, MP4 box structure walked — and sent everything
+else to a generic branch that read the first four bytes and recorded them as a
+signature. **That branch has no failure mode.** Hand it an empty file and it reads
+`b""`, reports `sig=`, and returns no error.
+
+A zero-byte `.mpg` passed verification on that basis and was published, in a run whose
+whole purpose was catching zero-byte files. Thirty-one of its siblings *were* caught,
+but only by accident: JPEG and MP4 parsing happen to fail when given no input. Nothing
+in the design was catching them, and the one file whose extension missed the typed
+checks walked straight through, hashed clean, and shipped.
+
+**Check the invariants that hold for every file before dispatching on type.** Zero
+bytes is never valid content. Neither is a size that disagrees with the manifest, nor a
+file that has since vanished. A per-type check is for what makes *that type* valid; it
+is the wrong place to discover the file is empty.
+
+Then audit the fallback branch on its own terms. Ask what input would make it **fail**.
+If there is no answer, it is not a check — it is a log line that happens to run inside
+a function called `verify`.
+
 ---
 
 ## 7. Deduplication needs content proof, but ruling out is cheap
