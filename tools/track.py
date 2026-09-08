@@ -18,7 +18,7 @@ from collections import Counter
 from pathlib import Path
 
 AUDIT = Path(r"D:\_PhotoAudit")
-LIB = Path(r"D:\PhotoLibrary")
+LIB = Path(r"D:\ContentLibrary")
 STATE = AUDIT / "STATE.json"
 PROGRESS = AUDIT / "PROGRESS.md"
 FINDINGS = AUDIT / "FINDINGS.md"          # append-only; fed into the repo later

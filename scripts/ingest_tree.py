@@ -31,9 +31,17 @@ from collections import defaultdict
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import autopilot as ap                                          # noqa: E402
 
+# Extensions this will ingest. A format missing from here is not rejected -
+# it is INVISIBLE, which is worse: the walk never sees it and reports success.
+# `.mod` was absent, and .MOD is what JVC and Panasonic camcorders write, so a
+# 93.7 MB family video sat in a folder called Movies and no ingest ever looked
+# at it. Camcorder and raw formats are included now for the same reason.
 MEDIA_EXT = {".jpg", ".jpeg", ".png", ".heic", ".heif", ".gif", ".webp", ".bmp",
-             ".tif", ".tiff", ".dng", ".cr2", ".nef", ".arw", ".mp4", ".mov",
-             ".avi", ".mkv", ".m4v", ".3gp", ".webm", ".wmv", ".mpg", ".mpeg"}
+             ".tif", ".tiff", ".dng", ".cr2", ".cr3", ".nef", ".arw", ".raf",
+             ".orf", ".rw2", ".pef", ".srw",
+             ".mp4", ".mov", ".avi", ".mkv", ".m4v", ".3gp", ".3g2", ".webm",
+             ".wmv", ".mpg", ".mpeg", ".mpe",
+             ".mod", ".tod", ".mts", ".m2ts", ".vob", ".flv", ".asf", ".mxf"}
 AUDIT = r"D:\_PhotoAudit"
 
 # Below this a "photo" is an emoji, sticker or thumbnail, not a memory. They are

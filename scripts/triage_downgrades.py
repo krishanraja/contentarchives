@@ -54,7 +54,7 @@ import shutil
 import sys
 from collections import defaultdict
 
-LIBROOT = r"D:\PhotoLibrary"
+LIBROOT = r"D:\ContentLibrary"
 NEW = os.path.join(LIBROOT, "Library")
 CHRONOLOGY = [os.path.join(LIBROOT, d) for d in ("Personal", "Communal", "NoDate")]
 REVIEW = os.path.join(LIBROOT, "_Review")

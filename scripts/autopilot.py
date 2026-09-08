@@ -22,9 +22,9 @@ import csv, os, re, sys, json, time, shutil, hashlib, tarfile, zipfile, datetime
 from collections import defaultdict
 
 AUDIT   = r"D:\_PhotoAudit"
-LIB     = r"D:\PhotoLibrary\Library"
-NODATE  = r"D:\PhotoLibrary\NoDate"
-CAT     = r"D:\PhotoLibrary\_Catalog"
+LIB     = r"D:\ContentLibrary\Media\Pending-Segmentation"
+NODATE  = r"D:\ContentLibrary\Media\NoDate"
+CAT     = r"D:\ContentLibrary\_Catalog"
 STATE   = os.path.join(AUDIT, "autopilot-state.csv")
 ADDED   = os.path.join(AUDIT, "autopilot-added.csv")
 LOGF    = os.path.join(AUDIT, "autopilot.log")
@@ -76,7 +76,7 @@ def safe_remove(path, why):
     """
     real = os.path.abspath(path.replace("\\\\?\\", ""))
     tmp_root = os.path.abspath(TMPDIR)
-    lib_root = os.path.abspath(os.path.dirname(LIB))       # D:\PhotoLibrary
+    lib_root = os.path.abspath(os.path.dirname(LIB))       # D:\ContentLibrary
 
     # Structural precondition: scratch must never live inside the library, or the
     # scratch allowlist would become a hole straight through the library guard.
@@ -128,9 +128,9 @@ INDEX_CACHE = os.path.join(AUDIT, "lib-index.pickle")
 # and a later ingest offering it again should recognise it rather than quietly
 # put it back in the chronology.
 INDEX_ROOTS = [LIB, NODATE,
-               r"D:\PhotoLibrary\Personal",
-               r"D:\PhotoLibrary\Communal",
-               r"D:\PhotoLibrary\_Review"]
+               r"D:\ContentLibrary\Media\Personal",
+               r"D:\ContentLibrary\Media\Communal",
+               r"D:\ContentLibrary\_Review"]
 
 
 def _walk_index():

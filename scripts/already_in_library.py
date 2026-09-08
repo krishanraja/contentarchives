@@ -28,7 +28,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 SRC = r"D:\_PhotoAudit\SPACE-FREEABLE.csv"
 OUT = r"D:\_PhotoAudit\SAFE-ALREADY-IN-LIBRARY.csv"
-LIB_ROOTS = [r"D:\PhotoLibrary", r"D:\ContentProduction", r"D:\Archive"]
+LIB_ROOTS = [r"D:\ContentLibrary", r"D:\ContentLibrary\ContentProduction", r"D:\ContentLibrary\Archive"]
 MIN_SIZE = 64 * 1024          # below this the bookkeeping outweighs the bytes
 
 

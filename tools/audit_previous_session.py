@@ -23,7 +23,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-LIB = Path(r"D:\PhotoLibrary")
+LIB = Path(r"D:\ContentLibrary")
 AUDIT = Path(r"D:\_PhotoAudit")
 REPO = Path(__file__).resolve().parent.parent
 
@@ -94,7 +94,7 @@ except Exception as e:
 
 # --- 5. the structural work: claimed in docs, or actually on disk? ----------
 # These are the checks that catch a plan being *written* rather than *applied*.
-archive = Path(r"D:\Archive")
+archive = Path(r"D:\ContentLibrary\Archive")
 check("Archive schema exists on disk", archive.is_dir(),
       "D:\\Archive present" if archive.is_dir() else
       "D:\\Archive DOES NOT EXIST - the schema is documented but not applied")

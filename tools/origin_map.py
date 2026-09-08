@@ -11,7 +11,7 @@ family content, or separating work output from memories, is a decision about
 *where a batch came from* - not about individual files. 59,000 files reduce to
 ~640 origin folders, and a folder is something a person can actually judge.
 
-    python tools/origin_map.py --library D:\PhotoLibrary --out D:\_PhotoAudit
+    python tools/origin_map.py --library D:\ContentLibrary --out D:\_PhotoAudit
 """
 
 from __future__ import annotations
@@ -126,7 +126,7 @@ def build(library: str, manifest: str, out_dir: str) -> tuple[str, str]:
 
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__)
-    ap.add_argument("--library", default=r"D:\PhotoLibrary")
+    ap.add_argument("--library", default=r"D:\ContentLibrary")
     ap.add_argument("--manifest", default=None,
                     help="default: <library>\\_Catalog\\manifest.csv")
     ap.add_argument("--out", default=r"D:\_PhotoAudit")

@@ -22,7 +22,7 @@ import os
 import sys
 from pathlib import Path
 
-DEFAULT_MANIFEST = Path(r"D:\PhotoLibrary\_Catalog\manifest.csv")
+DEFAULT_MANIFEST = Path(r"D:\ContentLibrary\_Catalog\manifest.csv")
 DEFAULT_AUDIT = Path(r"D:\_PhotoAudit")
 
 # Journals that record a deliberate removal, and the column holding the path.

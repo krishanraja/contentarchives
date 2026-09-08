@@ -26,8 +26,8 @@ from collections import defaultdict
 
 ROOT = "D:\\"
 LIBRARY_ROOTS = [
-    r"D:\PhotoLibrary",
-    r"D:\ContentProduction",
+    r"D:\ContentLibrary",
+    r"D:\ContentLibrary\ContentProduction",
 ]
 # Working areas - not the collection, but not junk either. Reported separately.
 WORK_ROOTS = [

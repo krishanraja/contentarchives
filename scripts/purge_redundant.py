@@ -30,7 +30,7 @@ import sys
 
 SRC = r"D:\_PhotoAudit\SPACE-TIERS.csv"
 JOURNAL = r"D:\_PhotoAudit\user-directed-deletions.csv"
-PROTECTED = [r"D:\PhotoLibrary", r"D:\ContentProduction"]
+PROTECTED = [r"D:\ContentLibrary", r"D:\ContentLibrary\ContentProduction"]
 
 
 def lp(p: str) -> str:

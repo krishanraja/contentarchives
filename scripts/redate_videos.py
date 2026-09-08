@@ -37,9 +37,9 @@ import sys
 from collections import Counter
 from concurrent.futures import ThreadPoolExecutor
 
-LIB = r"D:\PhotoLibrary\Library"
-NODATE = r"D:\PhotoLibrary\NoDate"
-MANIFEST = r"D:\PhotoLibrary\_Catalog\manifest.csv"
+LIB = r"D:\ContentLibrary\Media\Pending-Segmentation"
+NODATE = r"D:\ContentLibrary\Media\NoDate"
+MANIFEST = r"D:\ContentLibrary\_Catalog\manifest.csv"
 JOURNAL = r"D:\_PhotoAudit\video-redate.csv"
 FFPROBE = (r"C:\Users\user\AppData\Local\Microsoft\WinGet\Packages"
            r"\Gyan.FFmpeg_Microsoft.Winget.Source_8wekyb3d8bbwe"

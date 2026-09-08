@@ -47,7 +47,7 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from guarded_delete import delete_with_surviving_copy, DeletionRefused  # noqa: E402
 
-LIB = r"D:\PhotoLibrary"
+LIB = r"D:\ContentLibrary"
 STAGING = os.path.join(LIB, "Library")
 
 

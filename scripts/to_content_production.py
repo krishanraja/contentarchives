@@ -26,18 +26,18 @@ import shutil
 import sys
 
 AUDIT = r"D:\_PhotoAudit"
-MANIFEST = r"D:\PhotoLibrary\_Catalog\manifest.csv"
+MANIFEST = r"D:\ContentLibrary\_Catalog\manifest.csv"
 JOURNAL = os.path.join(AUDIT, "content-production-moves.csv")
 
 # path -> destination subfolder. Explicit, because these were chosen by a person.
 MOVES = {
-    r"D:\PhotoLibrary\Library\2026\2026-02\20260205_165928.mp4": "2026",
-    r"D:\PhotoLibrary\Library\2026\2026-02\20260205_161023.mp4": "2026",
-    r"D:\PhotoLibrary\Library\2026\2026-03\20260305_132059.mp4": "2026",
-    r"D:\PhotoLibrary\Library\2026\2026-03\20260305_133914.mp4": "2026",
-    r"D:\PhotoLibrary\NoDate\EMPLOYER-A_Full -.mp4": "interviews",
+    r"D:\ContentLibrary\Media\Pending-Segmentation\2026\2026-02\20260205_165928.mp4": "2026",
+    r"D:\ContentLibrary\Media\Pending-Segmentation\2026\2026-02\20260205_161023.mp4": "2026",
+    r"D:\ContentLibrary\Media\Pending-Segmentation\2026\2026-03\20260305_132059.mp4": "2026",
+    r"D:\ContentLibrary\Media\Pending-Segmentation\2026\2026-03\20260305_133914.mp4": "2026",
+    r"D:\ContentLibrary\Media\NoDate\EMPLOYER-A_Full -.mp4": "interviews",
 }
-ROOT = r"D:\ContentProduction"
+ROOT = r"D:\ContentLibrary\ContentProduction"
 
 
 def lp(p: str) -> str:
