@@ -1,0 +1,111 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Who is this?</title>
+<style>
+  :root{--bg:#0d0f12;--card:#171a1f;--ink:#f2f4f7;--dim:#8b93a1;--yes:#1f8a4c;--no:#b4353a;--line:#252a31}
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  body{margin:0;background:var(--bg);color:var(--ink);
+       font:16px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif;
+       display:flex;flex-direction:column;min-height:100dvh}
+  header{padding:14px 16px;border-bottom:1px solid var(--line);display:flex;
+         justify-content:space-between;align-items:center}
+  h1{font-size:15px;margin:0;font-weight:600;letter-spacing:.01em}
+  #stats{font-size:12px;color:var(--dim);font-variant-numeric:tabular-nums}
+  main{flex:1;display:flex;flex-direction:column;align-items:center;
+       justify-content:center;padding:16px;gap:14px}
+  .q{font-size:19px;font-weight:600;text-align:center}
+  .sub{font-size:13px;color:var(--dim);text-align:center;margin-top:-6px}
+  .pics{display:flex;gap:10px;flex-wrap:wrap;justify-content:center}
+  img{max-width:min(44vw,300px);max-height:44vh;border-radius:12px;
+      background:var(--card);object-fit:cover}
+  img.single{max-width:min(92vw,460px);max-height:56vh}
+  .grid{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;max-width:460px}
+  .grid img{width:100%;max-width:none;height:96px}
+  .btns{display:flex;gap:12px;width:100%;max-width:460px}
+  button{flex:1;padding:17px;font-size:16px;font-weight:600;border:0;
+         border-radius:13px;color:#fff;background:var(--card);cursor:pointer}
+  .yes{background:var(--yes)}.no{background:var(--no)}
+  input{width:100%;max-width:460px;padding:15px;font-size:17px;border-radius:12px;
+        border:1px solid var(--line);background:var(--card);color:var(--ink)}
+  .skip{background:none;color:var(--dim);font-weight:400;font-size:14px;padding:8px}
+  .done{text-align:center;color:var(--dim);padding:40px 20px}
+</style>
+
+<header>
+  <h1>Who is this?</h1>
+  <div id="stats"></div>
+</header>
+<main id="main"><div class="done">loading…</div></main>
+
+<script>
+const $ = s => document.querySelector(s);
+
+async function stats(){
+  try{
+    const s = await (await fetch('/stats')).json();
+    $('#stats').textContent = `${s.named}/${s.people} named · ${s.tagged} tagged`;
+  }catch(e){}
+}
+
+async function post(body){
+  await fetch('/',{method:'POST',headers:{'content-type':'application/json'},
+                   body:JSON.stringify(body)});
+  load();
+}
+
+function img(h, cls){ return `<img class="${cls||''}" src="/thumb/${h}" alt="">`; }
+
+async function load(){
+  stats();
+  const q = await (await fetch('/next')).json();
+  const m = $('#main');
+
+  if(q.type === 'merge'){
+    m.innerHTML = `
+      <div class="q">Same person?</div>
+      <div class="sub">${q.reason||''}</div>
+      <div class="pics">${img(q.a_hash)}${img(q.b_hash)}</div>
+      <div class="btns">
+        <button class="no"  id="n">Different</button>
+        <button class="yes" id="y">Same</button>
+      </div>`;
+    $('#y').onclick = ()=>post({type:'merge',a:q.a,b:q.b,accept:true});
+    $('#n').onclick = ()=>post({type:'merge',a:q.a,b:q.b,accept:false});
+
+  } else if(q.type === 'name'){
+    m.innerHTML = `
+      <div class="q">Who is this?</div>
+      <div class="sub">${q.label} · seen in ${q.count} photo${q.count==1?'':'s'}</div>
+      <div class="grid">${q.hashes.map(h=>img(h)).join('')}</div>
+      <input id="nm" placeholder="Their name" autocomplete="off"
+             autocapitalize="words" enterkeyhint="done">
+      <div class="btns">
+        <button class="skip" id="sk">Skip</button>
+        <button class="yes"  id="ok">Save</button>
+      </div>`;
+    const go = ()=>post({type:'name',person_id:q.person_id,name:$('#nm').value});
+    $('#ok').onclick = go;
+    $('#nm').onkeydown = e => { if(e.key === 'Enter') go(); };
+    $('#sk').onclick = ()=>post({type:'name',person_id:q.person_id,name:''});
+    $('#nm').focus();
+
+  } else if(q.type === 'keep'){
+    m.innerHTML = `
+      <div class="q">Worth keeping?</div>
+      <div class="sub">looks like: ${q.guess}${q.subject? ' · '+q.subject : ''}</div>
+      <div class="pics">${img(q.hash,'single')}</div>
+      <div class="btns">
+        <button class="no"  id="n">Clutter</button>
+        <button class="yes" id="y">Memory</button>
+      </div>`;
+    $('#y').onclick = ()=>post({type:'keep',hash:q.hash,keep:true});
+    $('#n').onclick = ()=>post({type:'keep',hash:q.hash,keep:false});
+
+  } else {
+    m.innerHTML = `<div class="done">Nothing left to ask.<br>
+      Run the classifier for more, or come back after the next import.</div>`;
+  }
+}
+load();
+</script>
