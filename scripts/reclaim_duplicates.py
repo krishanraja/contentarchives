@@ -101,8 +101,14 @@ def main() -> None:
     groups = [(s, v) for s, v in bysize.items() if len({i for _, i in v}) > 1]
     print(f"  {len(groups):,} size groups holding more than one inode")
 
+    # A long scan that prints nothing is indistinguishable from a hang, and
+    # the difference matters when the alternative is killing it and losing
+    # 30 minutes of hashing. Report often enough to be believed.
     pairs, freed_est = [], 0
-    for size, items in groups:
+    for gi, (size, items) in enumerate(groups, 1):
+        if gi % 500 == 0:
+            print(f"  {gi:,}/{len(groups):,} groups, {len(pairs):,} pairs, "
+                  f"{freed_est/1024**3:.1f} GB so far", flush=True)
         perino: dict[int, str] = {}
         for p, i in items:
             perino.setdefault(i, p)

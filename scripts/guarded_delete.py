@@ -58,7 +58,8 @@ JOURNAL = r"D:\_PhotoAudit\user-directed-deletions.csv"
 # Categories where the file cannot, by construction, be the only copy of
 # anything irreplaceable. Deliberately short. Adding to it is a decision.
 GARBAGE = {
-    "gopro-proxy":   (".lrv",),      # generated beside the full-res .mp4
+    "gopro-proxy":   (".lrv", ".lrf"),  # GoPro .lrv / DJI .lrf, generated
+                                        # beside their own full-res original
     "thumbnail-stub": (".thm",),     # camera thumbnail, not an image
     "empty":         (),             # zero bytes, checked separately
 }
@@ -153,7 +154,8 @@ def delete_garbage(path: str, category: str, reason: str) -> int:
                 f"extension {ext} is not in category '{category}': {path}")
         if category == "gopro-proxy":
             # a proxy is only garbage while its full-resolution original is there
-            for cand in (path[:-4] + ".MP4", path[:-4] + ".mp4"):
+            stem = os.path.splitext(path)[0]
+            for cand in (stem + ".MP4", stem + ".mp4", stem + ".MOV", stem + ".mov"):
                 if os.path.exists(_lp(cand)):
                     break
             else:

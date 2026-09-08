@@ -1,15 +1,15 @@
 # Consolidation progress
 
-_Generated 2026-09-07T19:14:52 by `track.py`. Every figure is counted from a
+_Generated 2026-09-08T04:41:03 by `track.py`. Every figure is counted from a
 file on disk, not asserted from memory._
 
 ## Library
 
 | | files | GB |
 |---|---|---|
-| Dated (`Library/YYYY/YYYY-MM`) | 86,785 | 759.2 |
+| Dated (`Library/YYYY/YYYY-MM`) | 65,137 | 551.8 |
 | Undated (`NoDate/`) | 3,623 | 4.0 |
-| **Total** | **90,408** | **763.2** |
+| **Total** | **68,760** | **555.9** |
 
 ## Ingestion
 
@@ -55,4 +55,4 @@ Not yet started. 322 candidates planned.
 
 | C | D | G | H |
 |---|---|---|---|
-| 172.7 | 48.7 | 93.9 | 164.0 |
+| 162.4 | 256.1 | 91.5 | 154.3 |

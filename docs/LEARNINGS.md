@@ -784,10 +784,29 @@ There is no exception to catch, no error to log, and no counter that moves. The
 only visible symptom was a suspiciously low duplicate count, which reads as good
 news.
 
+**A correction, found 2026-09-08.** The above is true and was NOT the main cause.
+Rebuilding the cache did not fix it, because `_walk_index()` walked only
+`Library\` and `NoDate\` - **8,036 files** - while `Personal\` and `Communal\`
+held **60,724, or 88% of the library**. `apply_split.py` created those two trees
+and nothing ever taught the index they existed.
+
+So the dedup was not consulting a stale map of the library. It was consulting a
+map of 12% of it, and a fresh walk of the wrong roots is still the wrong roots.
+The staleness was real and secondary; this was the bug.
+
+It is a nastier failure than staleness because rebuilding - the obvious remedy,
+and the one applied first - produces an index that is perfectly current and
+still blind. The symptom is identical, the fix appears to work, and nothing
+errors either way.
+
 **The rule.** A path index is invalidated by anything that changes a path -
-**moves and renames included**, not only writes. If the refresh mechanism cannot
-see an operation, that operation must invalidate the whole cache. Delete
-`lib-index.pickle` after any split, reclassification or manual tidy.
+moves and renames included, not only writes. Delete `lib-index.pickle` after any
+split, reclassification or manual tidy.
+
+**The stronger rule.** An index must be able to state WHAT IT COVERS, and that
+claim must be checked against reality. `INDEX_ROOTS` is now explicit, and the
+cheap assertion is a count: an index holding 8,036 entries for a 79,300-file
+library is wrong on its face, and nobody looked at the number for a day.
 
 **The deeper rule.** *A comparison that returns a falsy sentinel on failure cannot
 distinguish "different" from "unreadable".* Wherever a lookup can fail, count the

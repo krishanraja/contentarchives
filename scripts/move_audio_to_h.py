@@ -44,28 +44,68 @@ JOURNAL = r"D:\_PhotoAudit\user-directed-deletions.csv"
 DRIVEFS = r"C:\Users\user\AppData\Local\Google\DriveFS"
 
 
-def queue_depth() -> int | None:
-    """Rows still pending upload, read from DriveFS's own database.
-
-    Returns None if it cannot be read - and None must never be treated as zero.
-    """
-    total = 0
-    found = False
+def _accounts():
     for acct in glob.glob(os.path.join(DRIVEFS, "1*")):
         db = os.path.join(acct, "metadata_sqlite_db")
-        if not os.path.exists(db):
-            continue
-        tmp = os.path.join(tempfile.gettempdir(), f"dfs_{os.path.basename(acct)[:8]}.db")
+        if os.path.exists(db):
+            yield acct, db
+
+
+def _snapshot(db: str, tag: str):
+    tmp = os.path.join(tempfile.gettempdir(), f"dfs_{tag}.db")
+    shutil.copy2(db, tmp)
+    con = sqlite3.connect(tmp)
+    con.text_factory = bytes
+    return con
+
+
+def queue_depth() -> int | None:
+    """Pending operations for the account that actually owns the destination.
+
+    This originally summed EVERY Drive account, and that was wrong in a way that
+    blocked real work: two accounts are mounted, and on 2026-09-07 the one with
+    no connection to this upload sat at 10 stale operations for eleven hours
+    while the account holding the files had drained to 0. The guard refused a
+    deletion on the strength of a number about somebody else's backlog.
+
+    Scope the question to the account that indexes the files being uploaded.
+    Returns None if nothing can be read - and None is never treated as zero.
+    """
+    best = None
+    for acct, db in _accounts():
         try:
-            shutil.copy2(db, tmp)
-            con = sqlite3.connect(tmp)
-            n = con.execute("SELECT COUNT(*) FROM operations").fetchone()[0]
+            con = _snapshot(db, os.path.basename(acct)[:8])
+            owned = con.execute(
+                "SELECT COUNT(*) FROM items WHERE local_title LIKE '%.mp3'"
+            ).fetchone()[0]
+            pending = con.execute("SELECT COUNT(*) FROM operations").fetchone()[0]
             con.close()
-            total += n
-            found = True
         except Exception:
             continue
-    return total if found else None
+        if best is None or owned > best[0]:
+            best = (owned, pending)
+    return best[1] if best else None
+
+
+def cloud_has(paths: list[str]) -> tuple[int, int]:
+    """(present, missing) - are these files in the cloud's own index?
+
+    Stronger than a queue reading zero: an empty queue says nothing is waiting,
+    not that a particular file arrived. This asks after the files themselves.
+    """
+    names = {os.path.basename(p).lower() for p in paths}
+    indexed: set[str] = set()
+    for acct, db in _accounts():
+        try:
+            con = _snapshot(db, os.path.basename(acct)[:8] + "c")
+            for (t,) in con.execute("SELECT local_title FROM items"):
+                if t:
+                    indexed.add(t.decode("utf-8", "replace").lower())
+            con.close()
+        except Exception:
+            continue
+    present = len(names & indexed)
+    return present, len(names) - present
 
 
 def dest_for(src: str) -> str:

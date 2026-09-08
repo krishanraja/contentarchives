@@ -114,9 +114,28 @@ def space_ok():
 INDEX_CACHE = os.path.join(AUDIT, "lib-index.pickle")
 
 
+# Every root that holds library content. The index MUST cover all of them.
+#
+# This used to be (LIB, NODATE) alone - 8,036 files - while Personal\ and
+# Communal\ held 60,724, or 88% of the library. apply_split.py created those
+# two trees and nothing taught the index they existed, so a dedup candidate
+# living in the chronology was invisible: the lookup found nothing and the
+# member was filed as new. That is what admitted 21,649 duplicate pairs and
+# 207 GB on 2026-09-07, and it is NOT fixed by rebuilding the cache - a fresh
+# walk of the wrong roots is still the wrong roots.
+#
+# _Review is included deliberately: a file moved there was judged not-a-memory,
+# and a later ingest offering it again should recognise it rather than quietly
+# put it back in the chronology.
+INDEX_ROOTS = [LIB, NODATE,
+               r"D:\PhotoLibrary\Personal",
+               r"D:\PhotoLibrary\Communal",
+               r"D:\PhotoLibrary\_Review"]
+
+
 def _walk_index():
     by_size, ns = defaultdict(list), set()
-    for root in (LIB, NODATE):
+    for root in INDEX_ROOTS:
         for dp, _, fns in os.walk(root):
             for fn in fns:
                 p = os.path.join(dp, fn)
@@ -130,7 +149,7 @@ def _walk_index():
 
 
 def build_index():
-    """size -> [library paths] and set of (lowername, size).
+    r"""size -> [library paths] and set of (lowername, size).
 
     Cached, because a full walk of 90k+ files costs most of a pass's life when
     the low-memory watchdog kills us every few minutes. The cache is replayed
