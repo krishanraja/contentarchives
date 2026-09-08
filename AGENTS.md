@@ -41,6 +41,7 @@ sources disagree, stop destructive work, report the conflict, and open a reconci
 finding rather than picking the convenient one.
 
 **Secrets.** Never write a credential into source, documentation, logs, reports,
+issue bodies, pull request descriptions, commit messages,
 screenshots or chat. Refer to secrets by symbolic name and retrieve them at execution
 time. A secret found in the tree is already exposed: report its location without the
 value, rotate it, scrub the copies, and add the gate that stops the next one.
