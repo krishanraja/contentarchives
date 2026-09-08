@@ -31,6 +31,7 @@ import argparse
 import os
 import subprocess
 import sys
+import zlib
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from store import content_hash                                   # noqa: E402
@@ -120,7 +121,16 @@ def main() -> None:
     ap.add_argument("--out", required=True, help="thumbnail cache directory")
     ap.add_argument("--size", type=int, default=512)
     ap.add_argument("--limit", type=int, default=0)
+    ap.add_argument("--shard", default="",
+                    help="i/n - take only every nth file. Lets several workers "
+                         "run without coordinating: the split is by a hash of "
+                         "the path, so it is deterministic and disjoint, and no "
+                         "two workers ever touch the same file.")
     a = ap.parse_args()
+
+    shard_i = shard_n = 0
+    if a.shard:
+        shard_i, shard_n = (int(x) for x in a.shard.split("/"))
 
     os.makedirs(a.out, exist_ok=True)
     made = skipped = failed = 0
@@ -131,6 +141,8 @@ def main() -> None:
             p = os.path.join(dp, fn).replace("\\\\?\\", "")
             ext = os.path.splitext(fn)[1].lower()
             if ext not in PHOTO and ext not in VIDEO:
+                continue
+            if shard_n and (zlib.crc32(p.lower().encode()) % shard_n) != shard_i:
                 continue
             r = make(p, a.out, a.size)
             if r is None:

@@ -38,6 +38,7 @@ import os
 import sys
 import time
 import urllib.request
+import zlib
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from store import Store                                          # noqa: E402
@@ -101,6 +102,18 @@ def main() -> None:
     ap.add_argument("--limit", type=int, default=0)
     ap.add_argument("--strong", action="store_true", help="use Opus, for the residue")
     ap.add_argument("--only", help="file listing hashes to do, one per line")
+    ap.add_argument("--shard", default="",
+                    help="i/n - process only this slice. Give each worker its "
+                         "OWN --store directory: the store's lock is per-process "
+                         "and will not stop six processes interleaving rows in "
+                         "one CSV. Shards are merged afterwards, which is safe "
+                         "because every file in the store is append-only.")
+    ap.add_argument("--budget-usd", type=float, default=0.0,
+                    help="hard stop once estimated spend reaches this. 0 = no cap.")
+    ap.add_argument("--rate-in", type=float, default=1.00,
+                    help="USD per million input tokens for the chosen model")
+    ap.add_argument("--rate-out", type=float, default=5.00,
+                    help="USD per million output tokens")
     a = ap.parse_args()
 
     key = os.environ.get("ANTHROPIC_API_KEY")
@@ -127,6 +140,10 @@ def main() -> None:
             if h in done or (wanted is not None and h not in wanted):
                 continue
             todo.append((h, os.path.join(d, fn)))
+    if a.shard:
+        si, sn = (int(x) for x in a.shard.split("/"))
+        todo = [t for t in todo if zlib.crc32(t[0].encode()) % sn == si]
+        print(f"  shard {si}/{sn}")
     print(f"to classify: {len(todo):,}")
     if a.limit:
         todo = todo[:a.limit]
@@ -160,17 +177,31 @@ def main() -> None:
         if res.get("keep") is not None:
             st.tag(h, "keep", "yes" if res["keep"] else "no", src, conf)
         ok += 1
+        spend = tin / 1e6 * a.rate_in + tout / 1e6 * a.rate_out
+        if a.budget_usd and spend >= a.budget_usd:
+            # A runaway is not hypothetical: an unexpected image size, a retry
+            # loop or a wrong model can multiply cost silently. The cap turns
+            # that from a bill into a stopped job with everything before it kept.
+            print(f"\n  BUDGET REACHED: ${spend:.2f} of ${a.budget_usd:.2f} "
+                  f"after {ok:,} files. Stopping.")
+            print("  Everything classified so far is saved; re-run to continue.")
+            break
         if i % 25 == 0:
             el = time.time() - t0
             print(f"  {i:,}/{len(todo):,}  ok={ok} bad={bad}  "
-                  f"{tin/max(i,1):.0f} in-tok/file  {el/max(i,1):.2f}s/file", flush=True)
+                  f"{tin/max(i,1):.0f} in-tok/file  ${spend:.2f} so far  "
+                  f"{el/max(i,1):.2f}s/file", flush=True)
 
     el = time.time() - t0
     print(f"\nclassified {ok:,}, failed {bad:,}, in {el/60:.1f} min")
     if ok:
+        spend = tin / 1e6 * a.rate_in + tout / 1e6 * a.rate_out
         print(f"  tokens: {tin:,} in, {tout:,} out")
         print(f"  per 1,000 files: {tin/ok*1000:,.0f} in, {tout/ok*1000:,.0f} out")
-        print("  multiply by the model's rate for the real cost of the full corpus.")
+        print(f"  MEASURED COST: ${spend:.2f} for {ok:,} files "
+              f"= ${spend/ok*1000:.2f} per 1,000")
+        print(f"  -> 15,819 files would be about ${spend/ok*15819:.2f}")
+        print("  Rates default to Haiku list price; pass --rate-in/--rate-out to correct.")
 
 
 if __name__ == "__main__":
