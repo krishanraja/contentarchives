@@ -1,6 +1,6 @@
 # Consolidation progress
 
-_Generated 2026-09-09T00:47:23 by `track.py`. Every figure is counted from a
+_Generated 2026-09-09T06:45:19 by `track.py`. Every figure is counted from a
 file on disk, not asserted from memory._
 
 ## Library
@@ -55,4 +55,4 @@ Not yet started. 322 candidates planned.
 
 | C | D | G | H |
 |---|---|---|---|
-| 168.1 | 283.0 | 91.0 | 159.7 |
+| 172.9 | 278.8 | 91.0 | 164.3 |

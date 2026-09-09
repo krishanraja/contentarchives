@@ -1,5 +1,5 @@
 {
-  "generated": "2026-09-09T00:47:23",
+  "generated": "2026-09-09T06:45:19",
   "library": {
     "dated_files": 0,
     "dated_bytes": 0,
@@ -68,9 +68,9 @@
     "detail": "PERSONAL-losses.csv"
   },
   "disks_free_gb": {
-    "C": 168.1,
-    "D": 283.0,
+    "C": 172.9,
+    "D": 278.8,
     "G": 91.0,
-    "H": 159.7
+    "H": 164.3
   }
 }
