@@ -887,3 +887,136 @@ you know was consolidated, you are measuring the consolidation, not the waste.
 **Related.** Learning 17 (a cloud mount reports the wrong volume's free space)
 and learning 22 (equal size is not equal content) are the same family: a number
 that is easy to read standing in for one that is true.
+
+---
+
+## 29. A classifier's precedence order can defeat its own strongest rule
+
+The router that decides whether a file from H: is a memory, produced work, or
+admin was built with a deliberate precedence: **positive provenance outranks
+negative inference**. `DCIM\100GOPRO\GH010008.MP4` sitting under a folder called
+Downloads is a camera file that passed through a downloads folder, not a QA
+artifact, so the camera test runs first and wins.
+
+That reasoning is sound and it produced a wrong answer at scale.
+
+Android names a screenshot `Screenshot_20230105_031931.png`. The datestamp
+`\d{8}_\d{6}` is the *same shape a camera writes*, so the camera test matched,
+returned `chronology`, and the word "Screenshot" - sitting in plain sight at the
+front of the filename - was never examined. 17,173 files were routed to the
+chronology on this rule, and thousands of them were screenshots, which is
+precisely the category the user had asked to keep out of it.
+
+**The rule.** Order signals by how *self-declaring* they are, not by how strong
+they feel:
+
+  1. the file says what it is (`Screenshot_`, `screen_record`) - trust it
+  2. provenance inferred from a naming convention (`DCIM`, `GH######`)
+  3. inference from surrounding folder names
+  4. a permissive default
+
+A name a device *chose to write* beats a pattern you *recognised*. Two devices
+can share a pattern; only one of them writes the word.
+
+**The tell.** A precedence rule justified by a good example is untested against
+the case where both rules fire on the same file. Enumerate those overlaps
+deliberately - they are the only place the ordering actually does any work.
+
+---
+
+## 30. `\b` treats `_` as a word character, so half the pattern never fired
+
+`\bdsc\d{4}` does not match `_DSC1215.JPG`. `\bshots?\b` does not match
+`shot_adweek.png`. Underscore is in `[A-Za-z0-9_]`, so there is no word boundary
+between `_` and `D`, nor between `t` and `_`.
+
+Camera filenames and path-flattened dumps are *made of underscores*. The camera
+and production patterns were both silently under-firing on exactly the corpus
+they were written for, and the failure was invisible: every file still got a
+destination - the default one - and the totals looked plausible.
+
+**The rule.** In any pattern meant to match filenames, `\b` is the wrong
+boundary. Use explicit character-class edges - `(?<![a-z0-9])` and
+`(?![a-z0-9])` - so `_`, `-` and `.` all count as separators.
+
+**The tell.** A regex validated only on strings that match. Validate on strings
+that *should* match and currently do not: after the fix, `from-lorimer`'s
+production share moved 46.5% to 58.0%, and `_DSC1215.JPG` was newly recognised
+as a camera file. Neither was visible in the totals.
+
+---
+
+## 31. `ignore_errors=True` on a cleanup path hides the failure that fills the disk
+
+The batched ingest keeps peak disk usage to one batch by deleting the staged
+copy after each batch: `shutil.rmtree(lp(STAGE), ignore_errors=True)`.
+
+`shutil.rmtree` on a `\?\`-prefixed path failed here. With `ignore_errors=True`
+it failed **silently**, returned normally, and the next batch staged another
+20 GB on top of it. Across 24 batches that is not a warning, it is a full disk -
+and the log would have shown 24 successful batches right up until it stopped.
+
+**The rule.** Error suppression is fine where failure is harmless. On a path
+whose *entire purpose* is to reclaim a resource, suppression converts a loud
+failure into a silent one. Delete without suppression, then assert the
+postcondition - the directory is gone - and halt if it is not.
+
+**The tell.** `ignore_errors=True` written on the same line as the thing that
+makes the algorithm's space bound hold.
+
+---
+
+## 32. "356 GB of originals to delete" was 318.9 GB of hardlinks and 4.2 GB of reclaim
+
+D: held 362 GB outside the library - `Samsung S9+ Backup`, `work backup 2020`,
+`Laptop 2024 files` and a dozen more: the sources the library was built from,
+authorised for deletion once verified safe inside it.
+
+Classified against the filesystem, with `(st_dev, st_ino)` checked *before*
+hashing anything:
+
+| | files | GB |
+|---|---|---|
+| RECLAIMABLE - different inode, identical bytes | 987 | **4.2** |
+| HARDLINK - same inode, deleting frees nothing | 26,398 | 318.9 |
+| ONLY - exists nowhere in the library | 51,492 | 39.2 |
+
+Deleting every "original" on the drive would have freed **4.2 GB**, not 356.
+This is learning 28 arriving as a plan rather than a measurement: the
+consolidation was *done well*, by hardlink, and a well-consolidated drive is one
+where every source folder looks like pure waste and is in fact the library
+itself wearing a second name.
+
+**The second half matters more.** 51,492 files exist on D: and nowhere in the
+library. The instinct that produced the deletion plan would have removed them as
+"already consolidated". They are the opposite: they are what consolidation
+missed.
+
+**The rule.** A deletion plan needs three outcomes, not two. `redundant` /
+`only copy` omits the case that is both - same bytes, one name to delete, zero
+bytes recovered - and that case was 88% of this drive.
+
+---
+
+## 33. A plan that covered 5 of 11 folders reported success on 5
+
+The H: ingest was sized, dry-run, and verified end-to-end on a pilot folder:
+21,262 files, 295.5 GB, 15 batches, 8.1 hours. Every number was measured. The
+pilot passed all five verification checks with a file-count delta of exactly 0.
+
+H: had **11 folders**. The plan named 5. The missing 6 included
+`Krish - Phone Backup - Jun to Sep 2025` - 73.2 GB and, by camera signature, the
+most memory-dense folder on the drive.
+
+Nothing in the pipeline could catch this, because every tool was asked "did you
+do what you were told?" and every one correctly answered yes.
+
+**The rule.** Verification confirms the work you specified. It cannot confirm
+the specification. Any job defined over a *set* must separately prove the set is
+complete: enumerate the container, diff it against the plan, and name what is
+excluded and why. The ingest now prints and appends folders missing from its
+priority list rather than skipping them in silence.
+
+**The tell.** A dry run whose totals were never reconciled against an
+independent enumeration of the source. "15 batches, 295.5 GB" is a statement
+about the plan, not about the drive.
