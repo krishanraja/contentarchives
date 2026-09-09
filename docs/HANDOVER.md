@@ -35,6 +35,30 @@ counts 90,408 files in the library, 60,397 added and 10,026 duplicates rejected 
 content hash; the tables below were verified on 2026-09-06 and are older than that state
 file, so read it first.
 
+On 2026-09-08 the library was restructured to a single root, `D:\ContentLibrary`, with
+`Media\{Personal,Communal,NoDate,Pending-Segmentation}` holding the chronology and
+`Archive\`, `ContentProduction\`, `_Review\` and `_Catalog\` beside it rather than
+inside it (`d5470d7`). 81,306 files moved by directory rename; `scripts/paths.py` became
+the single source of truth after `D:\PhotoLibrary` was found hardcoded 85 times across
+40 scripts; and 18,552 files (3,022 screenshots, 2,084 web-asset PNGs, 13,446 received
+WhatsApp files) were evicted from the chronology into `_Review`, not deleted. The same
+day a second coverage bug was found: the dedup index had covered only `Library\` and
+`NoDate\`, 12% of the library, so every one of the 21,649 duplicate pairs found so far
+had compared a staged copy against a settled copy it could not see (`e4812dc`). Also on
+2026-09-08, the enrichment engine (`engine/`, see `engine/README.md`) was added to work
+through `_Review` with metadata, a cheap vision model, then a human (`1a6a2ed`), and
+`AGENTS.md` arrived carrying the fleet's shared canon block rendered from
+`krishanraja/ai-harness` (`ed45d5e`). A vision pass over 15,689 `_Review` files then
+found 10,004 were real memories the sweep rules had missed, mostly received WhatsApp
+photographs that metadata could not tell apart from received junk (`8f05203`). On
+2026-09-09, 9,975 of those were restored to the chronology, with 29 left in `_Review`
+because their origin was never journalled (`9d118a1`), and the on-disk inventory was
+rebuilt to 68,042 rows after a doubled root was found and fixed (`77d614e`).
+
+The "Library layout" tables below, and the layout diagram in
+[ARCHITECTURE.md](ARCHITECTURE.md), describe the tree before this restructure;
+`scripts/paths.py` carries the current one and is the one to read.
+
 ---
 
 ## What has been consolidated
