@@ -65,6 +65,19 @@ def main() -> None:
                         "are kept, not discarded: deleting the source afterwards "
                         "would otherwise lose them.")
     p.add_argument("--divert-root", default=r"D:\_Staging\diverted")
+    p.add_argument("--dest-root", default="",
+                   help="place accepted files under this root, mirroring their "
+                        "relative path, INSTEAD of the date chronology. For "
+                        "material that is not a personal memory - podcast "
+                        "masters, QA screenshots, invoices - which the user "
+                        "wants out of the chronology entirely. Dedup, hashing "
+                        "and journalling are unchanged.")
+    p.add_argument("--any-ext", action="store_true",
+                   help="also ingest extensions outside MEDIA_EXT (pdf, docx, "
+                        "mp3...). Without this they are not rejected, they are "
+                        "INVISIBLE - the walk never sees them. Use with "
+                        "--dest-root so documents land in Archive, not the "
+                        "chronology.")
     p.add_argument("--min-size", type=int, default=MIN_MEDIA,
                    help="skip media smaller than this many bytes. The default is a "
                         "guess about stickers and thumbnails, and a guess is not a "
@@ -87,16 +100,27 @@ def main() -> None:
     print(f"method : {'hardlink - costs no additional bytes' if link else 'copy'}")
 
     files = []
+    skipped_ext = defaultdict(int)
     for dp, _, fns in os.walk(ap.lp(src_root)):
         for fn in fns:
-            if os.path.splitext(fn)[1].lower() in MEDIA_EXT:
+            ext = os.path.splitext(fn)[1].lower()
+            if ext in MEDIA_EXT or a.any_ext:
                 full = os.path.join(dp, fn).replace("\\\\?\\", "")
                 try:
                     files.append((os.path.getsize(ap.lp(full)), full))
                 except OSError:
                     pass
+            else:
+                skipped_ext[ext] += 1
     print(f"media  : {len(files):,} files, "
           f"{sum(s for s, _ in files)/1024**3:.2f} GB")
+    # Never let an unhandled extension pass in silence. A format that is not
+    # listed is not rejected, it is unseen, and an unseen file reports success.
+    if skipped_ext:
+        top = sorted(skipped_ext.items(), key=lambda x: -x[1])[:10]
+        print(f"         {sum(skipped_ext.values()):,} files skipped as "
+              f"non-media: {dict(top)}")
+        print("         (pass --any-ext --dest-root ... to place them instead)")
 
     tiny = [f for f in files if f[0] < a.min_size]
     files = [f for f in files if f[0] >= a.min_size]
@@ -147,6 +171,13 @@ def main() -> None:
         if divert_as:
             dest_dir = os.path.join(a.divert_root, divert_as)
             y = "diverted"
+        elif a.dest_root:
+            # keep the source's own shape under the new root: a podcast master
+            # in "user Videos2026 Content Produced" stays identifiable, which
+            # a flat dump of 1,400 filenames would not be
+            sub = os.path.dirname(os.path.relpath(src, src_root))
+            dest_dir = os.path.join(a.dest_root, sub) if sub else a.dest_root
+            y = "routed"
         else:
             y, m = ap.ym_for(src, name, os.path.dirname(src), {})
             dest_dir = os.path.join(ap.LIB, y, f"{y}-{m}") if y else ap.NODATE

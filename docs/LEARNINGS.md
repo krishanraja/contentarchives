@@ -1020,3 +1020,67 @@ priority list rather than skipping them in silence.
 **The tell.** A dry run whose totals were never reconciled against an
 independent enumeration of the source. "15 batches, 295.5 GB" is a statement
 about the plan, not about the drive.
+
+---
+
+## 34. `os.walk` on a directory that does not exist reports an empty library
+
+`track.py` opens with "Every number here is counted from a file that exists, not
+asserted." It then counted `D:\ContentLibrary\Library` and
+`D:\ContentLibrary\NoDate`. The restructure had moved the chronology to
+`Media\Personal`, `Media\Communal`, `Media\Pending-Segmentation` and
+`Media\NoDate`, so neither path existed.
+
+`os.walk` on a missing directory does not raise. It yields nothing. Both counters
+finished at zero, the arithmetic worked, the file wrote successfully, and
+`PROGRESS.md` reported a **61,678-file, 646.2 GB library as 0 files** under a
+header promising the opposite. It stayed that way for two days, through a
+session that read it.
+
+The repo's own copy had a different version of the same bug, and a comment above
+it recording the *previous* time this happened: "Counting the pre-split paths
+alone made STATE.json report 1,274 files for a 73,000-file library - and the
+audit passed it, because it compared that figure against a count made the same
+wrong way."
+
+**The rule.** An absent input is not an empty one. Any walk, glob or scan over a
+path that is supposed to hold something must assert the path exists before
+counting, and fail loudly when it does not. `paths.py` exists so a rename is one
+edit; a script that hardcodes tree names off a root imported from `paths.py` gets
+the worst of both - it survives the rename and reports nothing.
+
+**The tell.** A generated figure that is exactly zero. Zero is what a broken
+counter and an empty directory look like from the outside, and only one of them
+is worth believing.
+
+---
+
+## 35. The cheap model was not less accurate, it had one answer
+
+A bake-off across five vision models scored each on agreement with the labels
+already in the store. GPT-5 nano came back at **49% agreement for 1/12th of the
+price** - a figure that reads like a tolerable trade, and one a cost table would
+have made irresistible.
+
+The run printed that percentage and kept nothing else. Recording each verdict
+showed what the other 51% actually was. On a sample stratified at 50 files each
+of photo, document, screenshot, graphic, meme and poster, nano answered
+**"photo" for 162 of 300 files** - in a set that is 17% photographs. It scored
+50/50 on photos by saying "photo" to almost everything, and would have filed
+**97 of 200 non-memories - screenshots, memes, documents, graphics - into the
+personal chronology as photographs.**
+
+The saving was $3.50 against $16. The cost was the single outcome this project
+exists to prevent.
+
+**The rule.** An aggregate agreement score cannot distinguish a model that is
+somewhat wrong from a model that is degenerate, and the degenerate one scores
+*better* on whichever class it collapses to. Never choose a classifier on a
+scalar. Keep the per-item verdicts, build the confusion matrix, and look at which
+direction the errors run - a model that only over-calls the class you are trying
+to *exclude* is worse than its score, and a model that corrects old labels is
+better than its score.
+
+**The tell.** A model whose recall on one class is perfect while everything else
+degrades. Also: a benchmark run that costs real money and writes only a summary
+- when it was killed before printing that summary, it left nothing at all.

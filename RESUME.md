@@ -30,60 +30,77 @@ exclusion, deletion or classification rule.**
 
 ---
 
-## Where things stand (2026-09-07, overnight)
+## Where things stand (2026-09-10)
 
-**The 2026-09-07 Takeout export is fully ingested and verified.** All six parts,
-35,114 media members, every one matched against its archive's central directory
-before that archive was deleted. `verify_takeout_complete.py` is the proof and
-re-runs any time.
+Counted from disk by `tools/track.py` at 2026-09-10T14:50, not narrated.
 
-**A dedup bug admitted ~222 GB of byte-identical duplicates** - the library index
-was 62.9% stale because `apply_split.py` MOVES files and the cache only tracked
-additions, and an unreadable candidate hashes to None which compares unequal and
-reads as "not a duplicate". Learning 27. Fixed at the root; a reclaim pass was
-running overnight.
+```
+D:\ContentLibrary\
+  Media\Personal\YYYY\YYYY-MM\        51,900    468.0 GB   the chronology
+  Media\Communal\YYYY\YYYY-MM\         3,791     22.5 GB   family and shared
+  Media\Pending-Segmentation\          4,554    148.5 GB   ingested, no side yet
+  Media\NoDate\                        1,433      7.3 GB   date never established
+                                      ------    ---------
+                                      61,678    646.2 GB
+
+  Archive\                             1,996      7.3 GB
+  ContentProduction\                      18     25.5 GB
+  _Review\                             5,844      1.4 GB   not-a-memory. NOT deleted.
+
+D: 186.1 GB free of 931.5    C: 161.6 GB free
+```
+
+**The 2026-09-07 Takeout export is fully ingested and verified** — all six parts,
+35,114 media members, each matched against its archive's central directory before
+that archive was deleted. `verify_takeout_complete.py` re-runs any time.
+
+**The H: pull is part-done and now genuinely resumable.** `from-lorimer` and
+`from-dji-2026` are in; `from-gopro-2024` is in progress. Until 2026-09-10
+`ingest_from_h.py` rebuilt its batch list from a full folder scan on every run, so
+resuming after an interruption re-pulled everything already ingested — 86.4 GB, or
+2.4 h at the measured 10.5 MB/s. It now skips on `(relpath, size)` read from the
+append-only journals. Not from the per-batch `INGEST-*.csv` reports: those were being
+written to one filename per folder, so batches 1-3 of DJI are simply gone from them.
+
+**D: cannot hold the finished library, and this is now measured rather than assumed.**
+380.5 GB remains on H:, of which 118.9 GB is near-certain duplicate (name and size
+both already held), 18.7 GB shares a size only, and **242.8 GB is certainly new**
+against **146.4 GB of usable headroom** (186.1 free, less the 40 GB batch floor). The
+2026-09-07 claim that the end state "plausibly fits the existing drive" was true when
+the library was expected to land near 540 GB; it is already at 646.2 GB with a third
+of the input still outside it. Reclaim on D: is exhausted: 318.9 GB of what a folder
+listing calls duplicate is hardlinks that free nothing (learning 28), 39.2 GB is
+sole-copy, and every scratch directory together is 1.3 GB. Compression was measured
+and abandoned at ~83 GB, which is less than the shortfall even if it were free.
+**The user chose to add a drive (2026-09-10).** The ingest is expected to halt cleanly
+at the floor with `from-boogles` and `from-wd6400` untouched; the resume logic makes
+continuing into new storage a `paths.py` edit and a re-run.
+
+**A file that cannot be copied is not a log line.** `DJI_20260623150233_0097_D.MP4`,
+3.95 GB, failed with `[WinError 1450] Insufficient system resources` on two separate
+runs a week apart — deterministic, not transient. `shutil.copy2` asks the Drive mount
+for one transfer it cannot service. It now retries in 8 MB chunks, and any file that
+still fails is written to `H-COPY-FAILURES.csv` rather than scrolling past in a log.
+
+**A missing tree must be an error, never a zero.** Both copies of `track.py` walked
+`Library/` and `NoDate/` off the ContentLibrary root — names that stopped existing at
+the restructure. `os.walk` on a directory that does not exist yields nothing and
+raises nothing, so `PROGRESS.md` reported a 61,678-file library as **0 files** for two
+days, under a header promising every figure is counted from disk. Both now count the
+roots in `paths.py` and refuse to run if a chronology tree is absent.
+
+**The dedup index cache was 19,096 entries ahead of the disk** — 80,774 cached against
+61,678 present, because it is only replayed from `autopilot-added.csv` while the
+restructure, the `_Review` eviction and the dedup reclaim all MOVED files. Learning 27
+already makes the dangerous direction safe: a stale candidate hashes to `None`, is
+counted, and is skipped rather than declared a match. But it silently *misses*
+duplicates, which is unaffordable at this disk pressure. Pickle retired 2026-09-10;
+delete it after anything that moves library files.
 
 **Nothing is deleted without a proven surviving copy.** `guarded_delete.py` is the
-only sanctioned path: different inode, equal size, identical blake2b-256 re-hashed
-at the instant of the unlink, survivor readable to its last byte - or membership of
-a deliberately tiny garbage list that excludes screenshots.
-
-**D: is 931 GB, not the terabyte-plus assumed.** 879.5 GB of real bytes, and
-322.5 GB of what a folder listing shows is hardlinks costing nothing (learning 28).
-After dedup the library should land near 540 GB, which means the whole end state
-plausibly fits the existing drive - an earlier claim that a bigger disk was needed
-was made before measuring and was wrong.
-
-```
-D:\PhotoLibrary\
-  Personal\YYYY\YYYY-MM\    56,928   the chronology
-  Communal\YYYY\YYYY-MM\     3,796   family and shared
-  NoDate\                      853   date never guessed
-  Library\                     329   origins with no side assigned yet
-  _Review\                  10,540   classified not-a-memory. NOT deleted.
-
-D:\Archive\                    1,988
-  Personal\   01-Identity 02-Financial 03-Property 04-Medical 05-Education 06-Work
-  Communal\   01-Identity 02-Financial 03-Property
-  99-Unsorted\ side or category not established
-
-D:\ContentProduction\             18   podcast, TV interview, 2026 videos, exports
-
-D: 311 GB free.  C: 67 GB free (Takeout landing there)
-```
-
-`_Staging` no longer exists — everything in it was filed.
-
-**The link is fixed.** Wired Ethernet now measures **220-425 Mbps sustained**, against
-1.5 Mbps on 2026-09-06. Bandwidth is no longer the constraint on anything here.
-
-**`C:\GoogleTakeout\Photos.zip` is resolved and gone.** It held 20 MP4s and no photos.
-19 were verified identical to library copies **by hash**; the 20th, `20240808_172820.mp4`,
-existed in the library and in OneDrive only as a 15.9 MB truncated copy while the export
-held the full **323.8 MB** original. That one was ingested (now in `Library\2024\2024-08\`,
-the small twin left untouched in `Personal\`) and only then was the zip deleted, freeing
-15 GB. Filename and size agreed on all 20; only the hash - and then the size - found the
-one that mattered.
+only sanctioned path: different inode, equal size, blake2b-256 re-hashed at the
+instant of the unlink, survivor readable to its last byte — or membership of a
+deliberately tiny garbage list that excludes screenshots.
 
 ### New, not yet ingested: the WD6400 childhood-PC drive (2026-09-06)
 
@@ -103,8 +120,9 @@ Before touching it:
   the cloud.
 - Ingest by the hashes in that folder's `push-manifest.csv`; do not re-read 140 GB.
 - The set is already internally deduplicated. It is **not** deduplicated against
-  `D:\PhotoLibrary` — roughly 95 GB matches no size in the library at all, and ~45 GB
-  shares a size with something held, which is a hint and not a verdict.
+  `D:\ContentLibrary` — re-measured 2026-09-10: 95.3 GB matches no size in the library at
+  all, 30.9 GB shares a name AND a size with something held, and 14.4 GB shares a size
+  only, which is a hint and not a verdict.
 - Its folder names are actively misleading; the rescue doc has measured examples.
 
 ---
@@ -132,64 +150,84 @@ stop being true once one measurement came back good.
 
 ## The remaining work
 
-### 1. Finish the second machine's batch — 744 files
+### 1. Finish the H: pull — 380.5 GB remaining, and it will not fit
 
-781 of 1,525 are staged at `D:\_lorimer_stage`; all of those are ingested. The
-remaining 744 are only on the Drive mount.
+`from-lorimer` and `from-dji-2026` are in. Remaining, in `PRIORITY` order:
+
+| folder | remaining | certainly new |
+|---|---|---|
+| `from-gopro-2024` | 25.7 GB | 24.2 GB |
+| `Krish - Phone Backup - Jun to Sep 2025` | 176.0 GB | 114.4 GB |
+| `content production & podcasts` | 2.2 GB | 0.4 GB |
+| `from-personal-google-drive` | ~0 | ~0 |
+| `from-boogles` | 31.6 GB | 4.5 GB |
+| `from-wd6400` | 140.6 GB | 95.3 GB |
 
 ```powershell
-robocopy "G:\My Drive\_photo-consolidation\from-lorimer" "D:\_lorimer_stage" /E /R:2 /W:5 /NP /NFL /NDL /MT:8
-python D:\_PhotoAudit\scripts\lorimer_ingest.py            # dry run
-python D:\_PhotoAudit\scripts\lorimer_ingest.py --apply
+Set-Location D:\_PhotoAudit
+python -u scripts\ingest_from_h.py --all            # dry run: prints what it will skip
+python -u scripts\ingest_from_h.py --all --apply
 ```
 
-Copy to local disk first — **never hash off the Drive mount**, it hangs with zero
-bytes read rather than failing (learning 15). Re-running the ingest is safe: it is
-content-hash deduped.
+Launch detached (`Start-Process pwsh -WindowStyle Hidden`) — a tracked background task
+gets killed by the memory watchdog (learning 9).
 
-Afterwards `D:\_lorimer_stage` can go; its ingested files are hardlinks and the
-library keeps the bytes.
+Re-running is now cheap and safe: the run opens by printing how many files it will not
+re-pull and how many hours that saves. It halts by design at 40 GB free on the library
+volume, keeps every batch already ingested, and continues where it stopped.
 
-### 2. Ingest the 2026-09-07 Takeout export - ALL SIX parts
+**The phone-backup folder grew.** `H-INVENTORY.csv` (2026-09-08) records it at 966
+files / 0.7 GB. It is now 3,110 files / 176.0 GB — the user kept uploading. Re-scan
+before trusting any inventory of H:; do not plan from the stored one.
 
-**To `C:`, never `D:`.** Three parallel downloads to `D:` made the partial files
-*shrink* — 19.8 GB back to 18.5 GB — while writing at 0 MB/min. That is the drive
-failing under sustained parallel write, the same signature as the retired E: drive.
+**Expect a halt around `from-boogles`.** There is 146.4 GB of headroom for 242.8 GB of
+new content. When it stops, that is the design working, not a failure. The fix is
+storage, which the user has agreed to add. To continue into it: change `ROOT` in
+`paths.py` and re-run the same command — `STAGE`, the journals and the free-space
+floor all derive from it now, and the resume set is read from the journals, so nothing
+already ingested is fetched twice.
 
-**C: fits two at a time**, ~50 GB each. Start the driver first; it watches
-`C:\Users\krish\Downloads`, `C:\GoogleTakeout`, `D:\` and `D:\Takeout`, consumes each
-archive and deletes it - but only once every media member is provably in the library -
-freeing room for the next.
+**One file needs a second pass.** `DJI_20260623150233_0097_D.MP4` failed to copy on
+both prior runs. The chunked fallback landed after the DJI folder had already been
+walked in the current run, so re-run `--folder "from-dji-2026 (cannes and wedding)"
+--apply` once the main pull is done; the resume set reduces it to that one file. Check
+`H-COPY-FAILURES.csv` afterwards — if it is non-empty, those files are not in the
+library and nothing else will say so.
 
-**The old export is dead and its part numbers are meaningless.** 002/003/004 of the
-2026-09-05 export exhausted Google's five-download limit, so a fresh export was taken on
-2026-09-07 (`takeout-20260907T082613Z-1-00N.zip`, 6 parts, expires ~2026-09-14).
+### 2. Segment `Pending-Segmentation\` — 4,554 files, 148.5 GB with no side assigned
 
-**Do not carry old part numbers across.** The re-export repartitioned everything -
-1,595 of old `001`'s files are absent from new `001`. Measured with
-`zip_fingerprint.py`, which reads the central directory only (seconds, no extraction):
+Everything a fresh ingest adds lands in `Media\Pending-Segmentation\` by design. It has
+to end up in `Personal\` or `Communal\`, or in `_Review\` if it is not a memory at all.
+The user's standing requirement (2026-09-08): the chronology holds personal memories
+and nothing else, the split is audited rather than assumed, and screenshots do not
+live in it.
 
-| new part | media | already held | NOT in library |
+**The enrichment model is settled by measurement, and the cheap one lost.**
+Bake-off over a stratified 300-file sample, 50 each of photo / document / screenshot /
+graphic / meme / poster, re-run 2026-09-10 with every verdict recorded to
+`D:\_enrichment\bakeoff-verdicts.csv`:
+
+| model | agreement | $/1,000 | full job, batched |
 |---|---|---|---|
-| 001 | 8,462 | 5,404 | **3,058 (8.8 GB, 36%)** |
-| 002 | 7,152 | 2,861 | **4,291 (16.5 GB, 60%)** |
+| GPT-5 nano | 49.0% | $0.060 | $3.50 |
+| GPT-5 mini | 72.3% | $0.274 | $15.97 |
+| Gemini 3.1 Flash-Lite | 78.0% | $0.453 | $26.37 |
+| Gemini 3.5 Flash-Lite | 77.7% | $0.590 | $34.36 |
+| Claude Haiku 4.5 | reference | ~$0.75 | ~$43 |
 
-Both were "already ingested" under the old numbering. Neither was. **Fingerprint every
-part of every export and judge it by what it holds - see learning 26.** Assume 005 and
-006 also carry un-ingested content until their fingerprints say otherwise.
+Agreement is measured against labels already in the store, so read it as divergence,
+not accuracy — which is exactly why the per-file record matters. Reading it: **nano is
+not a cheaper classifier, it is a model with one answer.** It replied "photo" for 162
+of 300 files in a sample where the true share is 17%, and would have filed **48% of
+all non-memories — 97 of 200 screenshots, memes, documents and graphics — into the
+chronology as photographs.** The 12x price advantage buys the single outcome this
+project exists to prevent. The earlier run printed only "48.7% agreement" and kept
+nothing per-file, so this was invisible; `bakeoff.py` now writes each verdict as it
+happens and rewrites the summary after every model, so a killed run still leaves
+evidence.
 
-```powershell
-Start-Process python -ArgumentList "-u","D:\_PhotoAudit\scripts\driver.py" `
-  -WindowStyle Hidden -RedirectStandardOutput "D:\_PhotoAudit\driver-run.log" `
-  -RedirectStandardError "D:\_PhotoAudit\driver-err.log"
-```
-
-Launch detached — a tracked background task gets killed by the memory watchdog
-(learning 9). After cancelling any long job, confirm the process actually died.
-
-**New material lands in `Library\`, not `Personal\`.** Assign it a side afterwards
-with `propose_split.py` and `apply_split.py`, and classify it with
-`classify_screenshots.py`. Do not let a fresh ingest bypass the split.
+Before running the full pass, eyeball the divergences of whichever model wins — some
+are the new model correcting an old Haiku label rather than making an error.
 
 ### 3. Back up — the largest open risk
 
@@ -197,7 +235,7 @@ There is still no second copy. Capacity is **not** the constraint: `H:` is a 2 T
 account with ~1.65 TB free against a ~500 GB library. The mount *reports* ~133 GB
 because `Get-PSDrive` returns the local cache volume (learning 17).
 
-Back up **`PhotoLibrary\` and `ContentProduction\` and `Archive\`** — not the whole
+Back up **`ContentLibrary\`** — `Media\`, `Archive\` and `ContentProduction\`. Not the whole
 drive, or the 320 GB of hardlinked bytes uploads twice.
 
 **Batch it.** Drive for Desktop stages uploads through a cache on `C:`, so one giant
@@ -211,13 +249,16 @@ throwing controller errors is the larger risk.
 
 ## Waiting on the user — do not act unprompted
 
-- **`D:\PhotoLibrary\_Review\`** — 10,540 files (4.6 GB) classified as not-memories.
-  Nothing was deleted. The user reviews and empties it.
-- **`D:\Archive\99-Unsorted\`** — origins whose *side* is not established, plus
+- **`D:\ContentLibrary\_Review\`** — 5,844 files (1.4 GB) judged not-a-memory.
+  Nothing was deleted. The user reviews and empties it. The count fell from 10,540
+  because the 2026-09-08 vision pass found 9,975 real memories the rules had swept
+  out and restored them — a rule that evicts on a filename pattern will do this again.
+- **`D:\ContentLibrary\Archive\99-Unsorted\`** — origins whose *side* is not established, plus
   messenger stickers. Keep it; it is the pressure valve that stops things being
   forced into a wrong category.
-- **`Library\` (328 files)** — origins with no side assigned. Deliberately left in
-  place rather than defaulted to Personal.
+- **`Media\Pending-Segmentation\` (4,554 files, 148.5 GB)** — origins with no side
+  assigned. Deliberately left in place rather than defaulted to Personal. This is the
+  queue for step 2, and every fresh ingest adds to it.
 
 ---
 
@@ -234,6 +275,7 @@ throwing controller errors is the larger risk.
 | Compression **abandoned** | measured: grainy footage has a quality ceiling, 4K HEVC ran at 0.1× realtime |
 | Downloads go to `C:`, never `D:` | D: corrupts partial files under parallel write |
 | Large videos are all kept | precious memories and travel footage |
+| Add storage rather than prune or compress to fit (2026-09-10) | measured: 242.8 GB still to come against 146.4 GB of headroom; reclaim on D: is exhausted and compression is worth less than the shortfall |
 
 **The data-loss topic is closed.** 45 files were lost early in this project. Do not
 re-narrate it. The rules it produced still bind — LEARNINGS 1 and 2.

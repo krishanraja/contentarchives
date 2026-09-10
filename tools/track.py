@@ -54,19 +54,28 @@ def _free(drive: str) -> float:
 def collect() -> dict:
     now = dt.datetime.now().isoformat(timespec="seconds")
 
-    # The chronology is split into Personal/ and Communal/; Library/ now holds
-    # only origins not yet assigned a side. Counting the pre-split paths alone
+    # The chronology is split into Personal/ and Communal/; Pending-Segmentation/
+    # holds origins not yet assigned a side. Counting the pre-split paths alone
     # made STATE.json report 1,274 files for a 73,000-file library - and the
     # audit passed it, because it compared that figure against a count made the
     # same wrong way. Count every chronology root.
-    sides = {name: _walk_count(LIB / name)
-             for name in ("Personal", "Communal", "Library", "NoDate")}
+    #
+    # Then the restructure moved all four under Media/ and this function kept
+    # reading the old names off the new root. os.walk on a directory that does
+    # not exist yields nothing and raises nothing, so the same function reported
+    # a 61,678-file library as ZERO files, for two days, in a file whose header
+    # says every figure is counted from disk. The absence check below is the
+    # point: a missing tree must be an error, never a zero.
+    CHRON = ("Personal", "Communal", "Pending-Segmentation", "NoDate")
+    missing = [n for n in CHRON if not (LIB / "Media" / n).is_dir()]
+    if missing:
+        raise SystemExit(
+            f"track.py: chronology trees missing under {LIB / 'Media'}: "
+            f"{missing}. Counting a missing tree as zero is the bug this "
+            f"check exists to prevent - fix the layout or this file's roots.")
+    sides = {name: _walk_count(LIB / "Media" / name) for name in CHRON}
 
-    nod_n = nod_b = 0
-    for base in (LIB, LIB / "Personal", LIB / "Communal"):
-        n, b = _walk_count(base / "NoDate")
-        nod_n += n
-        nod_b += b
+    nod_n, nod_b = sides["NoDate"]
 
     total_n = sum(n for n, _ in sides.values())
     total_b = sum(b for _, b in sides.values())
@@ -161,7 +170,7 @@ def write_progress(s: dict) -> None:
         "",
         "| | files | GB |",
         "|---|---|---|",
-        f"| Dated (`Library/YYYY/YYYY-MM`) | {L['dated_files']:,} | {L['dated_bytes']/1024**3:.1f} |",
+        f"| Dated (`Media/<side>/YYYY/YYYY-MM`) | {L['dated_files']:,} | {L['dated_bytes']/1024**3:.1f} |",
         f"| Undated (`NoDate/`) | {L['nodate_files']:,} | {L['nodate_bytes']/1024**3:.1f} |",
         f"| **Total** | **{L['total_files']:,}** | **{(L['dated_bytes']+L['nodate_bytes'])/1024**3:.1f}** |",
         "",

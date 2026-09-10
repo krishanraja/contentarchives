@@ -20,6 +20,7 @@ generalised versions of the safety, dating and dedupe logic live in
 | `extract_zip_media.py` | stream out only the members not already held |
 | `guarded_delete.py` | the only sanctioned delete: a proven surviving copy, or a named garbage category |
 | `ingest_eta.py` | projected finish time weighted by bytes, not by member count |
+| `ingest_from_h.py` | stream a cloud mount into the library in batches, routed, deduped, resumable |
 | `ingest_tree.py` | ingest any folder tree into the library, deduped and dated |
 | `inspect_old_zips.py` | read export archives without extracting them |
 | `machine_triage.py` | triage a machine's media by origin folder rather than extension |

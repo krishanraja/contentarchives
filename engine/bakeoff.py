@@ -37,6 +37,7 @@ from __future__ import annotations
 import argparse
 import base64
 import collections
+import csv
 import json
 import os
 import random
@@ -54,11 +55,15 @@ STORE = r"D:\_enrichment"
 
 # name -> (provider, model id, $/1M in, $/1M out) at STANDARD price.
 # Batch is half. Prices from the Artificial Analysis feed, 2026-09-09.
+# gemini-2.5-flash-lite appears in the models list but 404s: "no longer
+# available to new users". The list advertises models that cannot be called, so
+# every id here was verified with a real request before being added.
 CANDIDATES = {
-    "gpt5-nano":       ("openai", "gpt-5-nano", 0.05, 0.40),
-    "gemini-flash-lite": ("google", "gemini-2.5-flash-lite", 0.10, 0.40),
-    "gpt5-mini":       ("openai", "gpt-5-mini", 0.25, 2.00),
-    "haiku":           ("anthropic", "claude-haiku-4-5-20251001", 1.00, 5.00),
+    "gpt5-nano":     ("openai", "gpt-5-nano", 0.05, 0.40),
+    "gemini31-lite": ("google", "gemini-3.1-flash-lite", 0.25, 1.50),
+    "gemini35-lite": ("google", "gemini-3.5-flash-lite", 0.30, 2.50),
+    "gpt5-mini":     ("openai", "gpt-5-mini", 0.25, 2.00),
+    "haiku":         ("anthropic", "claude-haiku-4-5-20251001", 1.00, 5.00),
 }
 
 
@@ -90,27 +95,39 @@ def call_anthropic(model: str, jpeg: bytes, key: str) -> tuple[str, int, int]:
 
 def call_openai(model: str, jpeg: bytes, key: str) -> tuple[str, int, int]:
     b64 = base64.b64encode(jpeg).decode()
+    # GPT-5 models are reasoning models, and max_completion_tokens covers
+    # reasoning tokens too. At 800 the whole budget went to reasoning and the
+    # answer came back EMPTY - while still billing 800 output tokens, which
+    # made the "16x cheaper" model cost nearly what Haiku does for no output.
+    # minimal effort plus a wider ceiling fixes both halves of that.
     body = {"model": model, "messages": [{"role": "user", "content": [
         {"type": "text", "text": PROMPT},
         {"type": "image_url",
          "image_url": {"url": f"data:image/jpeg;base64,{b64}"}}]}],
-        "max_completion_tokens": 800}
+        "max_completion_tokens": 2000,
+        "reasoning_effort": "minimal"}
     try:
         d = post("https://api.openai.com/v1/chat/completions",
                  {"content-type": "application/json",
                   "authorization": f"Bearer {key}"}, body)
     except urllib.error.HTTPError as e:
         detail = e.read().decode(errors="replace")
-        # Older models want max_tokens; newer ones reject it. Try the other one
-        # rather than making the operator guess which family they picked.
+        # Older models want max_tokens and reject reasoning_effort; newer ones
+        # are the reverse. Retry once with the other shape rather than making
+        # the operator work out which family they picked.
+        retried = False
+        if "reasoning_effort" in detail:
+            body.pop("reasoning_effort", None)
+            retried = True
         if "max_completion_tokens" in detail or "max_tokens" in detail:
             body.pop("max_completion_tokens", None)
-            body["max_tokens"] = 800
-            d = post("https://api.openai.com/v1/chat/completions",
-                     {"content-type": "application/json",
-                      "authorization": f"Bearer {key}"}, body)
-        else:
+            body["max_tokens"] = 2000
+            retried = True
+        if not retried:
             raise RuntimeError(f"{e.code}: {detail[:400]}") from None
+        d = post("https://api.openai.com/v1/chat/completions",
+                 {"content-type": "application/json",
+                  "authorization": f"Bearer {key}"}, body)
     u = d.get("usage", {})
     ch = (d.get("choices") or [{}])[0]
     return (ch.get("message", {}).get("content") or "",
@@ -215,6 +232,23 @@ def main() -> None:
     print(f"\nsample: {len(rows)} files, "
           f"{dict(collections.Counter(r[2] for r in rows))}")
 
+    # A bake-off that prints an agreement percentage and keeps nothing is not
+    # evidence. Agreement is measured against labels already in the store, so a
+    # divergence may be the new model correcting the old one - and that can only
+    # be judged by looking at the disagreements. The 2026-09-09 run cost real
+    # money, was killed before its summary, and left nothing behind but a log
+    # tail. So: every verdict is written as it happens, and the summary is
+    # rewritten after each model rather than once at the end.
+    vpath = os.path.join(STORE, "bakeoff-verdicts.csv")
+    fresh = not os.path.exists(vpath)
+    vf = open(vpath, "a", newline="", encoding="utf-8")
+    vw = csv.writer(vf)
+    if fresh:
+        vw.writerow(["run", "model", "hash", "path", "stored_kind", "model_kind",
+                     "agree", "people", "subject", "keep", "sensitivity",
+                     "confidence"])
+    run_id = time.strftime("%Y%m%dT%H%M%S")
+
     results = {}
     for name in names:
         provider, model, pin, pout = CANDIDATES[name]
@@ -248,9 +282,16 @@ def main() -> None:
                 failed += 1
                 continue
             total += 1
-            if str(d.get("kind", "")).strip().lower() == truth.lower():
+            mk = str(d.get("kind", "")).strip().lower()
+            hit = mk == truth.lower()
+            if hit:
                 agree += 1
             sens[str(d.get("sensitivity", "(absent)"))] += 1
+            vw.writerow([run_id, name, h, path, truth, mk, int(hit),
+                         d.get("people", ""), str(d.get("subject", ""))[:120],
+                         d.get("keep", ""), d.get("sensitivity", ""),
+                         d.get("confidence", "")])
+            vf.flush()
             if i % 50 == 0:
                 print(f"   {i}/{len(rows)} agree={agree}/{total}", flush=True)
 
@@ -263,6 +304,9 @@ def main() -> None:
             "cost_1k": cost_1k, "job": cost_1k * 116.5, "sens": dict(sens),
             "s_per_file": el / max(len(rows), 1),
         }
+        with open(os.path.join(STORE, "bakeoff.json"), "w",
+                  encoding="utf-8") as jf:
+            json.dump(results, jf, indent=1)      # after each model, not at end
         r = results[name]
         print(f"   agreement {agree}/{total} "
               f"({agree*100/n_ok:.1f}%)  failed {failed}  blocked {blocked}")
@@ -271,6 +315,7 @@ def main() -> None:
               f"${r['job']:.2f} standard, ${r['job']/2:.2f} batched")
         print(f"   sensitivity spread: {r['sens']}")
 
+    vf.close()
     if not a.smoke and results:
         print("\n" + "=" * 78)
         print(f"{'model':<20}{'agree':>8}{'fail':>6}{'block':>7}"
@@ -284,6 +329,7 @@ def main() -> None:
         with open(out, "w", encoding="utf-8") as f:
             json.dump(results, f, indent=1)
         print(f"\n-> {out}")
+        print(f"-> {vpath}  (every verdict, for eyeballing divergences)")
         print("\nAgreement is measured against Haiku's own earlier labels, so")
         print("Haiku will score near 100% by construction. Read it as 'how far")
         print("does this model diverge from the labels already in the store',")
