@@ -127,10 +127,19 @@ INDEX_CACHE = os.path.join(AUDIT, "lib-index.pickle")
 # _Review is included deliberately: a file moved there was judged not-a-memory,
 # and a later ingest offering it again should recognise it rather than quietly
 # put it back in the chronology.
+# Archive\ and ContentProduction\ were absent, and ingest_tree --dest-root
+# writes into both. Measured 2026-09-10: four videos held twice, 22.09 GB,
+# separate inodes - present in ContentProduction AND in the chronology, and
+# invisible to every dedup pass because the index never looked there. The
+# reasoning that puts _Review in this list is the same reasoning: a file already
+# filed as produced work or as a document should be RECOGNISED on re-import, not
+# quietly admitted a second time somewhere else.
 INDEX_ROOTS = [LIB, NODATE,
                r"D:\ContentLibrary\Media\Personal",
                r"D:\ContentLibrary\Media\Communal",
-               r"D:\ContentLibrary\_Review"]
+               r"D:\ContentLibrary\_Review",
+               r"D:\ContentLibrary\Archive",
+               r"D:\ContentLibrary\ContentProduction"]
 
 
 def _walk_index():
@@ -184,8 +193,21 @@ def build_index():
         try:
             import pickle
             with open(INDEX_CACHE, "rb") as f:
-                cached_added, by_size, ns = pickle.load(f)
+                blob = pickle.load(f)
+            # The cache is keyed on how many rows autopilot-added.csv had, and
+            # on nothing else - so widening INDEX_ROOTS does not invalidate it.
+            # A cache built over five roots would keep being replayed after the
+            # list grew to seven, and the two new trees would stay invisible
+            # exactly as if the fix had never been made. Record the roots.
+            if len(blob) == 4:
+                cached_added, cached_roots, by_size, ns = blob
+            else:                                   # pre-2026-09-10 cache
+                cached_added, by_size, ns = blob
+                cached_roots = None
             by_size = defaultdict(list, by_size)
+            if cached_roots != list(INDEX_ROOTS):
+                log("  index cache was built over different roots, rebuilding")
+                raise ValueError("root set changed")
             if cached_added <= added_n:
                 # replay only the rows appended since the cache was written
                 if cached_added < added_n:
@@ -210,7 +232,8 @@ def build_index():
     try:
         import pickle
         with open(INDEX_CACHE, "wb") as f:
-            pickle.dump((added_n, dict(by_size), ns), f, protocol=4)
+            pickle.dump((added_n, list(INDEX_ROOTS), dict(by_size), ns),
+                        f, protocol=4)
     except Exception as e:
         log(f"  could not write index cache: {e}")
     return by_size, ns

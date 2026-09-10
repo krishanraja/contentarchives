@@ -202,51 +202,51 @@ The user's standing requirement (2026-09-08): the chronology holds personal memo
 and nothing else, the split is audited rather than assumed, and screenshots do not
 live in it.
 
-**The enrichment model is settled by measurement, and the agreement column is not
-what settles it.** Bake-off over a stratified 300-file sample, 50 each of photo /
-document / screenshot / graphic / meme / poster, re-run 2026-09-10 with every verdict
-written to `D:\_enrichment\bakeoff-verdicts.csv`. The full pass is **91,394 model
-calls** — 51,774 images plus 9,905 videos at 4 sampled frames each — counted by
-`job_calls()` rather than the literal 116,500 that used to be multiplied into every
-headline cost.
+**The enrichment model is settled by measurement, and the first measurement was
+circular.** Bake-off over a stratified 300-file sample, 50 each of photo / document /
+screenshot / graphic / meme / poster, with every verdict written to
+`D:\_enrichment\bakeoff-verdicts.csv`. The full pass is **91,394 model calls** —
+51,774 images plus 9,905 videos at 4 sampled frames each — counted by `job_calls()`
+rather than the literal 116,500 that used to be multiplied into every headline cost.
 
-| model | agreement | files it would call a photo that are not | $/1,000 | full pass, batched |
+`bakeoff.py` scores agreement against the labels already in the store. Those labels
+are Haiku's, so Haiku was being asked how often it agrees with itself, and every other
+model was being scored on how far it diverges from one particular model's opinion.
+`scripts/consensus.py` rebuilds the reference per file from the majority of the OTHER
+models, excluding whichever model is being scored. A label two independent models
+agree on is not truth, but it is evidence that does not come from the model on trial.
+
+| model | vs independent consensus | non-memories called "photo" | $/1,000 | full pass, batched |
 |---|---|---|---|---|
-| GPT-5 nano | 49.0% | **97 of 200 (48%)** | $0.060 | $2.74 |
-| GPT-5 mini | 73.7% | 39 of 200 (20%) | $0.269 | $12.29 |
-| **Gemini 3.1 Flash-Lite** | **75.9%** | **18 of 200 (9%)** | $0.453 | **$20.70** |
-| Gemini 3.5 Flash-Lite | 75.3% | 19 of 200 (10%) | $0.589 | $26.92 |
+| **Gemini 3.1 Flash-Lite** | **87.8%** | **3 of 168 (2%)** | $0.453 | **$20.70** |
+| Gemini 3.5 Flash-Lite | 87.5% | 5 of 170 (3%) | $0.589 | $26.92 |
+| GPT-5 mini | 81.5% | 22 of 178 (12%) | $0.269 | $12.29 |
+| Claude Haiku 4.5 | 74.5% | 3 of 172 (2%) | $1.133 | $51.77 |
+| GPT-5 nano | 57.9% | 79 of 178 (44%) | $0.060 | $2.74 |
 
-Agreement is measured against labels already in the store, so read it as divergence,
-not accuracy. The fourth column is the one that decides, because it counts the only
-error that costs anything here: a screenshot, meme, document or graphic filed into the
-chronology as a photograph.
+The second column counts the only error that costs anything here: a screenshot, meme,
+document or graphic filed into the chronology as a photograph, which a human then has
+to find and pull back out.
 
 - **nano is not a cheaper classifier, it is a model with one answer.** It replied
   "photo" for 162 of 300 files in a sample that is 17% photographs, scoring a perfect
-  50/50 on photos by saying "photo" to nearly everything. Its 12x price advantage buys
-  the single outcome this project exists to prevent.
-- **GPT-5 mini and Gemini 3.1 Flash-Lite are 2.2 points apart on agreement and twice
-  apart on the error that matters** — 20% against 9%. Per class: mini is better on
-  documents (37/50 vs 29/50) and worse on screenshots (29 vs 34), graphics (31 vs 37)
-  and memes (30 vs 38).
-- **3.5 Flash-Lite is strictly worse than 3.1** on both columns and costs 30% more.
-  There is no argument for it.
+  50/50 on photos by saying "photo" to nearly everything.
+- **Haiku is second-worst on accuracy and the most expensive**, at 2.5x Gemini 3.1 for
+  13 points less agreement. It measured $1.133/1,000 against the ~$0.75 the price
+  table implied. Re-tested 2026-09-10 at Krish's request; the case against it is not
+  the earlier HTTP 401, which was a reporting bug, but the numbers above.
+- **Roughly a quarter of the labels already in the store are wrong.** They score 75.5%
+  against the same reference, and Haiku re-run scores 74.5% — stably mediocre rather
+  than drifting. The pass is a replacement, not a re-derivation.
+- **3.5 Flash-Lite is a tie with 3.1 on quality and 30% dearer.** No argument for it.
 
-**Recommendation: Gemini 3.1 Flash-Lite.** The $8.41 premium over GPT-5 mini halves
-the rate at which non-memories reach the chronology, and every one of those is a file
-a human then has to find and pull back out.
+**Recommendation: Gemini 3.1 Flash-Lite, $20.70 batched.** Best on both columns and
+2.5x cheaper than the incumbent.
 
-**40 of 300 stored labels are wrong**, and independently so: on 40 files both
-candidates diverge from the store *and agree with each other*, most often
-`screenshot -> graphic` (12). So both models are more accurate than their agreement
-score, and a re-classification pass improves the existing labels rather than merely
-re-deriving them.
-
-**`ANTHROPIC_API_KEY` in `HKCU\Environment` returns HTTP 401.** Haiku failed all 300
-calls in the bake-off for this reason. It is only the reference here so nothing was
-blocked, but anything else reaching for that key is failing too.
-
+Read the caveat with the table: a majority vote among models favours whatever those
+models share, so it is evidence and not ground truth. It is simply the only measure
+here that does not ask a model how often it agrees with itself — which is what
+produced Haiku's apparent 100% and its actual 88.7%.
 
 **Derived copies were reaching the chronology, and 51 are already in it.** The router
 treats a camera filename as strong positive provenance that outranks weaker signals —

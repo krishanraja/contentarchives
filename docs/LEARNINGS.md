@@ -1084,3 +1084,40 @@ better than its score.
 **The tell.** A model whose recall on one class is perfect while everything else
 degrades. Also: a benchmark run that costs real money and writes only a summary
 - when it was killed before printing that summary, it left nothing at all.
+
+---
+
+## 36. Two files, one name, one exact byte count, different content
+
+`Archive\` and `ContentProduction\` were missing from `INDEX_ROOTS`, and
+`ingest_tree --dest-root` writes into both, so nothing deduplicating the library
+ever looked there. Four videos turned up held twice - once in
+`ContentProduction\2026\` and once in the chronology - matching on name and on
+size exactly.
+
+Learning 28 says check the inode before believing a duplicate count, so that was
+done first: four separate inodes, 22.09 GB of real disk. Then the whole-file
+hashes, because the rule is that a duplicate may only be declared on a content
+match:
+
+    20260205_161023.mp4   6.8 GB   IDENTICAL
+    20260305_132059.mp4   4.3 GB   IDENTICAL
+    20260305_133914.mp4   4.2 GB   IDENTICAL
+    20260205_165928.mp4   7.4 GB   DIFFERENT   8833730743a6df7f / d7eaef8dd2f5ae60
+
+**Three of four were duplicates. The fourth is 7.4 GB of unique footage wearing
+an identical name and an identical size.** Not a near-match: 7,736,000,000-odd
+bytes agreeing to the byte while the content does not. Any pass that had deduped
+on `(name, size)` - which is the cheap check every one of these tools reaches for
+first, and which `ingest_folder` uses as its fast path - would have deleted it and
+reported a clean 22.09 GB reclaimed.
+
+**The rule.** Size is a filter, never a verdict, and adding the filename to it
+adds nothing: two exports of the same source clip from the same tool at the same
+settings collide on both. The reclaim figure is the hash-confirmed subset -
+14.88 GB here, not 22.09 - and the gap between those two numbers is the whole
+lesson.
+
+**The tell.** A duplicate set whose members all come from the same device on the
+same day. That is precisely when a naming scheme and an encoder will produce
+identical metadata for different moments.

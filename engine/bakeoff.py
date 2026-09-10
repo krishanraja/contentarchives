@@ -82,8 +82,21 @@ CANDIDATES = {
 def post(url: str, headers: dict, body: dict, timeout: int = 120) -> dict:
     r = urllib.request.Request(url, data=json.dumps(body).encode(),
                                headers=headers, method="POST")
-    with urllib.request.urlopen(r, timeout=timeout) as resp:
-        return json.loads(resp.read())
+    try:
+        with urllib.request.urlopen(r, timeout=timeout) as resp:
+            return json.loads(resp.read())
+    except urllib.error.HTTPError as e:
+        # urllib's str() is "HTTP Error 401: Unauthorized" and the body - which
+        # is where every provider puts the actual reason - is discarded unless
+        # it is read here. Haiku failed all 300 calls of the 2026-09-10 run and
+        # the log said only "401", so the run was written off as a dead key. The
+        # key was fine. Never let a provider error arrive without its body.
+        detail = ""
+        try:
+            detail = e.read().decode(errors="replace")[:400]
+        except Exception:                                        # noqa: BLE001
+            pass
+        raise RuntimeError(f"HTTP {e.code} {url.split('/')[2]}: {detail}") from e
 
 
 # --- provider adapters ------------------------------------------------------
@@ -267,6 +280,23 @@ def main() -> None:
     global JOB_K
     JOB_K, how = job_calls()
     print(NLC + f"full pass: {JOB_K*1000:,.0f} model calls  ({how})")
+
+    # One real call per provider before spending 300 on it. A whole arm of this
+    # comparison was lost to an auth failure that a single request would have
+    # surfaced in two seconds instead of thirty-five minutes.
+    probe = sample(1)
+    if probe:
+        pj = open(probe[0][1], "rb").read()
+        for name in list(names):
+            provider, model, _, _ = CANDIDATES[name]
+            try:
+                ADAPTERS[provider](model, pj, have[provider])
+                print(f"  preflight {name:<16} ok")
+            except Exception as e:                               # noqa: BLE001
+                print(f"  preflight {name:<16} FAILED - {str(e)[:200]}")
+                names.remove(name)
+        if not names:
+            sys.exit("every candidate failed preflight")
 
     rows = sample(2 if a.smoke else a.n)
     print(f"\nsample: {len(rows)} files, "
