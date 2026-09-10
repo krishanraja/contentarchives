@@ -202,32 +202,71 @@ The user's standing requirement (2026-09-08): the chronology holds personal memo
 and nothing else, the split is audited rather than assumed, and screenshots do not
 live in it.
 
-**The enrichment model is settled by measurement, and the cheap one lost.**
-Bake-off over a stratified 300-file sample, 50 each of photo / document / screenshot /
-graphic / meme / poster, re-run 2026-09-10 with every verdict recorded to
-`D:\_enrichment\bakeoff-verdicts.csv`:
+**The enrichment model is settled by measurement, and the agreement column is not
+what settles it.** Bake-off over a stratified 300-file sample, 50 each of photo /
+document / screenshot / graphic / meme / poster, re-run 2026-09-10 with every verdict
+written to `D:\_enrichment\bakeoff-verdicts.csv`. The full pass is **91,394 model
+calls** — 51,774 images plus 9,905 videos at 4 sampled frames each — counted by
+`job_calls()` rather than the literal 116,500 that used to be multiplied into every
+headline cost.
 
-| model | agreement | $/1,000 | full job, batched |
-|---|---|---|---|
-| GPT-5 nano | 49.0% | $0.060 | $3.50 |
-| GPT-5 mini | 72.3% | $0.274 | $15.97 |
-| Gemini 3.1 Flash-Lite | 78.0% | $0.453 | $26.37 |
-| Gemini 3.5 Flash-Lite | 77.7% | $0.590 | $34.36 |
-| Claude Haiku 4.5 | reference | ~$0.75 | ~$43 |
+| model | agreement | files it would call a photo that are not | $/1,000 | full pass, batched |
+|---|---|---|---|---|
+| GPT-5 nano | 49.0% | **97 of 200 (48%)** | $0.060 | $2.74 |
+| GPT-5 mini | 73.7% | 39 of 200 (20%) | $0.269 | $12.29 |
+| **Gemini 3.1 Flash-Lite** | **75.9%** | **18 of 200 (9%)** | $0.453 | **$20.70** |
+| Gemini 3.5 Flash-Lite | 75.3% | 19 of 200 (10%) | $0.589 | $26.92 |
 
 Agreement is measured against labels already in the store, so read it as divergence,
-not accuracy — which is exactly why the per-file record matters. Reading it: **nano is
-not a cheaper classifier, it is a model with one answer.** It replied "photo" for 162
-of 300 files in a sample where the true share is 17%, and would have filed **48% of
-all non-memories — 97 of 200 screenshots, memes, documents and graphics — into the
-chronology as photographs.** The 12x price advantage buys the single outcome this
-project exists to prevent. The earlier run printed only "48.7% agreement" and kept
-nothing per-file, so this was invisible; `bakeoff.py` now writes each verdict as it
-happens and rewrites the summary after every model, so a killed run still leaves
-evidence.
+not accuracy. The fourth column is the one that decides, because it counts the only
+error that costs anything here: a screenshot, meme, document or graphic filed into the
+chronology as a photograph.
 
-Before running the full pass, eyeball the divergences of whichever model wins — some
-are the new model correcting an old Haiku label rather than making an error.
+- **nano is not a cheaper classifier, it is a model with one answer.** It replied
+  "photo" for 162 of 300 files in a sample that is 17% photographs, scoring a perfect
+  50/50 on photos by saying "photo" to nearly everything. Its 12x price advantage buys
+  the single outcome this project exists to prevent.
+- **GPT-5 mini and Gemini 3.1 Flash-Lite are 2.2 points apart on agreement and twice
+  apart on the error that matters** — 20% against 9%. Per class: mini is better on
+  documents (37/50 vs 29/50) and worse on screenshots (29 vs 34), graphics (31 vs 37)
+  and memes (30 vs 38).
+- **3.5 Flash-Lite is strictly worse than 3.1** on both columns and costs 30% more.
+  There is no argument for it.
+
+**Recommendation: Gemini 3.1 Flash-Lite.** The $8.41 premium over GPT-5 mini halves
+the rate at which non-memories reach the chronology, and every one of those is a file
+a human then has to find and pull back out.
+
+**40 of 300 stored labels are wrong**, and independently so: on 40 files both
+candidates diverge from the store *and agree with each other*, most often
+`screenshot -> graphic` (12). So both models are more accurate than their agreement
+score, and a re-classification pass improves the existing labels rather than merely
+re-deriving them.
+
+**`ANTHROPIC_API_KEY` in `HKCU\Environment` returns HTTP 401.** Haiku failed all 300
+calls in the bake-off for this reason. It is only the reference here so nothing was
+blocked, but anything else reaching for that key is failing too.
+
+
+**Derived copies were reaching the chronology, and 51 are already in it.** The router
+treats a camera filename as strong positive provenance that outranks weaker signals —
+correct reasoning, wrong answer for a re-encode, which inherits the camera name of the
+file it was made from. `content production & podcasts` on H: holds three
+`DJI_<stamp>_youtube_720p.mp4` exports whose 4.6-5.0 GB originals are already held,
+and the bytes differ so dedup cannot catch them either.
+
+Fixed 2026-09-10 at the tier learning 29 says to fix it at: a name that *declares*
+itself derived beats a camera name inferred from a prefix. `route_h.DERIVED` matches
+an export marker only as a trailing segment introduced by `-` or `_`
+(`_youtube`, `_proxy`, `_1080p`, `-converted`, `_export`, `_web`, ...), so
+`Cannes 4k trip/IMG_2201.JPG` still routes to the chronology. Destination is
+`production`, which is reversible and journalled — the asymmetry is the point.
+
+Already admitted: **51 files, 2.6 GB**, mostly from the `from-lorimer` pull as
+path-flattened Downloads. Five have their camera original held alongside; all of them
+are paired with sizes in `D:\_PhotoAudit\DERIVED-IN-CHRONOLOGY.csv`. **Nothing was
+moved** — some are `dji_export_..._editor.mp4`, edits the user made rather than
+machine transcodes, and that is a judgement for the segmentation pass, not a rule.
 
 ### 3. Back up — the largest open risk
 

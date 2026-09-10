@@ -67,6 +67,11 @@ H_ROOT = r"H:\My Drive\_photo-consolidation"
 # is the one edit in paths.py it is supposed to be.
 LIB_VOL = os.path.splitdrive(P.ROOT)[0] + os.sep
 STAGE = os.path.join(LIB_VOL, "_h_stage")
+# Where a file that defeated the batch copier is pulled by hand. It is
+# journalled with this root rather than the stage, so the resume set has to
+# recognise both - otherwise the next run helpfully re-fetches the one file
+# that was hardest to get.
+RESCUE = os.path.join(LIB_VOL, "_h_rescue")
 LOG = os.path.join(P.AUDIT, "h-ingest.csv")
 ROUTE_LOG = os.path.join(P.AUDIT, "H-ROUTING.csv")
 
@@ -159,10 +164,12 @@ def handled_from_stage() -> set:
 
     def key(origin: str, size: int) -> None:
         low = origin.lower()
-        mark = STAGE.lower() + os.sep
-        if not low.startswith(mark):
+        for root in (STAGE, RESCUE):
+            if low.startswith(root.lower() + os.sep):
+                break
+        else:
             return
-        rel = origin[len(STAGE) + 1:]
+        rel = origin[len(root) + 1:]
         head = rel.split(os.sep)[0].lower()
         if head in BUCKETS:                     # stage layout is STAGE\<bucket>\<rel>
             rel = rel[len(head) + 1:]

@@ -52,6 +52,18 @@ from batch_classify import PROMPT                                # noqa: E402
 
 THUMBS = r"D:\_thumbs"
 STORE = r"D:\_enrichment"
+NLC = chr(10)
+JOB_K = 116.5          # replaced by job_calls() at startup; see there
+
+IMG_EXT = {".jpg", ".jpeg", ".png", ".heic", ".heif", ".gif", ".webp", ".bmp",
+           ".tif", ".tiff", ".dng", ".cr2", ".cr3", ".nef", ".arw", ".raf",
+           ".orf", ".rw2", ".pef", ".srw"}
+VID_EXT = {".mp4", ".mov", ".avi", ".mkv", ".m4v", ".3gp", ".3g2", ".webm",
+           ".wmv", ".mpg", ".mpeg", ".mpe", ".mod", ".tod", ".mts", ".m2ts",
+           ".vob", ".flv", ".asf", ".mxf"}
+# Forward slashes on purpose: os.walk takes them on Windows, and they keep the
+# tree names out of reach of Python string escapes.
+ROOTS = ["D:/ContentLibrary/Media/Personal", "D:/ContentLibrary/Media/Communal", "D:/ContentLibrary/Media/NoDate", "D:/ContentLibrary/Media/Pending-Segmentation"]
 
 # name -> (provider, model id, $/1M in, $/1M out) at STANDARD price.
 # Batch is half. Prices from the Artificial Analysis feed, 2026-09-09.
@@ -208,6 +220,30 @@ def sample(n: int) -> list[tuple[str, str, str]]:
     return picked[:n]
 
 
+def job_calls() -> tuple[float, str]:
+    """How many model calls the full pass actually costs, counted from disk.
+
+    This was the literal 116.5 (thousand), written when the library was a
+    different size and shape, and then multiplied into every headline cost in
+    the comparison. It happened to stay close, which is worse than being wrong:
+    a number nobody can trace is indistinguishable from one nobody checked.
+
+    A video is not one call. frames.py samples 4 frames under 15 minutes and 5
+    above, so videos dominate the bill far more than a file count suggests.
+    """
+    img = vid = 0
+    for root in ROOTS:
+        for dp, _, fns in os.walk(root):
+            for fn in fns:
+                e = os.path.splitext(fn)[1].lower()
+                if e in IMG_EXT:
+                    img += 1
+                elif e in VID_EXT:
+                    vid += 1
+    calls = img + vid * 4                      # 4 is the floor, 5 for long ones
+    return calls / 1000.0, f"{img:,} images + {vid:,} videos x4 frames"
+
+
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -227,6 +263,10 @@ def main() -> None:
     if not names:
         sys.exit("no keys available - set at least one of "
                  + ", ".join(KEY_ENV.values()))
+
+    global JOB_K
+    JOB_K, how = job_calls()
+    print(NLC + f"full pass: {JOB_K*1000:,.0f} model calls  ({how})")
 
     rows = sample(2 if a.smoke else a.n)
     print(f"\nsample: {len(rows)} files, "
@@ -301,7 +341,7 @@ def main() -> None:
         results[name] = {
             "agree": agree, "total": total, "failed": failed,
             "blocked": blocked, "tin_per": tin / n_ok, "tout_per": tout / n_ok,
-            "cost_1k": cost_1k, "job": cost_1k * 116.5, "sens": dict(sens),
+            "cost_1k": cost_1k, "job": cost_1k * JOB_K, "sens": dict(sens),
             "s_per_file": el / max(len(rows), 1),
         }
         with open(os.path.join(STORE, "bakeoff.json"), "w",
