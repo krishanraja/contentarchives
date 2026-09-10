@@ -25,6 +25,7 @@ generalised versions of the safety, dating and dedupe logic live in
 | `inspect_old_zips.py` | read export archives without extracting them |
 | `machine_triage.py` | triage a machine's media by origin folder rather than extension |
 | `migrate_layout.py` | restructure a library and rewrite every record in step, verified by count |
+| `migrate_library.py` | move the library to a bigger drive and prove the copy by reading it back |
 | `move_audio_to_h.py` | move files to a cloud mount, deleting only once the upload queue proves receipt |
 | `move_to_review.py` | move a named set out of the chronology into review, never deleting |
 | `paths.py` | every path in one place, so a rename is one edit and not eighty-five |

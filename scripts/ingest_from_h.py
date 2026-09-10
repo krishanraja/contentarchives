@@ -189,6 +189,39 @@ def handled_from_stage() -> set:
                     continue                    # gone from the library: re-pull it
                 key(origin, sz)
 
+    # ingest_tree calls autopilot.record() for NEW files only. A file it rejects
+    # as a duplicate, or drops under the 20 KB floor, is written to its own
+    # per-batch report and nowhere else - so the resume set never learned about
+    # it and every resumed run pulled it again. Measured on the phone backup:
+    # of 1,571 files copied in batches 1-2, 964 were journalled and 607 were
+    # not. Batch 1 was 343 files of which 342 were duplicates: 20.0 GB fetched
+    # across a 10.5 MB/s link, discarded, and queued to be fetched again.
+    #
+    # The reports are durable now that each batch writes its own file, so read
+    # them. A duplicate is only skipped if the twin it was matched against is
+    # STILL on disk - if the survivor was deleted, the file must come back.
+    for rep in os.listdir(P.AUDIT):
+        if not (rep.startswith("INGEST-") and rep.endswith(".csv")):
+            continue
+        try:
+            with open(os.path.join(P.AUDIT, rep), newline="",
+                      encoding="utf-8", errors="replace") as f:
+                for row in csv.DictReader(f):
+                    out = (row.get("Outcome") or "").strip()
+                    srcp = row.get("Source") or ""
+                    if out == "duplicate":
+                        dest = row.get("Destination") or ""
+                        try:
+                            key(srcp, os.path.getsize(dest))
+                        except OSError:
+                            pass                 # survivor gone: pull it again
+                    elif out == "skipped-tiny":
+                        note = (row.get("Note") or "").split()
+                        if note and note[0].isdigit():
+                            key(srcp, int(note[0]))
+        except OSError:
+            continue
+
     dups = os.path.join(P.AUDIT, "autopilot-duplicates.csv")
     if os.path.exists(dups):
         with open(dups, newline="", encoding="utf-8", errors="replace") as f:
