@@ -496,6 +496,18 @@ re-narrate it. The rules it produced still bind — LEARNINGS 1 and 2.
 
 ## Standing constraints
 
+- **Push to `main` by default.** Krish gave standing approval on 2026-09-11: commit
+  and push in the same motion, do not stop to ask each time. The canon in
+  `AGENTS.md` requires explicit approval before publishing; this is that approval,
+  given in advance, for this repository and this branch. It covers the *asking*, not
+  the *verifying* - still run the redaction tripwire on anything published, scan the
+  diff for key-shaped strings, and read the diffstat before pushing. Ask again for
+  anything the grant plainly does not cover: a force push, a history rewrite, a new
+  public repository, or a branch that is not `main`.
+- **Pull and merge, never force.** Other machines write to this repo. A push was
+  rejected on 2026-09-11 because a steward run had landed; the fix was to merge and
+  keep both sides, not to overwrite. Nine commits sitting local is not a safe state:
+  this repo IS the handover, and an unpushed commit is one another agent cannot see.
 - **Progress lives in data, not conversation.** Regenerate state; never assert it.
 - Nothing built should be throwaway — the toolkit gets reused on other machines, on
   old phone backups, and on digitising a family member's VHS tapes.
