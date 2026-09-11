@@ -22,12 +22,14 @@ where the work is paused, what to do next, and which decisions are already settl
 | Read first | |
 |---|---|
 | [`RESUME.md`](RESUME.md) | start here — current position and next actions |
+| [`AGENTS.md`](AGENTS.md) | entry file for coding agents, carrying the fleet's shared canon block |
 | [`state/STATE.json`](state/STATE.json) | current state, generated — cannot have drifted |
 | [`state/PROGRESS.md`](state/PROGRESS.md) | the same, readable |
 | [`state/origin-folders.csv`](state/origin-folders.csv) | where every library file came from |
 | [`docs/ORGANISING.md`](docs/ORGANISING.md) | how to organise a personal drive — schema and retention rubric |
 | [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | storage model, and the protocol for sessions |
 | [`docs/HANDOVER.md`](docs/HANDOVER.md) | what is done, what is open |
+| [`engine/README.md`](engine/README.md) | the enrichment engine: metadata, a cheap vision model, then a human |
 | [`docs/rescues/`](docs/rescues/) | per-source rescue histories — what came off each disk, and what it cost |
 | [`docs/MACHINE-HYGIENE.md`](docs/MACHINE-HYGIENE.md) | bring a Windows machine to the agreed clean state, and keep it there |
 | [`docs/MIRROR.md`](docs/MIRROR.md) | how `D:` and `H:` end up holding the same library, in what order, and where the human checks it |
