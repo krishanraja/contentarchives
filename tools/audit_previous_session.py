@@ -24,6 +24,15 @@ import sys
 from pathlib import Path
 
 LIB = Path(r"D:\ContentLibrary")
+
+# The four chronology trees, as they exist after the Media/ restructure. This
+# file checked the pre-restructure names off the new root, so os.walk found
+# nothing, raised nothing, and the audit reported a 64,782-file library as 0 -
+# the same failure it exists to catch, in the tool that catches it. Worse, the
+# identity-document check walked the same absent paths and PASSED on finding
+# nothing in nothing. A vacuous pass is more dangerous than a failure.
+CHRONOLOGY = ("Personal", "Communal", "Pending-Segmentation", "NoDate")
+MEDIA = LIB / "Media"
 AUDIT = Path(r"D:\_PhotoAudit")
 REPO = Path(__file__).resolve().parent.parent
 
@@ -47,15 +56,22 @@ try:
     # library: two counts made the same wrong way confirm each other and prove
     # nothing. An independent check has to enumerate what is actually there.
     actual = 0
-    for sub in ("Personal", "Communal", "Library", "NoDate"):
-        root = LIB / sub
+    absent = [d for d in CHRONOLOGY if not (MEDIA / d).is_dir()]
+    for sub in CHRONOLOGY:
+        root = MEDIA / sub
         if root.is_dir():
             for dp, _, fns in os.walk(root):
                 actual += len(fns)
     drift = abs(actual - claimed)
-    check("state/STATE.json matches the library on disk",
-          drift <= max(50, claimed * 0.001),
-          f"claimed {claimed:,}, counted {actual:,}, drift {drift:,}")
+    if absent:
+        # Never let a missing tree read as an empty one.
+        check("state/STATE.json matches the library on disk", False,
+              f"chronology trees missing under {MEDIA}: {absent} - this is a"
+              f" broken check, not an empty library")
+    else:
+        check("state/STATE.json matches the library on disk",
+              drift <= max(50, claimed * 0.001),
+              f"claimed {claimed:,}, counted {actual:,}, drift {drift:,}")
 except Exception as e:
     check("state/STATE.json readable", False, str(e))
 
@@ -96,13 +112,13 @@ except Exception as e:
 # These are the checks that catch a plan being *written* rather than *applied*.
 archive = Path(r"D:\ContentLibrary\Archive")
 check("Archive schema exists on disk", archive.is_dir(),
-      "D:\\Archive present" if archive.is_dir() else
-      "D:\\Archive DOES NOT EXIST - the schema is documented but not applied")
+      f"{archive} present" if archive.is_dir() else
+      f"{archive} DOES NOT EXIST - the schema is documented but not applied")
 
-split = (LIB / "Personal").is_dir() and (LIB / "Communal").is_dir()
+split = (MEDIA / "Personal").is_dir() and (MEDIA / "Communal").is_dir()
 check("chronology split into Personal/Communal", split,
       "both present" if split else
-      "still a single Library/ tree - the split is agreed but not applied")
+      f"not present under {MEDIA} - the split is agreed but not applied")
 
 review = (LIB / "_Review").is_dir()
 check("screenshot review bucket exists", review,
@@ -115,8 +131,7 @@ if sensitive.exists():
     # under Archive\, and joining that onto the library root returns it
     # unchanged - so a naive existence test answers "yes, still there" about a
     # file that has already been filed correctly.
-    chronology = [str(LIB / d).lower() for d in
-                  ("Personal", "Communal", "Library", "NoDate")]
+    chronology = [str(MEDIA / d).lower() for d in CHRONOLOGY]
     with open(sensitive, newline="", encoding="utf-8", errors="ignore") as f:
         still = []
         for r in csv.DictReader(f):
@@ -127,7 +142,7 @@ if sensitive.exists():
                 still.append(full)
     check("identity documents moved out of the chronology", not still,
           f"{len(still)} still in the chronology" if still
-          else "none remain in Personal/, Communal/, Library/ or NoDate/")
+          else f"none remain in any of {CHRONOLOGY}")
 
 # --- 6. scratch that should not survive -------------------------------------
 scratch = [p for p in (r"D:\_zip_extract", r"D:\_lorimer_tmp", r"D:\_takeout_tmp",

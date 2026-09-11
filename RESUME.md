@@ -2,6 +2,10 @@
 
 **You have been asked to resume the media consolidation.**
 
+> **Machine state first.** A drive migration is in flight and the drive letters
+> moved on 2026-09-11. Read [RIGHT NOW](#right-now-a-drive-migration-is-in-flight-2026-09-11)
+> before running any command in this file, including the ones directly below.
+
 ```bash
 cd C:\Users\krish\dev\contentarchives
 git pull
@@ -30,77 +34,140 @@ exclusion, deletion or classification rule.**
 
 ---
 
-## Where things stand (2026-09-10)
+## RIGHT NOW: a drive migration is in flight (2026-09-11)
 
-Counted from disk by `tools/track.py` at 2026-09-10T14:50, not narrated.
+**Read this before running anything.** Drive letters moved today, and the tree is
+mid-copy between two disks. Both facts invalidate assumptions a script or an agent
+would otherwise make.
+
+### The drives, today
+
+| letter | disk | role |
+|---|---|---|
+| `D:` | WD Elements, 931.5 GB, NTFS, label `Elements` | **the live library** — `D:\ContentLibrary`, `D:\_PhotoAudit`, plus 20 years of raw source folders |
+| `E:` | LaCie Rugged Mini, 4,657 GB, NTFS, label `BOOGLES` | **the migration target**, and the permanent home once proven |
+
+`D:` filled up. It is 931.5 GB against a projected finished library of 922.0 GB — it
+fits by 9.5 GB, which is not enough to run in: `ingest_from_h` holds a 40 GB floor and
+stages up to 20 GB per batch, so the ingest would halt on the first batch and never
+restart. Hence the bigger disk.
+
+### What is running
 
 ```
-D:\ContentLibrary\
-  Media\Personal\YYYY\YYYY-MM\        51,900    468.0 GB   the chronology
-  Media\Communal\YYYY\YYYY-MM\         3,791     22.5 GB   family and shared
-  Media\Pending-Segmentation\          4,554    148.5 GB   ingested, no side yet
-  Media\NoDate\                        1,433      7.3 GB   date never established
-                                      ------    ---------
-                                      61,678    646.2 GB
-
-  Archive\                             1,996      7.3 GB
-  ContentProduction\                      18     25.5 GB
-  _Review\                             5,844      1.4 GB   not-a-memory. NOT deleted.
-
-D: 186.1 GB free of 931.5    C: 161.6 GB free
+python D:\_PhotoAudit\scripts\migrate_library.py --to E: --apply
+    log    D:\_PhotoAudit\migrate.log
+    hashes D:\_PhotoAudit\MIGRATION-HASHES.csv   (one row per file, flushed per file)
 ```
+
+Launched **detached** via `Start-Process pwsh -WindowStyle Hidden`, because a tracked
+background task gets killed by the memory watchdog — that happened twice today
+(learning 9). If no `python.exe` is running, it died; the copy is resumable and
+re-running the same command continues from where it stopped.
+
+The H: ingest is **stopped**, and stopped correctly: it ran itself down to the floor
+overnight and printed `HALT: D: down to 26.9 GB (floor 40.0)`. Do not restart it until
+the migration is finished — one thing at a time when the disk is the constraint.
+
+### The sequence, and where to pick it up
+
+1. ~~Copy `D:\ContentLibrary` to `E:`~~ — **in progress**, ~196 GB of 844.1 GB done.
+2. **Verify**: `python migrate_library.py --to E: --verify`. Reads every file on `E:`
+   and compares it to the hash taken from the bytes as they were written. Writes
+   `MIGRATION-VERIFY.csv` and exits non-zero on any mismatch. **Do not proceed on a
+   failure. Do not touch the source.**
+3. **Carry the working directories across**: `_PhotoAudit\`, `_enrichment\`,
+   `_thumbs\`. `_PhotoAudit` is not optional — it holds the journals, the resume set,
+   every ingest report and the origin map, and every tool opens `D:\_PhotoAudit`.
+4. **Swap the letters** so the LaCie becomes `D:` and Elements becomes `E:`. This needs
+   an elevated shell and is the entire repointing — no code changes, because every path
+   in the kit is either `D:` or derived from `paths.py`.
+
+   ```powershell
+   Set-Partition -DiskNumber <lacie> -PartitionNumber <n> -NewDriveLetter T
+   Set-Partition -DiskNumber <elements> -PartitionNumber <n> -NewDriveLetter E
+   Set-Partition -DiskNumber <lacie> -PartitionNumber <n> -NewDriveLetter D
+   ```
+
+   Get the numbers from `Get-Partition`; address disks by number, never by letter.
+5. **Restart the ingest**: `python ingest_from_h.py --all --apply`, detached. Only
+   `from-wd6400` remains — 100.8 GB to pull, 77.9 GB of it certainly new. The resume
+   set means nothing already ingested is fetched twice.
+6. **Then the classification pass**, which has been approved and is not yet run.
+
+### If you are picking this up cold
+
+Everything above is checkable rather than believable. `Get-Volume` tells you the
+letters. `Get-Content D:\_PhotoAudit\migrate.log -Tail 5` tells you the copy's
+position. `python tools/track.py --print` recounts the library from disk. Nothing in
+this section should be trusted over what those three commands report.
+
+
+## Where things stand (2026-09-11)
+
+Counted from disk by `tools/track.py` at 2026-09-11T11:31, not narrated.
+
+```
+D:\ContentLibrary\                     73,198 files    844.1 GB total
+  Media\Personal\YYYY\YYYY-MM\         51,900          468.0 GB   the chronology
+  Media\Communal\YYYY\YYYY-MM\          3,791           22.5 GB   family and shared
+  Media\Pending-Segmentation\           6,215          205.6 GB   ingested, no side yet
+  Media\NoDate\                         2,876          109.8 GB   date never established
+  Archive\ ContentProduction\ _Review\  ~8,400           38.3 GB
+
+D: 26.9 GB free of 931.5   (full, by design - see RIGHT NOW above)
+```
+
+**`NoDate\` has grown to 109.8 GB across 2,876 files** and is now the second largest
+tree. That is the `from-wd6400` childhood-PC material arriving without usable dates,
+and it is a segmentation input, not a problem: a 1998 scan has no EXIF and never will.
 
 **The 2026-09-07 Takeout export is fully ingested and verified** — all six parts,
-35,114 media members, each matched against its archive's central directory before
-that archive was deleted. `verify_takeout_complete.py` re-runs any time.
+35,114 media members, each matched against its archive's central directory before that
+archive was deleted. `verify_takeout_complete.py` re-runs any time.
 
-**The H: pull is part-done and now genuinely resumable.** `from-lorimer` and
-`from-dji-2026` are in; `from-gopro-2024` is in progress. Until 2026-09-10
-`ingest_from_h.py` rebuilt its batch list from a full folder scan on every run, so
-resuming after an interruption re-pulled everything already ingested — 86.4 GB, or
-2.4 h at the measured 10.5 MB/s. It now skips on `(relpath, size)` read from the
-append-only journals. Not from the per-batch `INGEST-*.csv` reports: those were being
-written to one filename per folder, so batches 1-3 of DJI are simply gone from them.
+**The H: pull is nearly done and fully resumable.** `from-lorimer`, `from-dji-2026`,
+`from-gopro-2024`, the phone backup and the small folders are all in. Only
+`from-wd6400` remains: 100.8 GB to pull, of which 18.8 GB is near-certain duplicate,
+4.1 GB shares a size only, and **77.9 GB is certainly new**. The resume set is read
+from the append-only journals AND from the per-batch `INGEST-*.csv` reports, so
+duplicates and sub-20 KB skips are not re-fetched either - that fix alone saved
+31.18 GB of re-transfer.
 
-**D: cannot hold the finished library, and this is now measured rather than assumed.**
-380.5 GB remains on H:, of which 118.9 GB is near-certain duplicate (name and size
-both already held), 18.7 GB shares a size only, and **242.8 GB is certainly new**
-against **146.4 GB of usable headroom** (186.1 free, less the 40 GB batch floor). The
-2026-09-07 claim that the end state "plausibly fits the existing drive" was true when
-the library was expected to land near 540 GB; it is already at 646.2 GB with a third
-of the input still outside it. Reclaim on D: is exhausted: 318.9 GB of what a folder
-listing calls duplicate is hardlinks that free nothing (learning 28), 39.2 GB is
-sole-copy, and every scratch directory together is 1.3 GB. Compression was measured
-and abandoned at ~83 GB, which is less than the shortfall even if it were free.
-**The user chose to add a drive (2026-09-10).** The ingest is expected to halt cleanly
-at the floor with `from-boogles` and `from-wd6400` untouched; the resume logic makes
-continuing into new storage a `paths.py` edit and a re-run.
+**Capacity is resolved by hardware, not by pruning.** The finished library projects to
+922.0 GB against Elements' 931.5 GB - it fits by 9.5 GB, which is unusable because the
+ingest needs a 40 GB floor plus a 20 GB stage. The LaCie is 4,657 GB. Reclaim on
+Elements was measured and exhausted: 318.9 GB of what a folder listing calls duplicate
+is hardlinks that free nothing, ~39 GB is sole-copy, and every scratch directory
+together is 1.3 GB. Compression was measured and abandoned at ~83 GB, less than the
+shortfall even if it were free.
 
 **A file that cannot be copied is not a log line.** `DJI_20260623150233_0097_D.MP4`,
-3.95 GB, failed with `[WinError 1450] Insufficient system resources` on two separate
-runs a week apart — deterministic, not transient. `shutil.copy2` asks the Drive mount
-for one transfer it cannot service. It now retries in 8 MB chunks, and any file that
-still fails is written to `H-COPY-FAILURES.csv` rather than scrolling past in a log.
+3.95 GB, failed `[WinError 1450] Insufficient system resources` on two separate runs a
+week apart - deterministic, not transient, because `shutil.copy2` asks the Drive mount
+for one transfer it cannot service. It now retries in 8 MB chunks; that file is in the
+library, verified by size and hardlinked. Anything that still fails is named in
+`H-COPY-FAILURES.csv`, which does not exist because nothing has.
 
 **A missing tree must be an error, never a zero.** Both copies of `track.py` walked
-`Library/` and `NoDate/` off the ContentLibrary root — names that stopped existing at
-the restructure. `os.walk` on a directory that does not exist yields nothing and
-raises nothing, so `PROGRESS.md` reported a 61,678-file library as **0 files** for two
-days, under a header promising every figure is counted from disk. Both now count the
-roots in `paths.py` and refuse to run if a chronology tree is absent.
+`Library/` and `NoDate/` off the ContentLibrary root - names that stopped existing at
+the restructure - and `os.walk` on a missing directory yields nothing and raises
+nothing, so `PROGRESS.md` reported a 61,678-file library as **0 files** for two days.
+Learning 34. `migrate_library.py` then did the same thing for a different reason a day
+later, which is why both now refuse to continue on an empty result.
 
-**The dedup index cache was 19,096 entries ahead of the disk** — 80,774 cached against
-61,678 present, because it is only replayed from `autopilot-added.csv` while the
-restructure, the `_Review` eviction and the dedup reclaim all MOVED files. Learning 27
-already makes the dangerous direction safe: a stale candidate hashes to `None`, is
-counted, and is skipped rather than declared a match. But it silently *misses*
-duplicates, which is unaffordable at this disk pressure. Pickle retired 2026-09-10;
-delete it after anything that moves library files.
+**The dedup index now covers `Archive\` and `ContentProduction\`.** It did not, while
+`ingest_tree --dest-root` writes into both, so four videos were held twice. Three were
+byte-identical (14.88 GB); the fourth shares a filename AND an exact byte count with
+its twin and has **different content** - learning 36, and the reason the reclaim figure
+is the hash-confirmed 14.88 GB rather than the 22.09 GB the inode check suggested. The
+cache now records which roots it was built over, because it is keyed on the row count
+of `autopilot-added.csv` and could not otherwise notice the root list changing.
 
-**Nothing is deleted without a proven surviving copy.** `guarded_delete.py` is the
-only sanctioned path: different inode, equal size, blake2b-256 re-hashed at the
-instant of the unlink, survivor readable to its last byte — or membership of a
-deliberately tiny garbage list that excludes screenshots.
+**Nothing is deleted without a proven surviving copy.** `guarded_delete.py` is the only
+sanctioned path: different inode, equal size, blake2b-256 re-hashed at the instant of
+the unlink, survivor readable to its last byte - or membership of a deliberately tiny
+garbage list that excludes screenshots.
 
 ### New, not yet ingested: the WD6400 childhood-PC drive (2026-09-06)
 
@@ -150,51 +217,29 @@ stop being true once one measurement came back good.
 
 ## The remaining work
 
-### 1. Finish the H: pull — 380.5 GB remaining, and it will not fit
+### 1. Finish the H: pull — only `from-wd6400` remains
 
-`from-lorimer` and `from-dji-2026` are in. Remaining, in `PRIORITY` order:
-
-| folder | remaining | certainly new |
-|---|---|---|
-| `from-gopro-2024` | 25.7 GB | 24.2 GB |
-| `Krish - Phone Backup - Jun to Sep 2025` | 176.0 GB | 114.4 GB |
-| `content production & podcasts` | 2.2 GB | 0.4 GB |
-| `from-personal-google-drive` | ~0 | ~0 |
-| `from-boogles` | 31.6 GB | 4.5 GB |
-| `from-wd6400` | 140.6 GB | 95.3 GB |
+100.8 GB left to pull, **77.9 GB of it certainly new**. Everything else on H: is in.
 
 ```powershell
-Set-Location D:\_PhotoAudit
-python -u scripts\ingest_from_h.py --all            # dry run: prints what it will skip
-python -u scripts\ingest_from_h.py --all --apply
+python -u D:\_PhotoAudit\scripts\ingest_from_h.py --all          # dry run, prints what it will skip
+python -u D:\_PhotoAudit\scripts\ingest_from_h.py --all --apply
 ```
 
 Launch detached (`Start-Process pwsh -WindowStyle Hidden`) — a tracked background task
-gets killed by the memory watchdog (learning 9).
+gets killed by the memory watchdog (learning 9), which happened twice on 2026-09-11.
 
-Re-running is now cheap and safe: the run opens by printing how many files it will not
-re-pull and how many hours that saves. It halts by design at 40 GB free on the library
+**Do not start this until the drive migration is finished.** One thing at a time when
+the disk is the constraint.
+
+Re-running is cheap and safe. The run opens by printing how many files it will not
+re-pull and how many hours that saves, halts by design at 40 GB free on the library
 volume, keeps every batch already ingested, and continues where it stopped.
 
-**The phone-backup folder grew.** `H-INVENTORY.csv` (2026-09-08) records it at 966
-files / 0.7 GB. It is now 3,110 files / 176.0 GB — the user kept uploading. Re-scan
-before trusting any inventory of H:; do not plan from the stored one.
+Afterwards, check `H-COPY-FAILURES.csv`. If it exists and is non-empty, those files are
+not in the library and nothing else will say so.
 
-**Expect a halt around `from-boogles`.** There is 146.4 GB of headroom for 242.8 GB of
-new content. When it stops, that is the design working, not a failure. The fix is
-storage, which the user has agreed to add. To continue into it: change `ROOT` in
-`paths.py` and re-run the same command — `STAGE`, the journals and the free-space
-floor all derive from it now, and the resume set is read from the journals, so nothing
-already ingested is fetched twice.
-
-**One file needs a second pass.** `DJI_20260623150233_0097_D.MP4` failed to copy on
-both prior runs. The chunked fallback landed after the DJI folder had already been
-walked in the current run, so re-run `--folder "from-dji-2026 (cannes and wedding)"
---apply` once the main pull is done; the resume set reduces it to that one file. Check
-`H-COPY-FAILURES.csv` afterwards — if it is non-empty, those files are not in the
-library and nothing else will say so.
-
-### 2. Segment `Pending-Segmentation\` — 4,554 files, 148.5 GB with no side assigned
+### 2. Segment `Pending-Segmentation\` — 6,215 files, 205.6 GB with no side assigned
 
 Everything a fresh ingest adds lands in `Media\Pending-Segmentation\` by design. It has
 to end up in `Personal\` or `Communal\`, or in `_Review\` if it is not a memory at all.
@@ -268,26 +313,56 @@ are paired with sizes in `D:\_PhotoAudit\DERIVED-IN-CHRONOLOGY.csv`. **Nothing w
 moved** — some are `dji_export_..._editor.mp4`, edits the user made rather than
 machine transcodes, and that is a judgement for the segmentation pass, not a rule.
 
-### 3. Back up — the largest open risk
+### 3. Back up — being fixed, for the first time
 
-There is still no second copy. Capacity is **not** the constraint: `H:` is a 2 TB
-account with ~1.65 TB free against a ~500 GB library. The mount *reports* ~133 GB
-because `Get-PSDrive` returns the local cache volume (learning 17).
+Until 2026-09-11 the library had exactly one copy, on a USB drive that had logged 14
+controller errors in a day. The migration ends that: Elements keeps a complete copy of
+the library as of today while the LaCie becomes the working volume.
 
-Back up **`ContentLibrary\`** — `Media\`, `Archive\` and `ContentProduction\`. Not the whole
-drive, or the 320 GB of hardlinked bytes uploads twice.
+The agreed end state, decided with Krish on 2026-09-11:
 
-**Batch it.** Drive for Desktop stages uploads through a cache on `C:`, so one giant
-copy fills the system drive and dies partway. Check `C:` free space between batches.
+- **LaCie (`BOOGLES`, 4,657 GB)** — the permanent local library. It absorbs the
+  remaining 78 GB and has ~3.7 TB of headroom.
+- **Elements (931.5 GB)** — left **untouched**, including its 20 years of raw source
+  folders. Their names carry provenance the origin map cannot fully reconstruct, and a
+  second copy nobody has edited is worth more than a tidy one somebody has.
+- **H: (Google Drive)** — to become the offsite copy. **It is not one yet.** Today H:
+  holds the *source* material, `_photo-consolidation`, and no library mirror.
 
-The user's standing instruction was not to mirror before the audit. Raise it rather
-than assume: the audit is now substantially done, and an unbacked library on a drive
-throwing controller errors is the larger risk.
+Three things make the cloud copy real work rather than a checkbox, and all three are
+already-paid-for lessons:
 
----
+1. **~23 hours of upload** at the 10.5 MB/s this account measured for download. Upload
+   has not been measured; measure it (learning 10) rather than assuming symmetry.
+2. **The quota is unknown.** `Get-Volume` on H: reports the local cache volume, not the
+   account (learning 17). Get the real figure from the Drive API. The library is
+   844.1 GB now and 922.0 GB finished, and 371 GB of source folders are still up there.
+3. **Verifying it is the hard part.** Do not hash through the mount: it hangs with zero
+   bytes read rather than failing (learning 15), and reading a placeholder hydrates it
+   and fills C: (learning 5). Learning 25 is a run that verified 17,102 of 17,102 files
+   against a cloud mount having compared local bytes with local bytes. **Use Drive's
+   `md5Checksum` field**, computed server-side, against a locally computed MD5. The file
+   is never read back.
+
+Krish's standing instruction: `ContentLibrary\` may be removed from Elements **only**
+once it is verified on the LaCie *and* verified in the cloud. Note the arithmetic
+before planning around the space it returns: roughly 319 GB of the library is
+hardlinked to originals in the source folders that are staying, so deleting the library
+tree frees about **525 GB, not 844**. Same illusion as learning 28, pointed the other
+way. There is no pressure to do it at all — three copies at zero marginal cost is a
+better posture than two.
+
 
 ## Waiting on the user — do not act unprompted
 
+- **Five identity documents are still in the chronology**, all in `Media\NoDate\`,
+  flagged by `passport` x3, `citizenship` x1 and `visa` x1 (50-230 KB scans). The
+  schema puts these in `Archive\Personal\01-Identity\` and `move_identity_docs.py`
+  does it. Not moved on 2026-09-11 because the migration was walking that tree, and
+  moving a file under a running copy is how it ends up in neither place. **This was
+  a vacuous PASS until 2026-09-11**: `audit_previous_session.py` checked the
+  pre-restructure paths, found nothing in directories that do not exist, and
+  reported "none remain". A check that cannot fail is not a check.
 - **`D:\ContentLibrary\_Review\`** — 5,844 files (1.4 GB) judged not-a-memory.
   Nothing was deleted. The user reviews and empties it. The count fell from 10,540
   because the 2026-09-08 vision pass found 9,975 real memories the rules had swept
@@ -295,7 +370,7 @@ throwing controller errors is the larger risk.
 - **`D:\ContentLibrary\Archive\99-Unsorted\`** — origins whose *side* is not established, plus
   messenger stickers. Keep it; it is the pressure valve that stops things being
   forced into a wrong category.
-- **`Media\Pending-Segmentation\` (4,554 files, 148.5 GB)** — origins with no side
+- **`Media\Pending-Segmentation\` (6,215 files, 205.6 GB)** — origins with no side
   assigned. Deliberately left in place rather than defaulted to Personal. This is the
   queue for step 2, and every fresh ingest adds to it.
 
@@ -315,6 +390,10 @@ throwing controller errors is the larger risk.
 | Downloads go to `C:`, never `D:` | D: corrupts partial files under parallel write |
 | Large videos are all kept | precious memories and travel footage |
 | Add storage rather than prune or compress to fit (2026-09-10) | measured: 242.8 GB still to come against 146.4 GB of headroom; reclaim on D: is exhausted and compression is worth less than the shortfall |
+| The LaCie (4,657 GB) is the permanent local library; Elements becomes a frozen copy (2026-09-11) | the finished library projects to 922.0 GB against Elements 931.5 GB - it fits by 9.5 GB, and the ingest needs a 40 GB floor plus a 20 GB stage to run at all |
+| Elements keeps its 20 years of raw source folders, untouched (2026-09-11) | the folder names carry provenance the origin map cannot reconstruct, and an unedited second copy is worth more than a tidy one |
+| `ContentLibrary` may leave Elements only after BOTH the LaCie copy and a cloud copy are verified (2026-09-11) | Krish: "no need for elements to contain the contentlibrary once that is safely on Boogles and H drive cloud backup verified and safe" |
+| Gemini 3.1 Flash-Lite classifies the library (2026-09-10) | best on agreement against an independent reference (87.8%) AND on chronology contamination (2%), at 2.5x less than Haiku |
 
 **The data-loss topic is closed.** 45 files were lost early in this project. Do not
 re-narrate it. The rules it produced still bind — LEARNINGS 1 and 2.
