@@ -39,6 +39,10 @@ def main() -> None:
         run("origin_map.py", passthrough)
         run("track.py", [])
     run("publish_state.py", ["--dry-run"] if check else [])
+    # The one sheet everything lands in. Regenerated last, because it
+    # joins the library, the hash index, the inventory, the origin map
+    # and the enrichment store - all of which are refreshed above.
+    run("master_sheet.py", [])
 
     print()
     if check:
