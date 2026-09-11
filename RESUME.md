@@ -388,6 +388,8 @@ stop being true once one measurement came back good.
 
 ## The remaining work
 
+The phased plan through to the end state is [`docs/ROADMAP.md`](docs/ROADMAP.md). The sections below are the near-term detail.
+
 ### 1. Finish the H: pull — only `from-wd6400` remains
 
 100.8 GB left to pull, **77.9 GB of it certainly new**. Everything else on H: is in.
