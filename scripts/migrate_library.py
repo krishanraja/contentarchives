@@ -41,10 +41,21 @@ import paths as P                                                # noqa: E402
 
 CHUNK = 8 * 1024 * 1024
 HASHES = os.path.join(P.AUDIT, "lib-hashes.csv")
+# Hashes computed from the bytes this run actually read out of the source.
+MIGHASH = os.path.join(P.AUDIT, "MIGRATION-HASHES.csv")
+
+
+# Built from chr(92) rather than written as a literal. The literal form is
+# four backslashes in source to mean two on disk, and it does not survive
+# being passed through a shell heredoc: this file shipped with lp() emitting
+# \?\ instead of \?\ , so every getsize() raised OSError, every OSError was
+# swallowed by the walk, and the planner reported a 64,782-file library as
+# 0 files - learning 34, in the script written to migrate it.
+LONGPATH = chr(92) * 2 + "?" + chr(92)
 
 
 def lp(p: str) -> str:
-    return p if p.startswith("\\?\\") else "\\?\\" + p
+    return p if p.startswith(LONGPATH) else LONGPATH + p
 
 
 def load_hashes() -> dict:
@@ -58,6 +69,35 @@ def load_hashes() -> dict:
                     except ValueError:
                         pass
     return h
+
+
+def copy_hashing(src: str, dst: str) -> str | None:
+    """Copy, and hash what was read on the way through.
+
+    The alternative is to hash the source in a separate pass, which means
+    reading 844 GB twice: once to copy it and once to learn what it was. The
+    stored lib-hashes.csv cannot stand in - 19,663 of its 21,449 rows are
+    pre-restructure PhotoLibrary paths that match nothing, leaving real
+    coverage at 1,672 files out of 73,198.
+
+    Hashing the stream is also a better proof than hashing the source
+    afterwards: this is the hash OF THE BYTES THAT WERE WRITTEN, so comparing
+    it to a read-back of the destination tests the copy end to end.
+    """
+    d = hashlib.blake2b(digest_size=32)
+    try:
+        with open(lp(src), "rb", buffering=0) as fi, \
+             open(lp(dst), "wb", buffering=0) as fo:
+            while True:
+                b = fi.read(CHUNK)
+                if not b:
+                    break
+                d.update(b)
+                fo.write(b)
+        shutil.copystat(lp(src), lp(dst))
+    except OSError:
+        return None
+    return d.hexdigest()
 
 
 def blake(path: str) -> str | None:
@@ -98,6 +138,12 @@ def main() -> None:
 
     files = list(walk(src))
     total = sum(s for _, s in files)
+    # An empty result here means a broken walk far more often than an empty
+    # library, and a migration that silently copies nothing then reports success
+    # is the worst failure this script could have.
+    if not files:
+        sys.exit(f"{src} exists but the walk found no files. That is a bug in "
+                 f"this script, not an empty library - fix it before copying.")
     free = shutil.disk_usage(a.to + os.sep).free
     print(f"source : {src}")
     print(f"target : {dst}")
@@ -114,21 +160,36 @@ def main() -> None:
     if a.apply:
         done = 0
         t0 = time.time()
+        seen = set()
+        if os.path.exists(MIGHASH):
+            with open(MIGHASH, newline="", encoding="utf-8") as f:
+                seen = {r[0] for r in csv.reader(f) if r}
+        mh = open(MIGHASH, "a", newline="", encoding="utf-8")
+        mw = csv.writer(mh)
         for i, (p, sz) in enumerate(files, 1):
             rel = os.path.relpath(p, src)
             d = os.path.join(dst, rel)
             try:
                 if os.path.exists(lp(d)) and os.path.getsize(lp(d)) == sz:
                     done += sz
-                    continue                      # resumable: already there
+                    # Copied by an earlier run, which may not have recorded a
+                    # hash. Read the source for it now rather than leaving a
+                    # file that verification cannot prove.
+                    if p not in seen:
+                        h = blake(p)
+                        if h:
+                            mw.writerow([p, sz, h])
+                            mh.flush()
+                    continue
             except OSError:
                 pass
             os.makedirs(lp(os.path.dirname(d)), exist_ok=True)
-            try:
-                shutil.copy2(lp(p), lp(d))
-            except OSError as e:
-                print(f"  copy failed {rel[:60]}: {e}", flush=True)
+            h = copy_hashing(p, d)
+            if h is None:
+                print(f"  copy failed {rel[:60]}", flush=True)
                 continue
+            mw.writerow([p, sz, h])
+            mh.flush()
             done += sz
             if i % 500 == 0:
                 el = time.time() - t0
@@ -136,10 +197,21 @@ def main() -> None:
                 left = (total - done) / 1024**2 / max(rate, 0.1) / 60
                 print(f"  {i:,}/{len(files):,}  {done/1024**3:.0f} GB  "
                       f"{rate:.0f} MB/s  ~{left:.0f} min left", flush=True)
+        mh.close()
         print(f"\ncopy finished in {(time.time()-t0)/60:.0f} min")
 
     if a.verify:
         cache = load_hashes()
+        # Hashes taken from the bytes this migration actually read win over
+        # the historical cache, whose keys largely predate the restructure.
+        if os.path.exists(MIGHASH):
+            with open(MIGHASH, newline="", encoding="utf-8") as f:
+                for row in csv.reader(f):
+                    if len(row) == 3:
+                        try:
+                            cache[(row[0], int(row[1]))] = row[2]
+                        except ValueError:
+                            pass
         out = os.path.join(P.AUDIT, "MIGRATION-VERIFY.csv")
         ok = bad = missing = 0
         t0 = time.time()
