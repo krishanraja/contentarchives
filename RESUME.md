@@ -53,6 +53,21 @@ that is about to become a frozen backup.
 
 ### Step 0 — confirm the copy actually finished
 
+**Steps 1 and 2 may already be done.** A chained watcher was armed on 2026-09-11 at
+13:30 to run them the moment the copy exits, because the copy and the verification
+are both disk-bound and the only latency worth removing is the gap between one
+finishing and somebody noticing. **Read `D:\_PhotoAudit\migrate-chain.log` first:**
+
+- `VERIFIED.` — steps 1 and 2 are done. Go to step 3.
+- `STOPPED: ...` — it stopped deliberately and the line says why. Do not swap the
+  drive letters, do not touch the source, fix what it names.
+- only `waiting for the copy to finish` — the copy is still running, or the watcher
+  itself was killed. Check for a `python.exe` process; if there is none and the copy
+  log has no `copy finished` line, re-run the copy, it resumes.
+
+The watcher does not survive a reboot. If it is gone, run steps 1 and 2 by hand -
+they are the same two commands.
+
 ```powershell
 Get-Content D:\_PhotoAudit\migrate.log -Tail 3
 Get-Process python -ErrorAction SilentlyContinue
