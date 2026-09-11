@@ -29,6 +29,7 @@ where the work is paused, what to do next, and which decisions are already settl
 | [`docs/ORGANISING.md`](docs/ORGANISING.md) | how to organise a personal drive — schema and retention rubric |
 | [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | storage model, and the protocol for sessions |
 | [`docs/HANDOVER.md`](docs/HANDOVER.md) | what is done, what is open |
+| [`docs/ROADMAP.md`](docs/ROADMAP.md) | the phased plan from here to two mirrored libraries, segmentation done, Elements purged, the game running |
 | [`engine/README.md`](engine/README.md) | the enrichment engine: metadata, a cheap vision model, then a human |
 | [`docs/rescues/`](docs/rescues/) | per-source rescue histories — what came off each disk, and what it cost |
 | [`docs/MACHINE-HYGIENE.md`](docs/MACHINE-HYGIENE.md) | bring a Windows machine to the agreed clean state, and keep it there |
