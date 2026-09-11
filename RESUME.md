@@ -2,8 +2,8 @@
 
 **You have been asked to resume the media consolidation.**
 
-> **Machine state first.** A drive migration is in flight and the drive letters
-> moved on 2026-09-11. Read [RIGHT NOW](#right-now-a-drive-migration-is-in-flight-2026-09-11)
+> **Machine state first.** A drive migration is part-done and the drive letters
+> moved on 2026-09-11. Read [RIGHT NOW](#right-now-finish-the-drive-migration-handover-point-2026-09-11)
 > before running any command in this file, including the ones directly below.
 
 ```bash
@@ -32,75 +32,142 @@ Then read [`state/PROGRESS.md`](state/PROGRESS.md) — generated, so it cannot h
 drifted — and [`docs/LEARNINGS.md`](docs/LEARNINGS.md) **before changing any
 exclusion, deletion or classification rule.**
 
----
+----
 
-## RIGHT NOW: a drive migration is in flight (2026-09-11)
+## RIGHT NOW: finish the drive migration (handover point, 2026-09-11)
 
-**Read this before running anything.** Drive letters moved today, and the tree is
-mid-copy between two disks. Both facts invalidate assumptions a script or an agent
-would otherwise make.
+**This session was handed over at the moment the library copy completed.** Everything
+below is a command, in order, with what a pass looks like and what to do on a failure.
+Nothing here needs improvising.
 
-### The drives, today
+### Where you are
 
 | letter | disk | role |
 |---|---|---|
-| `D:` | WD Elements, 931.5 GB, NTFS, label `Elements` | **the live library** — `D:\ContentLibrary`, `D:\_PhotoAudit`, plus 20 years of raw source folders |
-| `E:` | LaCie Rugged Mini, 4,657 GB, NTFS, label `BOOGLES` | **the migration target**, and the permanent home once proven |
+| `D:` | WD Elements, 931.5 GB, label `Elements` | the library, **still live**, and the source of the copy |
+| `E:` | LaCie Rugged Mini, 4,657 GB, NTFS, label `BOOGLES` | the copy, and the permanent library once proven |
 
-`D:` filled up. It is 931.5 GB against a projected finished library of 922.0 GB — it
-fits by 9.5 GB, which is not enough to run in: `ingest_from_h` holds a 40 GB floor and
-stages up to 20 GB per batch, so the ingest would halt on the first batch and never
-restart. Hence the bigger disk.
+The letters swap at step 4. Until then, `D:` is the old disk and every tool is correctly
+pointed at it. **Do not run the ingest before the swap** — it would write into a drive
+that is about to become a frozen backup.
 
-### What is running
+### Step 0 — confirm the copy actually finished
 
-```
-python D:\_PhotoAudit\scripts\migrate_library.py --to E: --apply
-    log    D:\_PhotoAudit\migrate.log
-    hashes D:\_PhotoAudit\MIGRATION-HASHES.csv   (one row per file, flushed per file)
+```powershell
+Get-Content D:\_PhotoAudit\migrate.log -Tail 3
+Get-Process python -ErrorAction SilentlyContinue
 ```
 
-Launched **detached** via `Start-Process pwsh -WindowStyle Hidden`, because a tracked
-background task gets killed by the memory watchdog — that happened twice today
-(learning 9). If no `python.exe` is running, it died; the copy is resumable and
-re-running the same command continues from where it stopped.
+Expect `copy finished in N min` and no `python.exe`. If a python process is still
+running, the copy is still going: leave it. If there is no process and no "finished"
+line, it died — re-run the same command, it resumes from where it stopped:
 
-The H: ingest is **stopped**, and stopped correctly: it ran itself down to the floor
-overnight and printed `HALT: D: down to 26.9 GB (floor 40.0)`. Do not restart it until
-the migration is finished — one thing at a time when the disk is the constraint.
+```powershell
+python -u D:\_PhotoAudit\scripts\migrate_library.py --to E: --apply
+```
 
-### The sequence, and where to pick it up
+Launch it detached (`Start-Process pwsh -WindowStyle Hidden`); a tracked background task
+gets killed by the memory watchdog (learning 9), which happened three times on
+2026-09-10 and 11.
 
-1. ~~Copy `D:\ContentLibrary` to `E:`~~ — **in progress**, ~196 GB of 844.1 GB done.
-2. **Verify**: `python migrate_library.py --to E: --verify`. Reads every file on `E:`
-   and compares it to the hash taken from the bytes as they were written. Writes
-   `MIGRATION-VERIFY.csv` and exits non-zero on any mismatch. **Do not proceed on a
-   failure. Do not touch the source.**
-3. **Carry the working directories across**: `_PhotoAudit\`, `_enrichment\`,
-   `_thumbs\`. `_PhotoAudit` is not optional — it holds the journals, the resume set,
-   every ingest report and the origin map, and every tool opens `D:\_PhotoAudit`.
-4. **Swap the letters** so the LaCie becomes `D:` and Elements becomes `E:`. This needs
-   an elevated shell and is the entire repointing — no code changes, because every path
-   in the kit is either `D:` or derived from `paths.py`.
+### Step 1 — prove the copy
 
-   ```powershell
-   Set-Partition -DiskNumber <lacie> -PartitionNumber <n> -NewDriveLetter T
-   Set-Partition -DiskNumber <elements> -PartitionNumber <n> -NewDriveLetter E
-   Set-Partition -DiskNumber <lacie> -PartitionNumber <n> -NewDriveLetter D
-   ```
+```powershell
+python -u D:\_PhotoAudit\scripts\migrate_library.py --to E: --verify
+```
 
-   Get the numbers from `Get-Partition`; address disks by number, never by letter.
-5. **Restart the ingest**: `python ingest_from_h.py --all --apply`, detached. Only
-   `from-wd6400` remains — 100.8 GB to pull, 77.9 GB of it certainly new. The resume
-   set means nothing already ingested is fetched twice.
-6. **Then the classification pass**, which has been approved and is not yet run.
+Reads every file on `E:` and compares it to the hash taken from the bytes as they were
+written. ~2.5 hours. Writes `MIGRATION-VERIFY.csv`, prints an OK / MISMATCH / MISSING
+tally, and exits non-zero on any failure.
+
+**On any failure: stop. Do not swap the letters, do not delete anything, do not touch
+the source.** Report the mismatching files. A file that failed to copy is recoverable
+while the source is untouched and irrecoverable once it is not.
+
+### Step 2 — carry the working directories across
+
+```powershell
+python -u D:\_PhotoAudit\scripts\migrate_library.py --to E: --extras --apply
+```
+
+`_PhotoAudit` (395 files), `_enrichment` (37), `_thumbs` (15,794) — about 0.67 GB, a
+couple of minutes, each file verified as it lands. Run it **after** step 1 so the
+verification report travels with it.
+
+`_PhotoAudit` is not optional. It holds the journals, the H: resume set, every ingest
+report, the hash cache and the origin map, and every tool in the kit opens
+`D:\_PhotoAudit` by absolute path. Without it on the new volume, the next ingest
+re-pulls everything and the resume logic silently has nothing to read.
+
+### Step 3 — ask Krish to swap the drive letters
+
+**This needs an elevated shell and cannot be done from an agent session.** Give him the
+disk numbers from `Get-Partition` — address disks by NUMBER, never by letter, because
+the letters are the thing being changed:
+
+```powershell
+Get-Partition | Where-Object DriveLetter | Format-Table DiskNumber,PartitionNumber,DriveLetter,Size
+# then, with <lacie> and <elements> filled in from that output:
+Set-Partition -DiskNumber <lacie>    -PartitionNumber <n> -NewDriveLetter T
+Set-Partition -DiskNumber <elements> -PartitionNumber <n> -NewDriveLetter E
+Set-Partition -DiskNumber <lacie>    -PartitionNumber <n> -NewDriveLetter D
+```
+
+This is the entire repointing. No code changes: every path in the kit is either `D:` or
+derived from `scripts/paths.py`.
+
+### Step 4 — prove the swap, before anything writes
+
+```powershell
+python D:\_PhotoAudit\scripts\postswap_check.py
+```
+
+Eight checks: that `D:` is now the 4,657 GB disk, that the four chronology trees exist
+under it, that the file count matches the migration's own record, that the audit trail
+arrived, that recent journalled placements resolve, that the H: resume set rebuilds,
+that a second copy of the library still exists on another volume, and that `STATE.json`
+is not reporting zero.
+
+It exits non-zero on any failure. **This is the one step in the migration with no error
+message of its own:** every path in the toolkit is `D:\...`, so if the wrong disk
+answers to D: the tools do not fail, they operate on the wrong drive quietly.
+
+### Step 5 — recount, then finish the ingest
+
+```powershell
+python C:\Users\krish\dev\contentarchives\tools\track.py --print
+python -u D:\_PhotoAudit\scripts\ingest_from_h.py --all --apply   # detached
+```
+
+Only `from-wd6400` remains: 100.8 GB to pull, 77.9 GB certainly new. The run opens by
+printing how many files it will not re-pull. Afterwards check `H-COPY-FAILURES.csv` —
+if it exists and is non-empty, those files are not in the library and nothing else will
+say so.
+
+### Step 6 — the classification pass
+
+Approved by Krish: **Gemini 3.1 Flash-Lite**, ~$20.70 for 91,394 calls. Chosen on a
+reference no model wrote (`engine/consensus.py`); see "Where things stand". Do not
+substitute a cheaper model without re-reading learning 35.
+
+### Still open, and explicitly not done
+
+- **Five identity documents** sit in `Media\NoDate\` — `passport` x3, `citizenship`,
+  `visa`. `move_identity_docs.py` files them into `Archive\Personal\01-Identity\`. Not
+  moved on 2026-09-11 because the migration was walking that tree.
+- **The cloud copy does not exist.** H: holds source material, not a mirror. See
+  "The remaining work" section 3 — verification there must use Drive's server-side
+  `md5Checksum`, never a read-back through the mount.
+- **51 derived copies** in the chronology (`DERIVED-IN-CHRONOLOGY.csv`) and **14.88 GB
+  of hash-confirmed cross-tree duplicates** (`XTREE-DUPLICATES.csv`). Nothing moved or
+  deleted in either case; both are segmentation judgements for Krish.
 
 ### If you are picking this up cold
 
 Everything above is checkable rather than believable. `Get-Volume` tells you the
-letters. `Get-Content D:\_PhotoAudit\migrate.log -Tail 5` tells you the copy's
-position. `python tools/track.py --print` recounts the library from disk. Nothing in
-this section should be trusted over what those three commands report.
+letters. `Get-Content D:\_PhotoAudit\migrate.log -Tail 5` tells you the copy's position.
+`python tools/audit_previous_session.py` grades the previous session against the
+filesystem. Nothing in this section should be trusted over what those report.
 
 
 ## Where things stand (2026-09-11)

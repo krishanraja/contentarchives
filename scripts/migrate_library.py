@@ -127,7 +127,15 @@ def main() -> None:
     ap.add_argument("--to", required=True, help="target drive, e.g. E:")
     ap.add_argument("--apply", action="store_true")
     ap.add_argument("--verify", action="store_true")
+    ap.add_argument("--extras", action="store_true",
+                    help="copy the working directories beside the library: _PhotoAudit (journals, resume set, reports, hash cache, origin map - NOT optional), _enrichment and _thumbs")
     a = ap.parse_args()
+
+    # Everything that has to move for the new disk to be a working library,
+    # not just a copy of the photographs. Named explicitly: a directory that is
+    # forgotten here is not an error, it is a tool opening a path that exists
+    # and is empty on the drive that now answers to D:.
+    EXTRAS = ["_PhotoAudit", "_enrichment", "_thumbs"]
 
     src = P.ROOT
     dst = os.path.join(a.to + os.sep, os.path.basename(src))
@@ -135,6 +143,46 @@ def main() -> None:
         sys.exit(f"{a.to} is not mounted")
     if os.path.abspath(src).lower().startswith(a.to.lower()):
         sys.exit("source and target are the same volume")
+
+    if a.extras:
+        vol = os.path.splitdrive(P.ROOT)[0] + os.sep
+        roots = [(os.path.join(vol, e), os.path.join(a.to + os.sep, e))
+                 for e in EXTRAS]
+        missing = [r for r, _ in roots if not os.path.isdir(r)]
+        if missing:
+            sys.exit(f"missing on the source volume: {missing}")
+        for r, d in roots:
+            fs = list(walk(r))
+            if not fs:
+                sys.exit(f"{r} exists but the walk found no files - that is a "
+                         f"broken walk, not an empty directory")
+            tot = sum(x[1] for x in fs)
+            print(f"{r} -> {d}   {len(fs):,} files, {tot/1024**3:.2f} GB",
+                  flush=True)
+            if not a.apply:
+                continue
+            ok = bad = 0
+            for q, sz in fs:
+                rel = os.path.relpath(q, r)
+                t = os.path.join(d, rel)
+                os.makedirs(lp(os.path.dirname(t)), exist_ok=True)
+                h = copy_hashing(q, t)
+                # Small trees, so prove each one immediately rather than in a
+                # second pass. A journal that arrives corrupt is worse than one
+                # that does not arrive.
+                if h and blake(t) == h:
+                    ok += 1
+                else:
+                    bad += 1
+                    print(f"    FAILED {rel[:70]}", flush=True)
+            print(f"    copied and verified {ok:,}, failed {bad}", flush=True)
+            if bad:
+                sys.exit("extras did not copy cleanly - do not swap the drive "
+                         "letters")
+        print("")
+        print("Extras done. The new volume now has the audit trail, so it can "
+              "run as the library.")
+        return
 
     files = list(walk(src))
     total = sum(s for _, s in files)

@@ -29,6 +29,7 @@ generalised versions of the safety, dating and dedupe logic live in
 | `move_audio_to_h.py` | move files to a cloud mount, deleting only once the upload queue proves receipt |
 | `move_to_review.py` | move a named set out of the chronology into review, never deleting |
 | `paths.py` | every path in one place, so a rename is one edit and not eighty-five |
+| `postswap_check.py` | after a drive-letter swap, prove the new disk really is the library |
 | `purge_downgrades.py` | delete those worse copies, re-verified at the moment of deletion |
 | `purge_redundant.py` | delete byte-identical copies, re-verified at the moment of deletion |
 | `reclaim_duplicates.py` | remove byte-identical duplicates, keeping the settled copy, verified at deletion |
