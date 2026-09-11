@@ -164,6 +164,20 @@ substitute a cheaper model without re-reading learning 35.
 
 ### If you are picking this up cold
 
+**The repo is not a complete copy of the toolkit.** Two working scripts live only on
+the machine, at `D:\_PhotoAudit\scripts\`, because the publication tripwire refuses
+them and is right to: their patterns ARE the identity vocabulary they exist to match,
+so redacting them would rewrite the rules into nonsense.
+
+- `route_h.py` — decides chronology vs produced vs admin before a file enters the
+  library. Blocked on `passport`, `birth cert`, `oci`, `payslip`, `tax return`,
+  `bank statement`.
+- `move_identity_docs.py` — lifts identity and financial scans out of the chronology.
+  Blocked on eleven terms including `nhs`, `p60`, `prescription`, `mortgage`.
+
+Everything else in `scripts/` is published and current; `publish_scripts.py --apply`
+regenerates it and records the exclusions in its own source.
+
 Everything above is checkable rather than believable. `Get-Volume` tells you the
 letters. `Get-Content D:\_PhotoAudit\migrate.log -Tail 5` tells you the copy's position.
 `python tools/audit_previous_session.py` grades the previous session against the
