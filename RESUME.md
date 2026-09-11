@@ -164,19 +164,32 @@ substitute a cheaper model without re-reading learning 35.
 
 ### If you are picking this up cold
 
-**The repo is not a complete copy of the toolkit.** Two working scripts live only on
-the machine, at `D:\_PhotoAudit\scripts\`, because the publication tripwire refuses
-them and is right to: their patterns ARE the identity vocabulary they exist to match,
-so redacting them would rewrite the rules into nonsense.
+**The repo is not a complete copy of the toolkit, and the gap is bigger than it
+looks.** There are 103 Python scripts on the machine at `D:\_PhotoAudit\scripts\` and
+71 in the repo. `publish_scripts.py` is a curated list, not a mirror.
 
-- `route_h.py` — decides chronology vs produced vs admin before a file enters the
-  library. Blocked on `passport`, `birth cert`, `oci`, `payslip`, `tax return`,
-  `bank statement`.
-- `move_identity_docs.py` — lifts identity and financial scans out of the chronology.
-  Blocked on eleven terms including `nhs`, `p60`, `prescription`, `mortgage`.
+**Four are blocked by the publication tripwire, and it is right to block them** - each
+either contains the identity vocabulary it exists to match, or real personal data:
 
-Everything else in `scripts/` is published and current; `publish_scripts.py --apply`
-regenerates it and records the exclusions in its own source.
+- `route_h.py` — routes a file to chronology, production or archive before it enters
+  the library. Blocked on `passport`, `birth cert`, `oci`, `payslip`, `tax return`.
+- `move_identity_docs.py` — lifts identity scans out of the chronology. Blocked on
+  eleven terms including `nhs`, `p60`, `prescription`, `mortgage`.
+- `provenance.py` — carries real source-folder names in a hardcoded list.
+- `publish_scripts.py` — contains the tripwire term list, so it matches every term
+  there is and can never publish itself.
+
+Redacting any of them would rewrite the rule into nonsense. **If you need one, read it
+on the machine.**
+
+**The other 41 are one-offs** - a script written for one folder on one evening, kept
+because nothing here is thrown away but not worth carrying as a toolkit. Examples:
+`3-Build-Library.py`, `aa_compare.py`, `analyse_lorimer.py`, `analyse_only.py`, `biggest_review.py`, `check_downloads.py`. If the remaining work needs one, it is on the machine;
+add it to `KEEP` in `publish_scripts.py` and re-run with `--apply`.
+
+Everything the documented remaining work depends on **is** in the repo, including the
+segmentation pair `propose_split.py` and `apply_split.py`, which were missing until
+2026-09-11 and are the whole of step 2.
 
 Everything above is checkable rather than believable. `Get-Volume` tells you the
 letters. `Get-Content D:\_PhotoAudit\migrate.log -Tail 5` tells you the copy's position.
