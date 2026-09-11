@@ -58,7 +58,12 @@ that is about to become a frozen backup.
 are both disk-bound and the only latency worth removing is the gap between one
 finishing and somebody noticing. **Read `D:\_PhotoAudit\migrate-chain.log` first:**
 
-- `VERIFIED.` — steps 1 and 2 are done. Go to step 3.
+- `VERIFIED.` — steps 1 and 2 are done. Go to step 3. **This is the state as of
+  2026-09-11 19:45.** 73,197 of 73,198 files passed on the first pass; the one
+  failure was a 7.7 GB file that copied to an IDENTICAL SIZE with different
+  content, was re-copied, and now reads back matching the source. One bad write
+  in 844 GB is bad luck; a second would make the dock or the new drive the
+  suspect, so check for new mismatches rather than assuming.
 - `STOPPED: ...` — it stopped deliberately and the line says why. Do not swap the
   drive letters, do not touch the source, fix what it names.
 - only `waiting for the copy to finish` — the copy is still running, or the watcher

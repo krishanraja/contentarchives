@@ -286,6 +286,12 @@ def main() -> None:
                 else:
                     bad += 1
                     w.writerow([p, d, sz, v, sh or "", th or "", where])
+                    # Flush it. On 2026-09-11 the counter read bad=1 for
+                    # three hours while MIGRATION-VERIFY.csv held zero rows,
+                    # because the row was sitting in a buffer until the
+                    # process exited. A failure you cannot read until the
+                    # end is a failure you cannot act on during the run.
+                    fh.flush()
                 if i % 500 == 0:
                     print(f"  verified {i:,}/{len(files):,}  ok={ok:,} "
                           f"bad={bad} missing={missing}", flush=True)
