@@ -46,7 +46,10 @@
     guard is absolute.
 #>
 
-Set-StrictMode -Version Latest
+# NO Set-StrictMode here. This file is dot-sourced, so a strict mode set at the
+# top would land in the CALLING chain's scope and change how every line of it
+# behaves - including chains written before the rule existed, mid-run, at night.
+# A safety helper must not alter the semantics of the thing it is helping.
 
 function Invoke-Step {
     [CmdletBinding()]
