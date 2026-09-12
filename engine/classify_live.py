@@ -130,6 +130,8 @@ def main():
     ap.add_argument("--max-usd", type=float, default=60.0)
     ap.add_argument("--apply", action="store_true")
     ap.add_argument("--dry-run", action="store_true")
+    ap.add_argument("--only-list", default="",
+                    help="file of content hashes, one per line: judge ONLY these, and judge them even if this model already has - for re-doing files whose thumbnail was rebuilt")
     a = ap.parse_args()
 
     key = os.environ.get("GOOGLE_API_KEY")
@@ -142,7 +144,17 @@ def main():
         if r.get("tag") == "kind" and r.get("source") == SOURCE:
             done.add(r["hash"])
     assets = assets_for(a.thumbs)
-    todo = sorted(h for h in assets if h not in done)
+    if a.only_list:
+        with open(a.only_list, encoding="utf-8") as f:
+            want = {ln.strip() for ln in f if ln.strip()}
+        # Deliberately ignores `done`. These files were judged from a sideways
+        # thumbnail; the stored answer is the thing being replaced, so skipping
+        # them for already having one would skip the entire job.
+        todo = sorted(h for h in want if h in assets)
+        print("only-list: {:,} hashes requested, {:,} have thumbnails".format(
+            len(want), len(todo)))
+    else:
+        todo = sorted(h for h in assets if h not in done)
     if a.limit:
         todo = todo[:a.limit]
 
