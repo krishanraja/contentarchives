@@ -38,6 +38,26 @@ uses, for the same reasons:
 
 so v_files shows the best available answer per field, and `tags` still holds
 every opinion underneath for anyone who wants to argue with it.
+
+VOCABULARY - READ THIS BEFORE WRITING A QUERY
+
+Every value is TEXT, including the ones that look like numbers and booleans,
+because they arrive as text from a model and are stored as given. The literals
+matter and guessing them produces a confidently wrong answer rather than an
+error:
+
+    keep          'True' / 'False'        NOT 'yes'/'no', NOT 1/0
+    people        a count as text         CAST(people AS INT) > 0 to filter
+    sensitivity   'none' / 'private-family' / 'intimate'
+    media         'photo' / 'video' / 'other'
+    year, month   text, and '' when unknown - never NULL-only
+    duration      REAL seconds, and only videos have it
+
+Measured 2026-09-12: `WHERE keep='no'` returns 0 rows and reads like good news.
+The true count of files the model would not keep is 7,161. A query layer that
+guesses at this vocabulary will report zero and sound certain, which is worse
+than failing, so any natural-language-to-SQL layer must be given these literals
+rather than left to infer them.
 """
 
 from __future__ import annotations
