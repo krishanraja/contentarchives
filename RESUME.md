@@ -34,7 +34,84 @@ exclusion, deletion or classification rule.**
 
 ----
 
-## RIGHT NOW: finish the drive migration (handover point, 2026-09-11)
+## RIGHT NOW: phase 3 is running as a scheduled task (2026-09-12, 13:13)
+
+**Classification is live and nothing is waiting on you.** Check it before doing
+anything else:
+
+```powershell
+pwsh -NoProfile -File scripts\chains\arm.ps1 -Status
+Get-Content D:\_PhotoAudit\phase3.log -Tail 3
+```
+
+`state : Running` and a progress line climbing towards 79,017 means it is healthy.
+The chain runs to the end of phase 3b unattended: classify -> sheet -> fix the
+sideways thumbnails -> re-judge only those -> faces -> sheet again. Its last line
+will be `PHASE 3B COMPLETE`.
+
+### What happened at 12:56, and why the launcher changed
+
+The previous session ended and the classifier **died in the same second**, at
+53,325 of 79,017, along with both chains waiting on it. It had been launched with
+`Start-Process pwsh -WindowStyle Hidden`, which hides a window but leaves the
+process in the caller's tree — see [learning 38](docs/LEARNINGS.md). No work was
+lost: the store is append-per-file and `classify_live.py` skips any hash this
+model has already tagged, so resuming cost only the 25,695 files genuinely
+outstanding, and $24.11 of the spend stands.
+
+**Launch long work with `scripts/chains/arm.ps1` from now on.** It registers the
+chain as a scheduled task, so its parent is `svchost.exe` rather than the agent,
+and it survives the session ending, the terminal closing and logging out. It does
+not survive a reboot — that is the deliberate stop, along with `-Stop`.
+
+### If it is not running when you arrive
+
+Everything in `scripts/chains` is resumable, so re-arm it and lose only what died:
+
+```powershell
+pwsh -NoProfile -File scripts\chains\arm.ps1 -Chain chain_phase3_resume.ps1
+```
+
+Then prove it is actually detached rather than assuming — the mistake above was
+exactly this assumption:
+
+```powershell
+$py = Get-CimInstance Win32_Process -Filter "Name='python.exe'"
+Get-CimInstance Win32_Process -Filter "ProcessId=$($py.ParentProcessId)"   # want pwsh, whose parent is svchost
+```
+
+### Spend
+
+$24.11 measured before the death; ~$11.64 estimated for the remainder, under a
+$20 ceiling on the resumed run, plus ~$2 for the rotated re-judge under a $12
+ceiling. **Ceilings stop on measured spend, so a pricing surprise halts the run
+rather than appearing on a statement.** Krish flagged his Claude account is
+running low — this is Gemini spend, separate from it, but keep the reporting
+honest.
+
+### When `PHASE 3B COMPLETE` appears
+
+1. Re-run the receipt sweep. The first one ran against a 60%-classified library,
+   which is why Krish still saw receipts in `Pending-Segmentation`. **Do not
+   widen the pattern**: the next matches are a PAN card, an HMRC letter, a bank
+   statement, a Form 1042-S. Those are identity and financial records for
+   `Archive\Personal\01-Identity\`, not a deletion sweep.
+2. Move `Pending-Segmentation` into Personal. Krish approved this as the default
+   on 2026-09-12. It is deferred to the segmentation phase on purpose: moving
+   9,833 files invalidates the path->hash index, so it happens once, cleanly,
+   with the index updated in the same step.
+3. Then segmentation, which Krish wants to review before it runs.
+
+----
+
+## DONE: the drive migration (completed 2026-09-11, kept for the record)
+
+The letters have been swapped and the copy is verified — `D:` is now the LaCie
+`BOOGLES` (3.7 TB free) and `E:` is the Elements. The steps below are what was
+run, kept because the verification argument in them is the one to reuse for the
+H: mirror.
+
+### The steps as they were run
 
 **This session was handed over at the moment the library copy completed.** Everything
 below is a command, in order, with what a pass looks like and what to do on a failure.

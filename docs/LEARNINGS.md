@@ -1166,3 +1166,53 @@ systems of the same kind. Ask what would have had to be different for them to
 disagree - if the answer is "nothing, they see the same thing the same way",
 there is one opinion here, not two. The instrument that caught this was a
 contact sheet grouped by label, and a human looking at it for ten seconds.
+
+## 38. `-WindowStyle Hidden` hides a window; it does not detach a process
+
+The classifier died at **12:56:00** on 2026-09-12, in the same second the agent
+session ended, 53,325 files into 79,017 and four hours into paid work. Both
+chains waiting on it died with it. Nothing had crashed and nothing was wrong
+with the work — the store on disk was intact and resuming cost only the 25,695
+files that were genuinely outstanding.
+
+Every one of those three processes had been launched with:
+
+```powershell
+Start-Process pwsh -WindowStyle Hidden -ArgumentList ...
+```
+
+which had been treated for days as the way to survive the session, including in
+learning 9's advice about the memory watchdog. It is not. `-WindowStyle Hidden`
+sets a *window* property. The child stays in the caller's process tree, and when
+the session's tree was killed, the tree was killed — hidden or not. The symptom
+that made this hard to see is that it *looks* detached: the process keeps running
+for hours, has no visible window, and is not a tracked background task. It
+survives everything except the one event it was chosen to survive.
+
+**The rule.** If work must outlive the session that started it, hand it to
+something that is not the session. On Windows that is the Task Scheduler:
+
+```powershell
+pwsh -NoProfile -File scripts\chains\arm.ps1 -Chain <chain>.ps1
+```
+
+`scripts/chains/arm.ps1` registers the chain as a scheduled task, so its parent
+is `svchost.exe` and it survives the session ending, the terminal closing and
+logging out. Verify it rather than trusting it — walk the parents and check that
+none of them is the agent:
+
+```powershell
+$p = Get-CimInstance Win32_Process -Filter "ProcessId=$pid"   # python
+Get-CimInstance Win32_Process -Filter "ProcessId=$($p.ParentProcessId)"
+```
+
+`python ← pwsh ← svchost.exe` is detached. `python ← pwsh ← ... ← claude.exe` is
+not, however hidden the window.
+
+**The tell.** A mechanism chosen for a property nobody ever tested. "Detached"
+was inferred from the absence of a window and from jobs surviving the memory
+watchdog — a different threat, which it genuinely does survive. The first real
+test of the claim was also the first time it cost anything. When something is
+load-bearing and untested, test it while the cost of being wrong is still zero:
+one `Get-CimInstance` on the parent pid, at any point in those four hours, would
+have shown it.
