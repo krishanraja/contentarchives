@@ -95,6 +95,7 @@ if (Test-Path $halt) {
 # @(files, estimated_usd), or @(-1, 0) if the answer could not be read - which
 # is treated as a stop, not as zero.
 function Get-Outstanding([string[]] $extra) {
+    # gate:exempt read-only dry run, seconds, no --apply: this IS a preflight
     $out = & python "$repo\engine\classify_live.py" --thumbs D:\_thumbs `
              --store D:\_enrichment @extra 2>&1 | Out-String
     $n = [regex]::Match($out, 'to classify:\s*([\d,]+) files')
@@ -143,8 +144,41 @@ function Invoke-Classify([string] $label, [string[]] $extra) {
              $label, $try, $left, $est, $ceiling)
 
         $before = if (Test-Path $log) { (Get-Item $log).Length } else { 0 }
-        python -u "$repo\engine\classify_live.py" --thumbs D:\_thumbs --store D:\_enrichment `
-               --workers 12 --max-usd $ceiling @extra --apply *>> $log
+        $tags = 'D:\_enrichment\content_tags.csv'
+        Invoke-Step -Name "$label a$try" -ExpectedUnits $left -CheckpointMin 15 -StallStrikes 3 `
+            -Preflight {
+                # Cheap, and each one has actually bitten: no key means every
+                # call 401s for hours, no thumbnails means paying to label
+                # nothing, and an unwritable store means the answers evaporate.
+                if (-not $env:GOOGLE_API_KEY) { Say '  no GOOGLE_API_KEY'; return $false }
+                if (-not (Test-Path 'D:\_thumbs')) { Say '  no thumbnail cache'; return $false }
+                if (-not (Test-Path $tags)) { Say '  no tag store to append to'; return $false }
+                return $true
+            } `
+            -Start {
+                Start-Process python -PassThru -WindowStyle Hidden -ArgumentList (@(
+                    '-u', "$repo\engine\classify_live.py", '--thumbs', 'D:\_thumbs',
+                    '--store', 'D:\_enrichment', '--workers', '12',
+                    '--max-usd', $ceiling) + $extra + @('--apply')) `
+                    -RedirectStandardOutput 'D:\_PhotoAudit\cls.out' `
+                    -RedirectStandardError  'D:\_PhotoAudit\cls.err'
+            } `
+            -Progress {
+                # The store grows a row per answer, so this rises while it works
+                # and flatlines the moment it is alive but achieving nothing.
+                if (Test-Path $tags) { (Get-Item $tags).Length } else { 0 }
+            } `
+            -Postcondition {
+                Get-Content 'D:\_PhotoAudit\cls.out' -ErrorAction SilentlyContinue | Add-Content -Path $log
+                Get-Content 'D:\_PhotoAudit\cls.err' -ErrorAction SilentlyContinue | Add-Content -Path $log
+                # A pass may legitimately end by finishing OR by hitting the
+                # ceiling; both are handled below. What must not happen is
+                # ending having written nothing at all.
+                $o = Get-Content 'D:\_PhotoAudit\cls.out' -Raw -ErrorAction SilentlyContinue
+                if ($o -match 'finished in|CEILING REACHED') { return $true }
+                Say '  classify_live ended without finishing or hitting its ceiling'
+                return $false
+            }
 
         # Only this attempt's output counts - an earlier attempt's ceiling line
         # must not stop a later one.
@@ -182,23 +216,107 @@ if (Should-Run '3b') {
 # This runs BEFORE the sheet so the rebuild picks the durations up, rather than
 # building a sheet that is knowingly missing a column and rebuilding it later.
 if (Should-Run '3a-video') {
-    Say 'step 3a-video: re-probing videos now that ffprobe resolves'
-    python -u "$repo\scripts\build_inventory.py" --video *>> $log
-    if ($LASTEXITCODE -ne 0) { Say "WARNING: build_inventory exited $LASTEXITCODE - continuing; it is an independent input to the sheet" }
+    Invoke-Step -Name '3a-video' -ExpectedUnits 82000 -CheckpointMin 10 `
+        -Preflight {
+            # THE failure this step actually had: ffprobe was looked for under
+            # another machine's username, probe_video returned {} in silence, and
+            # 33 minutes produced 0.0% duration across 12,988 videos. Five
+            # seconds of asking where ffprobe is would have caught all of it.
+            $out = & python -c "import importlib.util,sys;spec=importlib.util.spec_from_file_location('bi',sys.argv[1]);m=importlib.util.module_from_spec(spec);spec.loader.exec_module(m);print(m.FFPROBE or 'NONE')" "$repo\scripts\build_inventory.py" 2>&1 | Select-Object -Last 1
+            if (-not $out -or "$out" -eq 'NONE' -or -not (Test-Path "$out")) {
+                Say "  ffprobe not resolvable ('$out') - every video would silently get no duration"
+                return $false
+            }
+            Say "  ffprobe: $out"
+            return $true
+        } `
+        -Start {
+            Start-Process python -PassThru -WindowStyle Hidden `
+                -ArgumentList @('-u', "$repo\scripts\build_inventory.py", '--video') `
+                -RedirectStandardOutput 'D:\_PhotoAudit\inv.out' `
+                -RedirectStandardError  'D:\_PhotoAudit\inv.err'
+        } `
+        -Progress {
+            if (Test-Path 'D:\_PhotoAudit\INVENTORY.csv') { (Get-Item 'D:\_PhotoAudit\INVENTORY.csv').Length } else { 0 }
+        } `
+        -Postcondition {
+            Get-Content 'D:\_PhotoAudit\inv.out' -ErrorAction SilentlyContinue | Add-Content -Path $log
+            if (-not (Test-Path 'D:\_PhotoAudit\INVENTORY.csv')) { Say '  no INVENTORY.csv'; return $false }
+            # The column this step exists for. 0.0% must never again read as success.
+            $rows = Import-Csv 'D:\_PhotoAudit\INVENTORY.csv'
+            $vids = @($rows | Where-Object { $_.Kind -eq 'video' })
+            $withDur = @($vids | Where-Object { $_.Duration }).Count
+            $pct = if ($vids.Count) { 100.0 * $withDur / $vids.Count } else { 0 }
+            Say ("  videos {0:N0}, with duration {1:N0} ({2:N1}%)" -f $vids.Count, $withDur, $pct)
+            return ($vids.Count -eq 0 -or $pct -ge 50)
+        }
     Say 'step 3a-video done'
 }
 
 if (Should-Run '3c') {
-    Say 'step 3c: rebuilding MASTER.csv and scoring coverage'
-    python -u "$repo\tools\master_sheet.py" *>> $log
+    Invoke-Step -Name '3c sheet' -CheckpointMin 10 `
+        -Preflight {
+            foreach ($f in @('D:\_PhotoAudit\INVENTORY.csv', 'D:\_enrichment\content_tags.csv')) {
+                if (-not (Test-Path $f)) { Say "  missing join input: $f"; return $false }
+                if ((Get-Item $f).Length -lt 1024) { Say "  suspiciously small: $f"; return $false }
+            }
+            return $true
+        } `
+        -Start {
+            Start-Process python -PassThru -WindowStyle Hidden `
+                -ArgumentList @('-u', "$repo\tools\master_sheet.py") `
+                -RedirectStandardOutput 'D:\_PhotoAudit\sheet.out' `
+                -RedirectStandardError  'D:\_PhotoAudit\sheet.err'
+        } `
+        -Progress {
+            $t = 'D:\_PhotoAudit\MASTER.csv.tmp'
+            if (Test-Path $t) { (Get-Item $t).Length }
+            elseif (Test-Path 'D:\_PhotoAudit\MASTER.csv') { (Get-Item 'D:\_PhotoAudit\MASTER.csv').Length }
+            else { 0 }
+        } `
+        -Postcondition {
+            Get-Content 'D:\_PhotoAudit\sheet.out' -ErrorAction SilentlyContinue | Add-Content -Path $log
+            if (-not (Test-Path 'D:\_PhotoAudit\MASTER.csv')) { Say '  no MASTER.csv'; return $false }
+            $age = ((Get-Date) - (Get-Item 'D:\_PhotoAudit\MASTER.csv').LastWriteTime).TotalMinutes
+            if ($age -gt 240) { Say "  MASTER.csv is $([int]$age) min old - it was not rewritten"; return $false }
+            return $true
+        }
     Say 'PHASE 3 COMPLETE. Review the coverage table above, then decide segmentation.'
 }
 
 # --- phase 3b ----------------------------------------------------------------
 if (Should-Run 'A') {
-    Say 'step A: regenerating thumbnails for rotated originals'
-    python -u "$repo\tools\refix_rotated.py" --apply *>> $log
-    if ($LASTEXITCODE -ne 0) { Stop-Chain "refix_rotated exited $LASTEXITCODE" }
+    # ExpectedUnits is 19,878 because that is what it MEASURED, against an
+    # estimate of ~5,000. It ran 3h19m against a 20-minute guess and said nothing
+    # for three hours. The checkpoint now recalibrates out loud instead.
+    Invoke-Step -Name 'A rotate' -ExpectedUnits 19878 -CheckpointMin 15 `
+        -Preflight {
+            if (-not (Test-Path 'D:\_thumbs')) { Say '  no thumbnail cache to repair'; return $false }
+            # Prove the orientation reader works at all before walking 69,000
+            # files: a reader that always returns "upright" would find nothing
+            # and report success, which is indistinguishable from a tidy library.
+            $ok = & python -c "import importlib.util,sys;spec=importlib.util.spec_from_file_location('rf',sys.argv[1]);m=importlib.util.module_from_spec(spec);spec.loader.exec_module(m);print('OK' if callable(getattr(m,'orientation',None)) else 'NO')" "$repo\tools\refix_rotated.py" 2>&1 | Select-Object -Last 1
+            if ("$ok" -ne 'OK') { Say "  orientation reader unavailable ('$ok')"; return $false }
+            return $true
+        } `
+        -Start {
+            Start-Process python -PassThru -WindowStyle Hidden `
+                -ArgumentList @('-u', "$repo\tools\refix_rotated.py", '--apply') `
+                -RedirectStandardOutput 'D:\_PhotoAudit\refix.out' `
+                -RedirectStandardError  'D:\_PhotoAudit\refix.err'
+        } `
+        -Progress {
+            # counts "N regenerated" lines, so it rises while it works
+            if (Test-Path 'D:\_PhotoAudit\refix.out') { (Get-Item 'D:\_PhotoAudit\refix.out').Length } else { 0 }
+        } `
+        -Postcondition {
+            Get-Content 'D:\_PhotoAudit\refix.out' -ErrorAction SilentlyContinue | Add-Content -Path $log
+            if (-not (Test-Path 'D:\_PhotoAudit\ROTATED-REDO.txt')) {
+                Say '  no ROTATED-REDO.txt - step B would silently have nothing to do'
+                return $false
+            }
+            return $true
+        }
 }
 
 if (Should-Run 'B') {
@@ -251,45 +369,85 @@ if (Should-Run 'C') {
             (Get-Content $_.FullName -ErrorAction SilentlyContinue | Measure-Object -Line).Lines
         } | Measure-Object -Sum).Sum
     }
-    $before = Count-FaceRows
-    Say "step C preflight: 15 images through shard 0/3 (faces rows now: $before)"
-    $plBefore = (Get-Item $log).Length
-    python -u "$repo\engine\faces_embed.py" --thumbs D:\_thumbs --store D:\_enrichment `
-           --shard 0/3 --limit 15 *>> $log
-    $fs = [IO.File]::Open($log, 'Open', 'Read', 'ReadWrite')
-    try { $null = $fs.Seek($plBefore, 'Begin'); $plOut = (New-Object IO.StreamReader($fs)).ReadToEnd() }
-    finally { $fs.Dispose() }
-    $after = Count-FaceRows
-
-    # Two conditions, because --limit is applied BEFORE the already-done filter:
-    # if those 15 were all embedded by an earlier run the tool correctly does
-    # nothing, and "no new rows" is then success rather than failure. What must
-    # be true either way is that the shard RAN to completion and that face data
-    # exists at all.
-    if ($plOut -notmatch 'shard \d+ done|images to look at') {
-        Stop-Chain "step C preflight: faces_embed did not report finishing a shard. Fourteen hours of this would produce nothing and report success."
-    }
-    if ($after -le 0) {
-        Stop-Chain "step C preflight: no face rows exist anywhere after running. Expected faces*.csv to contain detections."
-    }
-    Say "step C preflight OK: shard ran, face rows $before -> $after"
-
-    Say 'step C: faces, three shards (4 cores; six oversubscribes them)'
-    $jobs = @()
-    foreach ($i in 0..2) {
-        $jobs += Start-Process python -PassThru -WindowStyle Hidden -ArgumentList @(
-            '-u', "$repo\engine\faces_embed.py", '--thumbs', 'D:\_thumbs',
-            '--store', 'D:\_enrichment', '--shard', "$i/3"
-        ) -RedirectStandardOutput "D:\_PhotoAudit\faces-$i.log" -RedirectStandardError "D:\_PhotoAudit\faces-$i.err"
-    }
-    Say ("face shards: " + ($jobs.Id -join ', '))
-    $jobs | Wait-Process
+    Invoke-Step -Name 'C faces' -ExpectedUnits 51797 -CheckpointMin 15 -StallStrikes 3 `
+        -Preflight {
+            # Fourteen hours is the most expensive thing in this pipeline, so the
+            # mechanism is proved on fifteen images first. Two conditions, because
+            # --limit is applied BEFORE the already-done filter: if those fifteen
+            # were embedded by an earlier run the tool correctly does nothing, and
+            # "no new rows" is then success. What must hold either way is that a
+            # shard RAN to completion and that face data exists at all.
+            $before = Count-FaceRows
+            $mark = (Get-Item $log).Length
+            python -u "$repo\engine\faces_embed.py" --thumbs D:\_thumbs `
+                   --store D:\_enrichment --shard 0/3 --limit 15 *>> $log
+            $fs = [IO.File]::Open($log, 'Open', 'Read', 'ReadWrite')
+            try { $null = $fs.Seek($mark, 'Begin'); $out = (New-Object IO.StreamReader($fs)).ReadToEnd() }
+            finally { $fs.Dispose() }
+            $after = Count-FaceRows
+            if ($out -notmatch 'shard \d+ done|images to look at') {
+                Say '  faces_embed did not report finishing a shard'
+                return $false
+            }
+            if ($after -le 0) { Say '  no face rows exist anywhere after running'; return $false }
+            Say "  shard ran, face rows $before -> $after"
+            return $true
+        } `
+        -Start {
+            Say 'faces: three shards (4 cores; six oversubscribes them)'
+            $jobs = @()
+            foreach ($i in 0..2) {
+                $jobs += Start-Process python -PassThru -WindowStyle Hidden -ArgumentList @(
+                    '-u', "$repo\engine\faces_embed.py", '--thumbs', 'D:\_thumbs',
+                    '--store', 'D:\_enrichment', '--shard', "$i/3"
+                ) -RedirectStandardOutput "D:\_PhotoAudit\faces-$i.log" -RedirectStandardError "D:\_PhotoAudit\faces-$i.err"
+            }
+            Say ("face shards: " + ($jobs.Id -join ', '))
+            return $jobs
+        } `
+        -Progress { Count-FaceRows } `
+        -Postcondition {
+            # Three shards must ALL have produced something. One silently
+            # selecting nothing would look identical to one that finished, and
+            # the shard count changed from 6 to 3 today.
+            $files = Get-ChildItem 'D:\_enrichment\faces.*.csv' -ErrorAction SilentlyContinue
+            Say ("  shard files: {0}, total face rows: {1:N0}" -f $files.Count, (Count-FaceRows))
+            if ($files.Count -lt 3) { Say '  fewer than three shard files'; return $false }
+            return ((Count-FaceRows) -gt 0)
+        }
     Say 'faces done'
 }
 
 if (Should-Run 'D') {
-    Say 'step D: rebuilding the sheet'
-    python -u "$repo\tools\master_sheet.py" *>> $log
+    Invoke-Step -Name 'D sheet' -CheckpointMin 10 `
+        -Preflight {
+            # The sheet is a join. Both sides must exist, or it produces a
+            # confident file with a missing column - which is exactly how
+            # OriginPath sat at 0% and Duration at 0.0% without anyone noticing.
+            foreach ($f in @('D:\_PhotoAudit\INVENTORY.csv', 'D:\_enrichment\content_tags.csv')) {
+                if (-not (Test-Path $f)) { Say "  missing input: $f"; return $false }
+                if ((Get-Item $f).Length -lt 1024) { Say "  suspiciously small: $f"; return $false }
+            }
+            return $true
+        } `
+        -Start {
+            Start-Process python -PassThru -WindowStyle Hidden `
+                -ArgumentList @('-u', "$repo\tools\master_sheet.py") `
+                -RedirectStandardOutput 'D:\_PhotoAudit\sheet.out' `
+                -RedirectStandardError  'D:\_PhotoAudit\sheet.err'
+        } `
+        -Progress {
+            $t = 'D:\_PhotoAudit\MASTER.csv.tmp'
+            if (Test-Path $t) { (Get-Item $t).Length }
+            elseif (Test-Path 'D:\_PhotoAudit\MASTER.csv') { (Get-Item 'D:\_PhotoAudit\MASTER.csv').Length }
+            else { 0 }
+        } `
+        -Postcondition {
+            Get-Content 'D:\_PhotoAudit\sheet.out' -ErrorAction SilentlyContinue | Add-Content -Path $log
+            if (-not (Test-Path 'D:\_PhotoAudit\MASTER.csv')) { Say '  no MASTER.csv'; return $false }
+            $age = ((Get-Date) - (Get-Item 'D:\_PhotoAudit\MASTER.csv').LastWriteTime).TotalMinutes
+            if ($age -gt 240) { Say "  MASTER.csv is $([int]$age) min old - it was not rewritten"; return $false }
+            return $true
+        }
     Say 'PHASE 3B COMPLETE. Re-run the receipt sweep now the library is fully classified.'
-
 }

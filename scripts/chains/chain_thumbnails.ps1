@@ -31,20 +31,47 @@ if (Test-Path 'D:\_PhotoAudit\H-COPY-FAILURES.csv') {
 
 $env:PYTHONIOENCODING = 'utf-8'
 $eng = 'C:\Users\krish\dev\contentarchives\engine\thumbnail.py'
-Say 'starting 6 thumbnail shards over D:\ContentLibrary\Media'
-$jobs = @()
-foreach ($i in 0..5) {
-    $jobs += Start-Process python -PassThru -WindowStyle Hidden -ArgumentList @(
-        '-u', $eng,
-        '--source', 'D:\ContentLibrary\Media',
-        '--out', 'D:\_thumbs',
-        '--shard', "$i/6"
-    ) -RedirectStandardOutput "D:\_PhotoAudit\thumbs-$i.log" -RedirectStandardError "D:\_PhotoAudit\thumbs-$i.err"
+. "$PSScriptRoot\steps.ps1"
+
+# Stop-Chain is what Invoke-Step calls on a failed guard; this chain had no such
+# concept, so give it one rather than let the runner throw an unhandled error.
+function Stop-Chain([string] $why) { Say "STOPPED: $why"; exit 1 }
+function Count-Thumbs {
+    (Get-ChildItem D:\_thumbs -Recurse -File -ErrorAction SilentlyContinue | Measure-Object).Count
 }
-Say ("shards running: " + ($jobs.Id -join ', '))
-$jobs | Wait-Process
+
+Invoke-Step -Name 'thumbnails' -ExpectedUnits 97000 -CheckpointMin 15 `
+    -Preflight {
+        if (-not (Test-Path 'D:\ContentLibrary\Media')) { Say '  no source tree'; return $false }
+        # Make ONE thumbnail before starting six shards over a whole library.
+        # thumbnail.py silently produced landscape thumbnails from portrait
+        # originals for weeks because nothing ever looked at one it made.
+        $probe = & python -c "import importlib.util,sys;spec=importlib.util.spec_from_file_location('t',sys.argv[1]);m=importlib.util.module_from_spec(spec);spec.loader.exec_module(m);print('OK' if callable(getattr(m,'make',None)) else 'NO')" $eng 2>&1 | Select-Object -Last 1
+        if ("$probe" -ne 'OK') { Say "  thumbnail.make unavailable ('$probe')"; return $false }
+        return $true
+    } `
+    -Start {
+        Say 'starting 6 thumbnail shards over D:\ContentLibrary\Media'
+        $jobs = @()
+        foreach ($i in 0..5) {
+            $jobs += Start-Process python -PassThru -WindowStyle Hidden -ArgumentList @(
+                '-u', $eng,
+                '--source', 'D:\ContentLibrary\Media',
+                '--out', 'D:\_thumbs',
+                '--shard', "$i/6"
+            ) -RedirectStandardOutput "D:\_PhotoAudit\thumbs-$i.log" -RedirectStandardError "D:\_PhotoAudit\thumbs-$i.err"
+        }
+        Say ("shards running: " + ($jobs.Id -join ', '))
+        return $jobs
+    } `
+    -Progress { Count-Thumbs } `
+    -Postcondition {
+        $n = Count-Thumbs
+        Say "  thumbnails on disk: $n"
+        return ($n -gt 0)
+    }
 Say 'all shards finished'
 
-$n = (Get-ChildItem D:\_thumbs -Recurse -File -ErrorAction SilentlyContinue | Measure-Object).Count
+$n = Count-Thumbs
 Say "thumbnails on disk: $n"
 Say 'DONE. Next: engine/classify_live.py --thumbs D:\_thumbs --store D:\_enrichment --apply'
