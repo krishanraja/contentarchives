@@ -137,10 +137,11 @@ def schema(db: sqlite3.Connection) -> None:
     """)
 
 
-def load_files(db: sqlite3.Connection) -> int:
-    idx = MS.load_hash_index()
+def load_files(db: sqlite3.Connection, inventory: str = None,
+               idx: dict = None) -> int:
+    idx = MS.load_hash_index() if idx is None else idx
     rows = []
-    with io.open(MS.INVENTORY, encoding="utf-8", errors="replace",
+    with io.open(inventory or MS.INVENTORY, encoding="utf-8", errors="replace",
                  newline="") as f:
         for r in csv.DictReader(f):
             p = r.get("LibraryPath") or ""
@@ -171,8 +172,8 @@ def load_files(db: sqlite3.Connection) -> int:
     return len(rows)
 
 
-def load_tags(db: sqlite3.Connection) -> int:
-    p = os.path.join(MS.STORE, "content_tags.csv")
+def load_tags(db: sqlite3.Connection, store: str = None) -> int:
+    p = os.path.join(store or MS.STORE, "content_tags.csv")
     if not os.path.exists(p):
         return 0
     n = 0
@@ -214,9 +215,9 @@ def resolve(db: sqlite3.Connection) -> int:
     return len(best)
 
 
-def load_answers(db: sqlite3.Connection) -> int:
+def load_answers(db: sqlite3.Connection, store: str = None) -> int:
     """Read the journal. This function only ever reads."""
-    j = Journal(MS.STORE)
+    j = Journal(store or MS.STORE)
     rows = []
     for r in j.all_rows():
         try:
@@ -328,6 +329,8 @@ def main() -> None:
         description=__doc__,
         formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--out", default=OUT)
+    ap.add_argument("--inventory", default=None)
+    ap.add_argument("--store", default=None)
     ap.add_argument("--ask", default="", help="run a full-text search and exit")
     a = ap.parse_args()
 
@@ -350,10 +353,11 @@ def main() -> None:
 
     db = connect(tmp)
     schema(db)
-    print("files    : {:,}".format(load_files(db)))
-    print("tags     : {:,}".format(load_tags(db)))
+    print("files    : {:,}".format(load_files(db, a.inventory)))
+    print("tags     : {:,}".format(load_tags(db, a.store)))
     print("resolved : {:,}".format(resolve(db)))
-    print("answers  : {:,} read from the journal".format(load_answers(db)))
+    print("answers  : {:,} read from the journal".format(
+        load_answers(db, a.store)))
     print("applied  : {:,} file-fields set by a human".format(apply_answers(db)))
     build_views(db)
     db.commit()
