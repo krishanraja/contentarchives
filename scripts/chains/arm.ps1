@@ -38,6 +38,23 @@ param(
 $ErrorActionPreference = 'Stop'
 $repo = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 
+# Stopping the TASK kills its pwsh, but the python it launched keeps running as
+# an orphan - and an orphaned classifier goes on spending money against the same
+# todo list the next run will claim, so the same file is paid for twice. Seen for
+# real on 2026-09-12: a re-arm left pid 29248 classifying with a dead parent while
+# its replacement started up. Unregistering a task is not stopping the work.
+function Stop-ChainWorkers {
+    $ours = Get-CimInstance Win32_Process -Filter "Name='python.exe'" -ErrorAction SilentlyContinue |
+            Where-Object { $_.CommandLine -match 'classify_live|faces_embed|refix_rotated|master_sheet|build_inventory' }
+    foreach ($w in $ours) {
+        $parent = Get-CimInstance Win32_Process -Filter "ProcessId=$($w.ParentProcessId)" -ErrorAction SilentlyContinue
+        if (-not $parent) {
+            Write-Host ("  orphan {0} ({1}) - stopping" -f $w.ProcessId, ($w.CommandLine -replace '.*\(\w+)\.py.*', '$1'))
+            Stop-Process -Id $w.ProcessId -Force -ErrorAction SilentlyContinue
+        }
+    }
+}
+
 function Show-Status {
     $t = Get-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue
     if (-not $t) { Write-Host "no task '$TaskName' registered"; return }
@@ -54,6 +71,8 @@ if ($Status) { Show-Status; exit 0 }
 if ($Stop) {
     Stop-ScheduledTask    -TaskName $TaskName -ErrorAction SilentlyContinue
     Unregister-ScheduledTask -TaskName $TaskName -Confirm:$false -ErrorAction SilentlyContinue
+    Start-Sleep -Seconds 2
+    Stop-ChainWorkers
     Write-Host "stopped and unregistered '$TaskName'"
     Write-Host "NOTE: python children are not killed by this. Check with:"
     Write-Host "  Get-CimInstance Win32_Process -Filter \"Name='python.exe'\""
@@ -65,10 +84,13 @@ if (-not $Chain) { throw "give -Chain <file in scripts\chains>, or -Status / -St
 $script = Join-Path $PSScriptRoot $Chain
 if (-not (Test-Path $script)) { throw "no such chain: $script" }
 
-# A task left over from a previous arming would otherwise refuse the register.
+# A task left over from a previous arming would otherwise refuse the register -
+# and its python workers would outlive it, so reap them before starting new ones.
 Get-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue | ForEach-Object {
     Stop-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue
     Unregister-ScheduledTask -TaskName $TaskName -Confirm:$false
+    Start-Sleep -Seconds 2
+    Stop-ChainWorkers
 }
 
 $pwshExe = (Get-Process -Id $PID).Path

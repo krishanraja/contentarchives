@@ -126,12 +126,28 @@ if (Test-Path D:\_PhotoAudit\ROTATED-REDO.txt) {
 }
 Say 'step B done'
 
-Say 'step C: faces, six shards'
+# Three shards, not six. Measured on this machine 2026-09-12: one shard does
+# 0.85 images/sec and peaks at 630 MB. The CPU is an i5-1135G7 - FOUR physical
+# cores - and detection runs on CPUExecutionProvider, so six shards each taking
+# an onnxruntime thread pool oversubscribe the cores several times over and add
+# contention rather than throughput. Six would also hold ~3.8 GB against ~2.7 GB
+# free, and memory pressure is what has been killing long jobs on this box all
+# day. Three holds ~1.9 GB and still saturates four cores.
+#
+# Aggregate throughput is CPU-bound at roughly 1 image/sec whatever the shard
+# count, so the 51,797 images with a face in them are an overnight job. Shard
+# count is a safety choice here, not a speed one. The lever that WOULD change
+# the runtime is --det-size, and it trades away small and distant faces, so it
+# is Krish's call rather than a default to quietly change.
+#
+# Resumability is by content hash in faces.csv, not by shard, so changing the
+# shard count never re-does an image that is already embedded.
+Say 'step C: faces, three shards (4 cores; six oversubscribes them)'
 $jobs = @()
-foreach ($i in 0..5) {
+foreach ($i in 0..2) {
     $jobs += Start-Process python -PassThru -WindowStyle Hidden -ArgumentList @(
         '-u', "$repo\engine\faces_embed.py", '--thumbs', 'D:\_thumbs',
-        '--store', 'D:\_enrichment', '--shard', "$i/6"
+        '--store', 'D:\_enrichment', '--shard', "$i/3"
     ) -RedirectStandardOutput "D:\_PhotoAudit\faces-$i.log" -RedirectStandardError "D:\_PhotoAudit\faces-$i.err"
 }
 Say ("face shards: " + ($jobs.Id -join ', '))
