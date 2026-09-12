@@ -1,21 +1,32 @@
 # Resume phase 3 from wherever the store got to, and run through to the end of
-# phase 3b, in ONE process.
+# phase 3b - surviving being killed, because on this machine it will be.
 #
-# WHY THIS FILE EXISTS SEPARATELY FROM chain_phase3.ps1
+# HISTORY, BECAUSE IT EXPLAINS THE SHAPE OF THIS FILE
 #
-# On 2026-09-12 at 12:56:00 the agent session ended and the classifier died in
-# the same second, at 53,325 of 79,017. It had been launched with
-# `Start-Process pwsh -WindowStyle Hidden`, which hides a window but does NOT
-# leave the process tree - so when the session's tree was killed, the work went
-# with it, along with both waiting chains. Hidden is not detached.
+# 2026-09-12 12:56  the classifier died in the same second an agent session
+#                   ended, at 53,325/79,017. Launched with `Start-Process pwsh
+#                   -WindowStyle Hidden`, which hides a window but leaves the
+#                   process in the caller's tree. Learning 38.
+# 2026-09-12 15:10  relaunched as a scheduled task - genuinely detached, parent
+#                   svchost - and killed anyway at 14,750/25,695, two hours in,
+#                   with LastTaskResult 0xC000013A (STATUS_CONTROL_C_EXIT). No
+#                   Windows cause: no reboot, empty System log, task settings
+#                   correct. Something outside Windows kills long jobs on this
+#                   box under memory pressure, as it killed five tracked tasks
+#                   the day before.
 #
-# Launch this with scripts/chains/arm.ps1, which registers it as a SCHEDULED
-# TASK. Task Scheduler owns the process, not the console, so it survives the
-# session ending, the CLI closing, and logging out. That is the actual fix.
+# So this no longer tries to avoid the kill. It makes the kill cost nothing.
 #
-# Nothing here repeats paid work: classify_live skips any hash this model has
-# already tagged, so a re-run resumes and costs only what is left. Step 3a
-# (build_inventory) finished at 04:59 and is not repeated.
+# Two layers, because either alone has a hole:
+#   inner - each classify step loops until the store says nothing is left, so a
+#           killed python is retried by the surviving pwsh within a minute.
+#   outer - arm.ps1 registers the task with RestartCount, so a killed pwsh is
+#           restarted by the Task Scheduler service itself.
+#
+# Both are safe to repeat. classify_live skips any hash this model has already
+# tagged, the store is append-per-file, refix_rotated only rewrites thumbnails
+# that are actually wrong, and master_sheet is a pure rebuild. Nothing here can
+# pay twice for the same file.
 $log  = 'D:\_PhotoAudit\phase3.log'
 $repo = 'C:\Users\krish\dev\contentarchives'
 function Say($m) { "$((Get-Date).ToString('HH:mm:ss'))  $m" | Tee-Object -FilePath $log -Append }
@@ -25,25 +36,94 @@ $e = Get-ItemProperty -Path 'HKCU:\Environment'
 $env:GOOGLE_API_KEY = $e.GOOGLE_API_KEY
 if (-not $env:GOOGLE_API_KEY) { Say 'STOPPED: GOOGLE_API_KEY not in HKCU\Environment'; exit 1 }
 
-Say 'RESUMED after the 12:56 session-death. Ceiling $20 on top of the $24.11 already spent.'
+# A HALT file is how a deliberate stop survives a restart. Without it the outer
+# RestartCount would drive straight through the spend ceiling - the brake would
+# stop the process and the scheduler would start it again, 99 times. A brake a
+# restart loop can push through is not a brake.
+#
+# So: a real failure writes HALT and exits 1 (honest, and the task result shows
+# it). The restart that follows sees HALT and exits 0, which ends the cycle. A
+# kill writes nothing, so a killed run just resumes, which is the whole point.
+$halt = 'D:\_PhotoAudit\PHASE3-HALTED.txt'
+function Stop-Chain([string] $why) {
+    Say "STOPPED: $why"
+    "$((Get-Date).ToString('u'))  $why" | Set-Content -Path $halt -Encoding utf8
+    Say "wrote $halt - delete it once the cause is fixed, then re-arm."
+    exit 1
+}
+if (Test-Path $halt) {
+    Say "halted by a previous run, not restarting: $(Get-Content $halt -Raw)"
+    Say 'delete D:\_PhotoAudit\PHASE3-HALTED.txt once the cause is fixed, then re-arm.'
+    exit 0
+}
+
+
+# What is still outstanding, asked of the store rather than assumed. Returns
+# @(files, estimated_usd), or @(-1, 0) if the answer could not be read - which
+# is treated as a stop, not as zero.
+function Get-Outstanding([string[]] $extra) {
+    $out = & python "$repo\engine\classify_live.py" --thumbs D:\_thumbs `
+             --store D:\_enrichment @extra 2>&1 | Out-String
+    $n = [regex]::Match($out, 'to classify:\s*([\d,]+) files')
+    $c = [regex]::Match($out, 'estimate\s*:\s*\$([\d.]+)')
+    if (-not $n.Success) { return @(-1, 0.0) }
+    return @([int]($n.Groups[1].Value -replace ',', ''),
+             $(if ($c.Success) { [double]$c.Groups[1].Value } else { 0.0 }))
+}
+
+# Run the classifier until the store says there is nothing left. The ceiling is
+# recomputed from what actually remains on every attempt, so restarting cannot
+# quietly multiply a per-run budget into an unbounded one.
+function Invoke-Classify([string] $label, [string[]] $extra) {
+    for ($try = 1; $try -le 60; $try++) {
+        $o = Get-Outstanding $extra
+        $left = [int]$o[0]; $est = [double]$o[1]
+        if ($left -lt 0) { Stop-Chain "${label} could not read the outstanding count from classify_live" }
+        if ($left -eq 0) { Say "${label}: nothing outstanding"; return $true }
+
+        $ceiling = [math]::Round([math]::Max(2.0, $est * 1.6) , 2)
+        Say ("{0}: attempt {1}, {2:N0} files outstanding, est `${3:N2}, ceiling `${4:N2}" -f `
+             $label, $try, $left, $est, $ceiling)
+
+        $before = if (Test-Path $log) { (Get-Item $log).Length } else { 0 }
+        python -u "$repo\engine\classify_live.py" --thumbs D:\_thumbs --store D:\_enrichment `
+               --workers 12 --max-usd $ceiling @extra --apply *>> $log
+
+        # Only this attempt's output counts - an earlier attempt's ceiling line
+        # must not stop a later one.
+        $fresh = ''
+        if (Test-Path $log) {
+            $fs = [IO.File]::Open($log, 'Open', 'Read', 'ReadWrite')
+            try { $null = $fs.Seek($before, 'Begin'); $fresh = (New-Object IO.StreamReader($fs)).ReadToEnd() }
+            finally { $fs.Dispose() }
+        }
+        if ($fresh -match 'CEILING REACHED') {
+            Stop-Chain "${label} hit its spend ceiling. Raise it deliberately, or find out why the measured rate beat the estimate."
+        }
+    }
+    Stop-Chain "${label} still unfinished after 60 attempts - something is failing, not just being killed."
+}
+
+Say '=== chain start (resumable; safe to restart at any point) ==='
 
 # --- the rest of phase 3 -----------------------------------------------------
-Say 'step 3b (resumed): classifying the remaining ~25,695 files'
-python -u "$repo\engine\classify_live.py" --thumbs D:\_thumbs --store D:\_enrichment --workers 12 --max-usd 20 --apply *>> $log
-if ($LASTEXITCODE -ne 0) { Say "WARNING: classify_live exited $LASTEXITCODE - the store keeps what it wrote; re-running resumes" }
+if (-not (Invoke-Classify 'step 3b classify' @())) { exit 1 }
 Say 'step 3b done'
 
 Say 'step 3c: rebuilding MASTER.csv and scoring coverage'
 python -u "$repo\tools\master_sheet.py" *>> $log
 Say 'PHASE 3 COMPLETE. Review the coverage table above, then decide segmentation.'
 
-# --- phase 3b, inlined so there is one process to keep alive, not two ---------
+# --- phase 3b ----------------------------------------------------------------
 Say 'step A: regenerating thumbnails for rotated originals'
 python -u "$repo\tools\refix_rotated.py" --apply *>> $log
-if ($LASTEXITCODE -ne 0) { Say "STOPPED: refix_rotated exited $LASTEXITCODE"; exit 1 }
+if ($LASTEXITCODE -ne 0) { Stop-Chain "refix_rotated exited $LASTEXITCODE" }
 
-Say 'step B: re-judging only the files whose thumbnail changed'
-python -u "$repo\engine\classify_live.py" --thumbs D:\_thumbs --store D:\_enrichment --workers 12 --max-usd 12 --only-list D:\_PhotoAudit\ROTATED-REDO.txt --apply *>> $log
+if (Test-Path D:\_PhotoAudit\ROTATED-REDO.txt) {
+    if (-not (Invoke-Classify 'step B re-judge rotated' @('--only-list', 'D:\_PhotoAudit\ROTATED-REDO.txt'))) { exit 1 }
+} else {
+    Say 'step B: no ROTATED-REDO.txt - nothing to re-judge'
+}
 Say 'step B done'
 
 Say 'step C: faces, six shards'

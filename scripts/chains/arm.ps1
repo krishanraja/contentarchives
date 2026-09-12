@@ -18,8 +18,14 @@
     not survive a reboot by design: -Stop, or a reboot, are the two ways this
     stops, and both are deliberate.
 
-    Everything in scripts/chains is resumable, so re-arming after any death
-    costs only the work that was actually lost.
+    Detachment alone turned out not to be enough: a properly detached chain was
+    still killed two hours in on 2026-09-12, so the task is also registered with
+    RestartCount and every chain is written to resume. Everything in
+    scripts/chains is safe to re-run, so a death costs only the work in flight.
+
+    -Status is worth trusting over intuition. `schtasks /query` prints "Ready"
+    for a task that is not currently running, which reads like "fine"; the state
+    that means running is "Running".
 #>
 [CmdletBinding()]
 param(
@@ -72,9 +78,19 @@ $action  = New-ScheduledTaskAction -Execute $pwshExe `
 
 # ExecutionTimeLimit 0 = no limit. The default is three days, which would kill a
 # long classification mid-run and look like a crash.
+#
+# RestartCount is the outer half of the recovery. On 2026-09-12 a chain that WAS
+# properly detached (parent svchost, verified) was still killed two hours in with
+# LastTaskResult 0xC000013A - no reboot, empty System log, settings correct.
+# Something outside Windows kills long jobs on this machine under memory
+# pressure. Rather than keep hunting it, the Task Scheduler service restarts the
+# task when it exits non-zero, and every chain is written to resume, so a kill
+# costs about a minute instead of hours. A chain that fails for a real reason
+# still stops: it says STOPPED and exits 1 after its own bounded retries.
 $settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries `
               -DontStopIfGoingOnBatteries -StartWhenAvailable `
-              -ExecutionTimeLimit ([TimeSpan]::Zero) -MultipleInstances IgnoreNew
+              -ExecutionTimeLimit ([TimeSpan]::Zero) -MultipleInstances IgnoreNew `
+              -RestartCount 99 -RestartInterval (New-TimeSpan -Minutes 1)
 
 # -LogonType Interactive: the chain reads GOOGLE_API_KEY from HKCU\Environment
 # and writes to mapped drives, both of which need the real user's profile.
