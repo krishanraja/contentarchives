@@ -181,13 +181,50 @@ What it needs to become a daily habit:
    local disk, so this is a real design decision and it is **open** — a local server on
    the LAN, or a hosted page with a subset of thumbnails uploaded. ~97,000 thumbnails at
    ~50 KB is ~4.8 GB, which is too much to publish wholesale; a working set is not.
-3. **Write-back as `source: human`**, which already outranks every model in
-   `master_sheet.py`'s `SOURCE_RANK`. A human answer is never overwritten by a model.
+3. **Write-back through `engine/answers.py`**, the append-only journal — *not* into
+   the store or the database. `source: human` already outranks every model in
+   `master_sheet.py`'s `SOURCE_RANK`, and now the journal guarantees a rebuild can
+   never destroy an answer, because `build_db.py` only ever reads it. Corrections
+   append rather than overwrite, so what Krish thought last month stays visible.
+   Answers name a **scope** — `cluster`, `folder`, `origin`, `file`, `all` — so one
+   answer labels thousands of files. Ranking candidate questions by *files labelled
+   per answer* is the scheduler the game should run on.
 4. **Show the number.** The session ends with the coverage figure and how much today's
    play moved it. That is the whole motivation loop, and it is why `master_sheet.py`
    prints a score rather than a table.
 
 **Done when:** it is worth playing. That is a product judgement, not a checklist.
+
+---
+
+## Phase 9 — Asking  ·  the reason the sheet exists
+
+Agreed with Krish on 2026-09-12: *"I should in the end be able to ask for whatever I
+want and surface it pretty easily."*
+
+The decision underneath it, which shapes everything above: **folders stay dumb, and
+all context lives in an index.** A folder hierarchy expresses exactly one axis, so
+every fact encoded in the tree — person, place, event, topic — is a fact that cannot
+be cross-cut without duplicating files, and the urge to encode more is precisely what
+produces the twelve-deep nesting nobody can navigate. The library stays chronological
+and four levels deep for ever (87.4% of it already is). Asking is a query layer over
+`library.db`, never a walk of the tree.
+
+Three layers, in this order, because each is worthless without the one before it:
+
+| layer | what it is | status |
+|---|---|---|
+| a. **Structured** | `library.db` — SQLite + FTS5, one row per file, every opinion kept and the winning one resolved | `tools/build_db.py`, built |
+| b. **Natural language → SQL** | a model writes the query against a small fixed schema. Reliable *because* the schema is small | not started |
+| c. **Semantic** | embed the `subject` sentence already generated for 97,484 files; match "that beach day with the red umbrella" on meaning | not started |
+
+**Answers surface as a contact sheet, not a list.** This is evidence, not taste: Krish
+has twice caught real classification errors by looking at one — the screenshots that
+two models agreed on and got wrong, and the 442 receipts — and neither would have been
+visible in a table of filenames.
+
+**Done when:** a question asked in English returns the right pictures without Krish
+knowing what a column is called.
 
 ---
 

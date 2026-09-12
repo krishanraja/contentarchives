@@ -34,73 +34,79 @@ exclusion, deletion or classification rule.**
 
 ----
 
-## RIGHT NOW: phase 3 is running as a scheduled task (2026-09-12, 13:13)
+## RIGHT NOW: faces run overnight, then the library is fully enriched (2026-09-12, 18:30)
 
-**Classification is live and nothing is waiting on you.** Check it before doing
-anything else:
+**Check before doing anything else.** Nothing is waiting on you:
 
 ```powershell
 pwsh -NoProfile -File scripts\chains\arm.ps1 -Status
 Get-Content D:\_PhotoAudit\phase3.log -Tail 3
 ```
 
-`state : Running` and a progress line climbing towards 79,017 means it is healthy.
-The chain runs to the end of phase 3b unattended: classify -> sheet -> fix the
-sideways thumbnails -> re-judge only those -> faces -> sheet again. Its last line
-will be `PHASE 3B COMPLETE`.
+`state : Running` with the log climbing means healthy. The chain runs unattended
+to its last line, `PHASE 3B COMPLETE`.
 
-### What happened at 12:56, and why the launcher changed
+### Done, and verified
 
-The previous session ended and the classifier **died in the same second**, at
-53,325 of 79,017, along with both chains waiting on it. It had been launched with
-`Start-Process pwsh -WindowStyle Hidden`, which hides a window but leaves the
-process in the caller's tree — see [learning 38](docs/LEARNINGS.md). No work was
-lost: the store is append-per-file and `classify_live.py` skips any hash this
-model has already tagged, so resuming cost only the 25,695 files genuinely
-outstanding, and $24.11 of the spend stands.
+- **Classification is COMPLETE.** 79,020 assets judged by gemini-3.1-flash-lite,
+  **0 failed, 0 blocked**, about **$27** all in. The retry loop confirmed it by
+  asking the store what was outstanding rather than assuming: `nothing
+  outstanding`.
+- **442 receipts deleted** through `guarded_delete.py`, 0 refused.
+- **The Personal/Communal split audited at folder level**: 0 of 459 folders hold
+  both sides.
 
-**Launch long work with `scripts/chains/arm.ps1` from now on.** It registers the
-chain as a scheduled task, so its parent is `svchost.exe` rather than the agent,
-and it survives the session ending, the terminal closing and logging out. It does
-not survive a reboot — that is the deliberate stop, along with `-Stop`.
+### Running now, in order
 
-### If it is not running when you arrive
+| step | what | roughly |
+|---|---|---|
+| 3a-video | re-probe 12,988 videos for duration (the ffprobe bug) | ~90 min |
+| 3c | rebuild MASTER.csv | ~25 min |
+| A | regenerate sideways thumbnails | ~20 min |
+| B | re-judge only those | ~30 min |
+| **C** | **faces, 3 shards over 51,797 images** | **~14 h, the long pole** |
+| D | rebuild the sheet | ~25 min |
 
-Everything in `scripts/chains` is resumable, so re-arm it and lose only what died:
+Faces is CPU-bound at roughly **1 image/sec** on this 4-core i5 and finishes
+around **08:00**. Three shards rather than six is deliberate: measured at 0.85
+img/s and 630 MB each, six would oversubscribe four cores and hold 3.8 GB on a
+box that kills long jobs at 2.7 GB free. `--det-size` is the only lever that
+would shorten it, and it trades away small and distant faces, so it is Krish's
+call and stays at 512.
+
+### Run these when `PHASE 3B COMPLETE` appears
 
 ```powershell
-pwsh -NoProfile -File scripts\chains\arm.ps1 -Chain chain_phase3_resume.ps1
+python tools\geocode_library.py            # count first
+python tools\geocode_library.py --apply    # ~24,000 files gain a place name, free
+python tools\build_db.py                   # library.db: SQLite + FTS5
 ```
 
-Then prove it is actually detached rather than assuming — the mistake above was
-exactly this assumption:
+Then the three that need judgement, in this order:
 
-```powershell
-$py = Get-CimInstance Win32_Process -Filter "Name='python.exe'"
-Get-CimInstance Win32_Process -Filter "ProcessId=$($py.ParentProcessId)"   # want pwsh, whose parent is svchost
-```
-
-### Spend
-
-$24.11 measured before the death; ~$11.64 estimated for the remainder, under a
-$20 ceiling on the resumed run, plus ~$2 for the rotated re-judge under a $12
-ceiling. **Ceilings stop on measured spend, so a pricing surprise halts the run
-rather than appearing on a statement.** Krish flagged his Claude account is
-running low — this is Gemini spend, separate from it, but keep the reporting
-honest.
-
-### When `PHASE 3B COMPLETE` appears
-
-1. Re-run the receipt sweep. The first one ran against a 60%-classified library,
-   which is why Krish still saw receipts in `Pending-Segmentation`. **Do not
-   widen the pattern**: the next matches are a PAN card, an HMRC letter, a bank
-   statement, a Form 1042-S. Those are identity and financial records for
+1. **Re-run the receipt sweep.** The first ran against a 60%-classified library.
+   **Do not widen the pattern** - the next matches are a PAN card, an HMRC
+   letter, a bank statement, a Form 1042-S. Those are identity records for
    `Archive\Personal\01-Identity\`, not a deletion sweep.
-2. Move `Pending-Segmentation` into Personal. Krish approved this as the default
-   on 2026-09-12. It is deferred to the segmentation phase on purpose: moving
-   9,833 files invalidates the path->hash index, so it happens once, cleanly,
-   with the index updated in the same step.
-3. Then segmentation, which Krish wants to review before it runs.
+2. **Cluster the faces and name the top ~50.** This is the game's first session
+   and the highest-leverage work in the project: one answer labels hundreds to
+   thousands of files. Record it through `engine/answers.py`, never by editing
+   the store or the database.
+3. **Segment** the 9,833 `Pending-Segmentation` (Krish approved Personal as the
+   default), the 5,844 `_Review` and the 2,876 `NoDate`, and flatten the 227
+   files still carrying raw Windows profile paths up to 16 deep. Moving files
+   invalidates the path->hash index, so it happens once, cleanly, with the index
+   updated in the same step.
+
+### Do not
+
+- **Re-arm while work is running** unless you mean it. `arm.ps1` reaps orphaned
+  workers now, but a re-arm restarts the chain from step 3b.
+- **Run memory-hungry jobs alongside the chain.** Something on this box kills
+  long jobs under memory pressure; tracked background commands are the first to
+  go, and it killed a benchmark today for exactly this reason.
+- **Write human answers anywhere but `engine/answers.py`.** Everything else here
+  is derived and can be rebuilt for money or time. A person's judgement cannot.
 
 ----
 
