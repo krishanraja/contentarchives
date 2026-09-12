@@ -1121,3 +1121,48 @@ lesson.
 **The tell.** A duplicate set whose members all come from the same device on the
 same day. That is precisely when a naming scheme and an encoder will produce
 identical metadata for different moments.
+
+---
+
+## 37. Two models agreeing is correlated error, not evidence
+
+A bake-off scored five vision models against each other. Because scoring any of
+them against the labels already in the store meant asking Haiku how often it
+agrees with itself, the reference was rebuilt per file from the majority of the
+OTHER models - leave-one-out consensus. It was a real improvement on the
+circular version, and it was reported with the right caveat attached: *"a
+majority vote among models favours whatever those models share, so it is
+evidence and not ground truth."*
+
+Then it was used as though it were ground truth anyway. The session reported
+that **40 of 300 stored labels were wrong, "corroborated" because two
+independent models diverged from the store and agreed with each other** - most
+often `screenshot -> graphic`, 12 of the 40.
+
+Krish looked at the images and said: the screenshots are screenshots.
+
+They were pictures of the London Underground map, transit map tiles, a map
+legend. **Both challenger models called them graphics and both were wrong**,
+because a screenshot of a map genuinely looks like a graphic. The models share
+training data and they share the ambiguity of the image. A third model would
+most likely have agreed as well, and made the wrong answer more convincing
+rather than less.
+
+Self-reported confidence did not help either. Mean confidence where the two
+models agreed: **0.995**. Where they disagreed: **0.984**. Nineteen files out of
+7,786 came in under 0.75. The model is not hesitant when it is wrong.
+
+**The rule.** Model agreement measures shared priors, not truth. It is useful for
+exactly one thing: *disagreement* is a cheap signal that a human should look.
+Agreement is not the complementary signal - it is silence. Errors where models
+concur are invisible to any number of additional models, and they are the
+dangerous ones precisely because concurrence reads as confirmation. Never let a
+model overrule another model on a contested field; carry the disagreement into
+the record and let a person settle it. `master_sheet.py` now writes `KindAlt`
+and `KindDisputed` rather than picking a winner.
+
+**The tell.** A "corroborated" finding where the corroboration comes from
+systems of the same kind. Ask what would have had to be different for them to
+disagree - if the answer is "nothing, they see the same thing the same way",
+there is one opinion here, not two. The instrument that caught this was a
+contact sheet grouped by label, and a human looking at it for ten seconds.

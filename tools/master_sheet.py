@@ -67,11 +67,26 @@ ORIGINS = os.path.join(AUDIT, "ORIGIN-MAP.csv")
 TAGS = os.path.join(STORE, "content_tags.csv")
 OUT = os.path.join(AUDIT, "MASTER.csv")
 
-# Which model's opinion wins when several have judged the same file. The
-# bake-off measured these against a reference none of them wrote: Gemini 3.1 at
-# 87.8% and 2% chronology contamination, Haiku at 74.5%. A human always wins.
+# Which opinion wins when several have judged the same file. A human always
+# wins, and that is not a formality - it is the only ground truth here.
+#
+# The model order came from a bake-off scored against a "reference" built by
+# majority vote of the other models. On 2026-09-12 Krish looked at the files
+# where that consensus said the stored label was wrong, and the stored label was
+# right: 366 files Gemini called "graphic" are screenshots of a maps app, and
+# both challenger models agreed with each other about it. Two models agreeing is
+# correlated error, not evidence. The caveat was written down when the scorer
+# was built and it took a human ten seconds to prove.
+#
+# So a model no longer silently overrules another model on `kind`. Where they
+# differ the disagreement is CARRIED into the sheet - see KindDisputed - and a
+# human settles it. 366 files is a short session with the swipe game and ends
+# the argument permanently, which is better than either model winning it.
 SOURCE_RANK = {"human": 0, "google/gemini-3.1-flash-lite": 1,
                "google/gemini-3.5-flash-lite": 2, "model:haiku": 3}
+# Fields where a model disagreeing with another model is recorded rather than
+# resolved. Only `kind` so far, because only `kind` has been shown to need it.
+CONTESTED = {"kind"}
 
 # Long-format tag names differ between passes: Haiku wrote people_count, the
 # live classifier writes people. Normalise on read rather than rewriting the
@@ -96,7 +111,7 @@ TECH = ["Bytes", "Ext", "DateTaken", "DateSource", "Make", "Model",
         "Width", "Height", "Duration", "Lat", "Lon"]
 COLS = (["LibraryPath", "Hash", "Side", "Year", "Month"] + TECH
         + ["OriginFolder", "SourceRoot", "OriginPath"]
-        + ENRICH + ["EnrichedBy", "Confidence"])
+        + ENRICH + ["KindAlt", "KindDisputed", "EnrichedBy", "Confidence"])
 
 
 def lp(p: str) -> str:
@@ -128,8 +143,13 @@ def load_hash_index() -> dict:
 
 
 def enrichment() -> dict:
-    """hash -> {field: (value, source, confidence)}, best source winning."""
+    """hash -> {field: (value, source, confidence)}, best source winning.
+
+    For a field in CONTESTED, every distinct opinion is kept so the sheet can
+    show that the models differ rather than picking one and looking certain.
+    """
     best: dict = collections.defaultdict(dict)
+    alts: dict = collections.defaultdict(lambda: collections.defaultdict(dict))
     for r in read_csv(TAGS):
         h = r.get("hash")
         tag = TAG_ALIAS.get(r.get("tag", ""), r.get("tag", ""))
@@ -144,6 +164,17 @@ def enrichment() -> dict:
             except ValueError:
                 conf = 0.0
             best[h][tag] = (r.get("value", ""), src, conf, rank)
+        if tag in CONTESTED:
+            alts[h][tag][r.get("value", "")] = src
+    for h, fields in alts.items():
+        for tag, opinions in fields.items():
+            if len(opinions) > 1:
+                chosen = best[h].get(tag, ("",))[0]
+                other = [v for v in opinions if v != chosen]
+                best[h]["_alt_" + tag] = (";".join(sorted(other)),
+                                          ";".join(sorted(opinions[v]
+                                                          for v in other)),
+                                          0.0, 9)
     return best
 
 
@@ -253,6 +284,9 @@ def main() -> None:
             if v:
                 srcs.add(v[1])
                 confs.append(v[2])
+        alt = ev.get("_alt_kind")
+        rec["KindAlt"] = alt[0] if alt else ""
+        rec["KindDisputed"] = "1" if alt else ""
         rec["EnrichedBy"] = ";".join(sorted(srcs))
         rec["Confidence"] = "{:.2f}".format(
             sum(confs) / len(confs)) if confs else ""
