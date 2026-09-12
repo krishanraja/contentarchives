@@ -82,6 +82,11 @@ python tools\geocode_library.py --apply    # ~24,000 files gain a place name, fr
 python tools\build_db.py                   # library.db: SQLite + FTS5
 ```
 
+Already run once ad hoc on 2026-09-12 while faces ran overnight: 33,841 files geocoded
+(`c5a5ff4`, `6bef342`), `library.db` built at 82,193 files and 752,200 tag rows
+(`6bef342`). Both are idempotent, so re-running after `PHASE 3B COMPLETE` to pick up
+the finished face pass is safe, not a redo.
+
 Then the three that need judgement, in this order:
 
 1. **Re-run the receipt sweep.** The first ran against a 60%-classified library.
