@@ -1216,3 +1216,146 @@ test of the claim was also the first time it cost anything. When something is
 load-bearing and untested, test it while the cost of being wrong is still zero:
 one `Get-CimInstance` on the parent pid, at any point in those four hours, would
 have shown it.
+
+## 39. Stopping the supervisor is not stopping the work
+
+Re-arming the chain left pid 29248 classifying with a dead parent while its
+replacement started up. Stopping a scheduled task kills the shell it launched;
+the python that shell started keeps running, reparented and invisible. For four
+minutes two classifiers worked the same list of outstanding files.
+
+That is the only failure mode in this project that costs money rather than time.
+Everything else — a killed copy, a lost thumbnail pass, a half-built sheet — is
+recovered by re-running. Two processes paying an API for the same file are
+buying the same answer twice and neither of them knows.
+
+It got worse before it got better. The reaper written to fix it lived inside the
+`if a task already exists` branch, so when an arming failed *part-way* — a bad
+regex, after the unregister — there was no task and a live orphan, which is
+precisely the state where an orphan is waiting to be found. Reaping is not a
+cleanup step on the happy path; it is the first thing a launcher does.
+
+**The rule.** A launcher must account for the process tree it is replacing, not
+just the process it is replacing. `arm.ps1` now looks for python running this
+project's engine scripts whose parent no longer exists, and stops only those — a
+worker with a live parent is left alone, which was verified against a running
+chain before the code was trusted.
+
+**The tell.** "I stopped it" meaning "I stopped the thing I had a handle on."
+The question that finds this is not *did the supervisor exit* but *is anything
+still running that the supervisor started*. On Windows:
+
+```powershell
+Get-CimInstance Win32_Process -Filter "Name='python.exe'" |
+  ForEach-Object { $_.ProcessId, $_.ParentProcessId }
+```
+
+A parent pid that no longer resolves is an orphan, and an orphan doing paid work
+is a bill.
+
+## 40. A brake that a restart loop can push through is not a brake
+
+The chain got two layers of automatic recovery — an inner retry around each
+step, and `RestartCount 99` on the scheduled task — because the work was being
+killed every couple of hours by something outside Windows and each kill cost
+hours of classification.
+
+Both layers were right, and together they quietly disarmed the spend ceiling.
+`--max-usd` stops the classifier on measured spend, which is the one protection
+against a pricing surprise turning into a statement. With automatic restart, the
+ceiling stops the process and the scheduler starts it again: ninety-nine times,
+each with a fresh budget, which is not a ceiling at all. Nothing would have
+alerted, because every individual run would have behaved exactly as designed.
+
+**The rule.** When adding automatic recovery, enumerate every deliberate stop it
+now overrides. A stop that means *"this is fine, resume"* and a stop that means
+*"stop, a human must look"* are indistinguishable to a supervisor unless they are
+made distinguishable on purpose. Here a real failure writes `PHASE3-HALTED.txt`
+and exits non-zero; the restart that follows sees the file and exits zero, ending
+the cycle — while a kill writes nothing and therefore resumes, which is the whole
+point. The per-attempt ceiling is also recomputed from what actually remains, so
+restarting cannot multiply a budget.
+
+**The tell.** Adding resilience without re-reading what the system was allowed to
+refuse to do. Ask, of every new retry: *what does this now retry that was
+previously a decision?*
+
+## 41. `if not os.path.exists(X): return {}` is how 12,988 videos lost their metadata
+
+`scripts/build_inventory.py` looked for ffprobe at
+`C:\Users\user\AppData\...` — one machine's username, hardcoded — and this
+machine's user is `krish`. `probe_video()` opened with a guard that returned an
+empty dict when the binary was missing, so a missing tool was indistinguishable
+from a video with nothing to report. A 33-minute pass reported success and wrote
+no Duration, Width or Height for any video in the library: 0.0% of 12,988.
+
+Nobody would have found this by looking at the run. It had no error, no warning,
+no non-zero exit. It was found by counting a column and asking why the answer was
+not what it should be — the same instrument that caught the zero-byte file in
+rule 6 and the broken joins in `MASTER.csv`.
+
+This is rule 6's shape exactly, which is the uncomfortable part: *a verifier's
+fallback branch that has no failure mode*. Knowing the pattern did not prevent
+the pattern.
+
+**The rule.** A dependency that is absent must be loud. Resolve tools rather than
+hardcoding them — `shutil.which` first, then a glob under the *current* user —
+and when one genuinely cannot be found, say so on stderr rather than returning a
+shape that reads as "nothing to report".
+
+**The tell.** Any `except: pass`, `return {}`, or `or ""` on a path that was
+supposed to *gather* something. Ask what the caller sees when it fails, and
+whether that is distinguishable from a legitimate empty answer. If it is not,
+the failure is invisible by construction. The general check is cheaper than the
+specific one: after any enrichment pass, print per-field fill rates and look for
+a zero.
+
+## 42. Reading a file while something else rewrites it
+
+Midway through auditing the library I read `INVENTORY.csv` and got 572 rows,
+100% of them undated and all from one folder. The real file had 82,635 rows.
+Nothing was corrupt: `build_inventory.py` was rewriting it in place at that
+moment, and the read caught it 572 rows in.
+
+Had the numbers been less absurd it would have gone straight into a report. It
+was only obvious because 572 files and "100% have no date" are impossible for
+this library, and impossible is easier to notice than merely wrong.
+
+**The rule.** Before measuring from a generated file, check whether anything is
+currently generating it. Producers should write to `.tmp` and rename — atomic,
+so a reader sees either the old file or the new one and never a prefix of the
+new one. `master_sheet.py` and `build_db.py` do this; `build_inventory.py` does
+not, and that is why this happened.
+
+**The tell.** A count that is wildly smaller than expected, or a percentage of
+exactly 0 or 100. Both are more often an artefact of the measurement than a fact
+about the world.
+
+## 43. Two PowerShell traps that read as correct English
+
+Both cost a debugging cycle on 2026-09-12, and neither is visible to a careful
+reading, which is the point.
+
+**`"$label: nothing outstanding"`** does not interpolate `$label` followed by a
+colon. `$label:` is a scope-modified variable reference — like `$env:PATH` or
+`$script:x` — so the parser reads a variable named `nothing` in a scope called
+`label`. It fails at parse time with a message about variable names that does
+not mention the colon being the problem. `${label}: ...` is the fix.
+
+**`schtasks /query` prints `Status: Ready`** for a task that is *not currently
+running*. "Ready" reads like a clean bill of health; it means idle. A task that
+is running says `Running`, and `(Get-ScheduledTask).State` says the same thing
+less ambiguously. A monitor that treated "Ready" as healthy would have reported
+a dead chain as fine indefinitely.
+
+**The rule.** For anything load-bearing in a shell script, parse it rather than
+read it:
+
+```powershell
+$errs = $null
+[System.Management.Automation.Language.Parser]::ParseFile($p, [ref]$null, [ref]$errs)
+```
+
+and check the *meaning* of a status string against the tool's own vocabulary
+rather than against ordinary English. Both of these were caught by a parser and
+by a cross-check, not by review.

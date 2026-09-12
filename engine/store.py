@@ -128,6 +128,29 @@ class Store:
             confidence: float = 1.0) -> None:
         self._append(TAGS, [h, tag, value, source, f"{confidence:.2f}", self._now()])
 
+    def tag_many(self, rows) -> int:
+        """Append many tags with ONE fsync. rows: (hash, tag, value, source, conf).
+
+        _append fsyncs per row, which is right for a classifier paying per file -
+        a kill must not lose what was already bought. It is wrong for a derived
+        backfill: geocoding writes ~83,000 rows, and 83,000 fsyncs to an external
+        USB disk takes hours to do what one takes seconds to do. The trade is
+        safe here precisely because the work is DERIVED - if a kill loses the
+        tail, re-running recomputes it for free. Never use this for anything a
+        human or an API produced.
+        """
+        n = 0
+        with _LOCK:
+            with open(self._p(TAGS), "a", newline="", encoding="utf-8") as f:
+                w = csv.writer(f)
+                now = self._now()
+                for h, tag, value, source, conf in rows:
+                    w.writerow([h, tag, value, source, f"{float(conf):.2f}", now])
+                    n += 1
+                f.flush()
+                os.fsync(f.fileno())
+        return n
+
     def tags_for(self, h: str) -> dict[str, tuple[str, str, float]]:
         """Best claim per tag: a human answer always beats a model's."""
         best: dict[str, tuple[str, str, float]] = {}
