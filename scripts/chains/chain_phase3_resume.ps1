@@ -44,7 +44,17 @@ param(
 
 $log  = 'D:\_PhotoAudit\phase3.log'
 $repo = 'C:\Users\krish\dev\contentarchives'
-function Say($m) { "$((Get-Date).ToString('HH:mm:ss'))  $m" | Tee-Object -FilePath $log -Append }
+# Write-Host, NOT Tee-Object. Tee passes its string down the pipeline, so a Say
+# inside a function becomes part of that function's RETURN VALUE. Should-Run
+# returned @('skipping step A', $false), and PowerShell treats a non-empty array
+# as true - so every step logged "skipping" and then ran anyway. Caught at 22:41
+# on 2026-09-12 with step A about to redo three hours of thumbnails it had just
+# finished. A logging helper must be silent on the pipeline.
+function Say($m) {
+    $line = "$((Get-Date).ToString('HH:mm:ss'))  $m"
+    Add-Content -Path $log -Value $line
+    Write-Host $line
+}
 
 $ORDER = @('3b', '3a-video', '3c', 'A', 'B', 'C', 'D')
 $FromIx = $ORDER.IndexOf($From)
