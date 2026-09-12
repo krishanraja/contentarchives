@@ -43,9 +43,11 @@ import argparse
 import csv
 import datetime
 import json
+import glob
 import os
 import re
 import struct
+import shutil
 import subprocess
 import sys
 
@@ -71,9 +73,26 @@ INVENTORY_ROOTS = [LIB]
 ORIGIN_MAP = r"D:\_PhotoAudit\ORIGIN-MAP.csv"
 OUT = r"D:\_PhotoAudit\INVENTORY.csv"
 CKPT = r"D:\_PhotoAudit\inventory-progress.json"
-FFPROBE = (r"C:\Users\user\AppData\Local\Microsoft\WinGet\Packages"
-           r"\Gyan.FFmpeg_Microsoft.Winget.Source_8wekyb3d8bbwe"
-           r"\ffmpeg-8.1.1-full_build\bin\ffprobe.exe")
+
+def _find_ffprobe():
+    r"""Locate ffprobe, or return "" - and say so, loudly, at the call site.
+
+    This was hardcoded to C:\Users\user\... for one machine's username. On a
+    machine where that user does not exist the guard below returned an empty
+    dict, so every video got no Duration, Width or Height and the run reported
+    success. Measured 2026-09-12: 12,988 videos, Duration 0.0% populated, after
+    a 33-minute pass that looked like it worked.
+    """
+    found = shutil.which("ffprobe")
+    if found:
+        return found
+    pat = os.path.join(os.path.expanduser("~"), "AppData", "Local", "Microsoft",
+                       "WinGet", "Packages", "Gyan.FFmpeg*", "*", "bin", "ffprobe.exe")
+    hits = sorted(glob.glob(pat))
+    return hits[-1] if hits else ""
+
+
+FFPROBE = _find_ffprobe()
 
 PHOTO = {'.jpg', '.jpeg', '.png', '.heic', '.heif', '.gif', '.bmp', '.tif',
          '.tiff', '.webp', '.dng', '.cr2', '.cr3', '.nef', '.arw'}
@@ -202,9 +221,22 @@ def exif_all(path: str) -> dict:
     return out
 
 
+_WARNED = []
+
+
 def probe_video(path: str) -> dict:
     out: dict = {}
-    if not os.path.exists(FFPROBE):
+    if not FFPROBE or not os.path.exists(FFPROBE):
+        # Silence here is what cost 12,988 videos their metadata. A probe
+        # that is not installed must not look like a video with nothing to
+        # report.
+        if not _WARNED:
+            _WARNED.append(1)
+            sys.stderr.write(
+                "WARNING: ffprobe not found - every video will be written with "
+                "no Duration, Width or Height. Install ffmpeg or put ffprobe "
+                "on PATH, then re-run with --video.\n")
+            sys.stderr.flush()
         return out
     try:
         r = subprocess.run([FFPROBE, "-v", "quiet", "-print_format", "json",

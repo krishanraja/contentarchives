@@ -49,7 +49,8 @@ function Stop-ChainWorkers {
     foreach ($w in $ours) {
         $parent = Get-CimInstance Win32_Process -Filter "ProcessId=$($w.ParentProcessId)" -ErrorAction SilentlyContinue
         if (-not $parent) {
-            Write-Host ("  orphan {0} ({1}) - stopping" -f $w.ProcessId, ($w.CommandLine -replace '.*\(\w+)\.py.*', '$1'))
+            $what = @("classify_live","faces_embed","refix_rotated","master_sheet","build_inventory") | Where-Object { $w.CommandLine -match $_ } | Select-Object -First 1
+            Write-Host ("  orphan {0} ({1}) - stopping" -f $w.ProcessId, $what)
             Stop-Process -Id $w.ProcessId -Force -ErrorAction SilentlyContinue
         }
     }
@@ -90,8 +91,11 @@ Get-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue | ForEach-Ob
     Stop-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue
     Unregister-ScheduledTask -TaskName $TaskName -Confirm:$false
     Start-Sleep -Seconds 2
-    Stop-ChainWorkers
 }
+# Unconditionally, NOT only when a task existed: a previous arming that failed
+# part-way leaves no task but live workers, and that is precisely when an orphan
+# is waiting to be found.
+Stop-ChainWorkers
 
 $pwshExe = (Get-Process -Id $PID).Path
 $action  = New-ScheduledTaskAction -Execute $pwshExe `

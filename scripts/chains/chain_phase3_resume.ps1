@@ -110,6 +110,19 @@ Say '=== chain start (resumable; safe to restart at any point) ==='
 if (-not (Invoke-Classify 'step 3b classify' @())) { exit 1 }
 Say 'step 3b done'
 
+# Videos had no Duration, Width or Height at all - 12,988 of them, 0.0%
+# populated - because scripts/build_inventory.py hardcoded ffprobe under
+# C:\Users\user\ and this machine's user is krish. probe_video() returned an
+# empty dict when the binary was missing, so a 33-minute pass reported success
+# and wrote nothing. ffprobe is resolved from PATH now, and shouts if absent.
+#
+# This runs BEFORE the sheet so the rebuild picks the durations up, rather than
+# building a sheet that is knowingly missing a column and rebuilding it later.
+Say 'step 3a-video: re-probing videos now that ffprobe resolves'
+python -u "$repo\scripts\build_inventory.py" --video *>> $log
+if ($LASTEXITCODE -ne 0) { Say "WARNING: build_inventory exited $LASTEXITCODE - continuing; it is an independent input to the sheet" }
+Say 'step 3a-video done'
+
 Say 'step 3c: rebuilding MASTER.csv and scoring coverage'
 python -u "$repo\tools\master_sheet.py" *>> $log
 Say 'PHASE 3 COMPLETE. Review the coverage table above, then decide segmentation.'
