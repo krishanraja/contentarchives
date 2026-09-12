@@ -120,11 +120,23 @@ function Invoke-Classify([string] $label, [string[]] $extra) {
     # in THIS attempt's output", which it does only after draining its queue. A
     # killed pass prints nothing and is retried, which is the behaviour wanted.
     $onlyList = $extra -contains '--only-list'
+    $prevLeft = [int]::MaxValue
     for ($try = 1; $try -le 60; $try++) {
         $o = Get-Outstanding $extra
         $left = [int]$o[0]; $est = [double]$o[1]
         if ($left -lt 0) { Stop-Chain "${label} could not read the outstanding count from classify_live" }
         if ($left -eq 0) { Say "${label}: nothing outstanding"; return $true }
+
+        # THE LOOP INVARIANT: a retry must make progress. If a whole attempt ran
+        # and the amount of work left did not go DOWN, the loop is not retrying,
+        # it is repeating - and repeating a paid pass 60 times is how a $9 step
+        # becomes a $530 one. This is the general form of the --only-list bug,
+        # and it would have caught it without anyone knowing --only-list existed.
+        # Only checked from attempt 2, because attempt 1 has nothing to compare.
+        if ($try -gt 1 -and $left -ge $prevLeft -and -not $onlyList) {
+            Stop-Chain ("{0}: attempt {1} left {2:N0} outstanding, no better than the {3:N0} before it. A retry that does not reduce the work is repeating it, not resuming it." -f $label, $try, $left, $prevLeft)
+        }
+        $prevLeft = $left
 
         $ceiling = [math]::Round([math]::Max(2.0, $est * 1.6) , 2)
         Say ("{0}: attempt {1}, {2:N0} files outstanding, est `${3:N2}, ceiling `${4:N2}" -f `
@@ -215,6 +227,53 @@ if (Should-Run 'B') {
 # Resumability is by content hash in faces.csv, not by shard, so changing the
 # shard count never re-does an image that is already embedded.
 if (Should-Run 'C') {
+    # PREFLIGHT. Faces is a fourteen-hour step, and the most expensive mistake
+    # available is not a crash - it is fourteen hours of work that produces
+    # nothing and reports success, which is exactly what build_inventory did for
+    # 33 minutes today when ffprobe could not be found.
+    #
+    # So: prove the pipeline end to end on fifteen images, by checking that
+    # faces.csv actually GREW, before committing the night to it. Fifteen images
+    # is about a minute, and the rows are real work the full run then skips.
+    # The shard arithmetic is worth proving too - the shard count changed from
+    # 6 to 3 today, and a shard that silently selects nothing would look
+    # identical to a shard that finished.
+    # A SHARDED run writes faces.<i>.csv, NOT faces.csv - faces_embed renames the
+    # output per shard. The first version of this preflight checked faces.csv,
+    # found 0 lines, and halted a pipeline that had just successfully detected 9
+    # faces in 8 images. A safeguard that checks the wrong artefact is as
+    # dangerous as no safeguard: it blocks good work, or waves bad work through,
+    # and in both cases it is trusted. So this counts every faces*.csv.
+    function Count-FaceRows {
+        $files = Get-ChildItem 'D:\_enrichment\faces*.csv' -ErrorAction SilentlyContinue
+        if (-not $files) { return 0 }
+        return ($files | ForEach-Object {
+            (Get-Content $_.FullName -ErrorAction SilentlyContinue | Measure-Object -Line).Lines
+        } | Measure-Object -Sum).Sum
+    }
+    $before = Count-FaceRows
+    Say "step C preflight: 15 images through shard 0/3 (faces rows now: $before)"
+    $plBefore = (Get-Item $log).Length
+    python -u "$repo\engine\faces_embed.py" --thumbs D:\_thumbs --store D:\_enrichment `
+           --shard 0/3 --limit 15 *>> $log
+    $fs = [IO.File]::Open($log, 'Open', 'Read', 'ReadWrite')
+    try { $null = $fs.Seek($plBefore, 'Begin'); $plOut = (New-Object IO.StreamReader($fs)).ReadToEnd() }
+    finally { $fs.Dispose() }
+    $after = Count-FaceRows
+
+    # Two conditions, because --limit is applied BEFORE the already-done filter:
+    # if those 15 were all embedded by an earlier run the tool correctly does
+    # nothing, and "no new rows" is then success rather than failure. What must
+    # be true either way is that the shard RAN to completion and that face data
+    # exists at all.
+    if ($plOut -notmatch 'shard \d+ done|images to look at') {
+        Stop-Chain "step C preflight: faces_embed did not report finishing a shard. Fourteen hours of this would produce nothing and report success."
+    }
+    if ($after -le 0) {
+        Stop-Chain "step C preflight: no face rows exist anywhere after running. Expected faces*.csv to contain detections."
+    }
+    Say "step C preflight OK: shard ran, face rows $before -> $after"
+
     Say 'step C: faces, three shards (4 cores; six oversubscribes them)'
     $jobs = @()
     foreach ($i in 0..2) {

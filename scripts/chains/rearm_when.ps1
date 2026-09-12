@@ -29,6 +29,7 @@ param(
     [string] $Chain      = 'chain_phase3_resume.ps1',
     [string] $Log        = 'D:\_PhotoAudit\phase3.log',
     [string] $TaskName   = 'contentarchives-swap',
+    [string] $NoteLog    = 'D:\_PhotoAudit\rearm_when.log',
     [int]    $TimeoutMin = 720,
     [switch] $Register,
     [switch] $Stop
@@ -37,9 +38,15 @@ param(
 $ErrorActionPreference = 'Stop'
 $here = $PSScriptRoot
 
+# Notes go to their OWN file, never to the log being watched. Writing
+# "watching for 'step B done'" into the file you are grepping for "step B done"
+# makes the watcher match itself and fire instantly - which it did on
+# 2026-09-12, killing a running step B and jumping the chain forward. A watcher
+# must not be able to see its own voice.
 function Note($m) {
-    "$((Get-Date).ToString('HH:mm:ss'))  [rearm_when] $m" |
-        Tee-Object -FilePath $Log -Append
+    $line = "$((Get-Date).ToString('HH:mm:ss'))  [rearm_when] $m"
+    Add-Content -Path $NoteLog -Value $line
+    Write-Host $line
 }
 
 if ($Stop) {
@@ -77,13 +84,31 @@ if ($Register) {
 }
 
 # ---- the watch itself -------------------------------------------------------
-Note "watching for '$Marker' (timeout ${TimeoutMin}m)"
+#
+# Only text appended AFTER this point counts. A chain log accumulates across
+# runs, so "step B done" from an earlier run is already sitting in it and a
+# naive search fires immediately on history rather than on the event. Recording
+# the length first turns "does the log contain X" into "has X happened since I
+# started watching", which is the actual question.
+$startLen = if (Test-Path $Log) { (Get-Item $Log).Length } else { 0 }
+Note "watching from byte $startLen (timeout ${TimeoutMin}m)"
+
+function Get-NewText {
+    if (-not (Test-Path $Log)) { return '' }
+    $fs = [IO.File]::Open($Log, 'Open', 'Read', 'ReadWrite')
+    try {
+        if ($fs.Length -le $startLen) { return '' }
+        $null = $fs.Seek($startLen, 'Begin')
+        return (New-Object IO.StreamReader($fs)).ReadToEnd()
+    } finally { $fs.Dispose() }
+}
+
 $deadline = (Get-Date).AddMinutes($TimeoutMin)
 while ((Get-Date) -lt $deadline) {
     if (Test-Path $Log) {
-        # -SimpleMatch: the marker is a literal, not a regex, so a bracket or a
-        # dollar in it cannot silently change what is being waited for.
-        if (Select-String -Path $Log -Pattern $Marker -SimpleMatch -Quiet -ErrorAction SilentlyContinue) {
+        # Plain substring, not a regex, so a bracket or a dollar in the marker
+        # cannot silently change what is being waited for.
+        if ((Get-NewText).Contains($Marker)) {
             Note "saw '$Marker' - re-arming with: $ChainArgs"
             & (Join-Path $here 'arm.ps1') -Chain $Chain -ChainArgs $ChainArgs *>> $Log
             Note "re-armed. Unregistering self so this cannot fire twice."
