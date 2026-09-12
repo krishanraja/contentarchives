@@ -27,9 +27,32 @@
 # tagged, the store is append-per-file, refix_rotated only rewrites thumbnails
 # that are actually wrong, and master_sheet is a pure rebuild. Nothing here can
 # pay twice for the same file.
+#
+# -From skips steps already finished. A chain is a sequence of hours-long jobs,
+# and a fix to a LATER step should not cost the earlier ones: on 2026-09-12 a bug
+# was found in step B while step A had been running for three hours, and without
+# this the only way to load the fix was to throw that away and re-run
+# build_inventory and the sheet as well. Re-arm with the step that is about to
+# start, having checked the log for what actually completed.
+#
+#   pwsh -File arm.ps1 -Chain chain_phase3_resume.ps1 -ChainArgs '-From B'
+#
+param(
+    [ValidateSet('3b', '3a-video', '3c', 'A', 'B', 'C', 'D')]
+    [string] $From = '3b'
+)
+
 $log  = 'D:\_PhotoAudit\phase3.log'
 $repo = 'C:\Users\krish\dev\contentarchives'
 function Say($m) { "$((Get-Date).ToString('HH:mm:ss'))  $m" | Tee-Object -FilePath $log -Append }
+
+$ORDER = @('3b', '3a-video', '3c', 'A', 'B', 'C', 'D')
+$FromIx = $ORDER.IndexOf($From)
+function Should-Run([string] $step) {
+    $i = $ORDER.IndexOf($step)
+    if ($i -lt $FromIx) { Say "skipping step $step (already done; resumed from $From)"; return $false }
+    return $true
+}
 
 $env:PYTHONIOENCODING = 'utf-8'
 $e = Get-ItemProperty -Path 'HKCU:\Environment'
@@ -75,6 +98,18 @@ function Get-Outstanding([string[]] $extra) {
 # recomputed from what actually remains on every attempt, so restarting cannot
 # quietly multiply a per-run budget into an unbounded one.
 function Invoke-Classify([string] $label, [string[]] $extra) {
+    # --only-list DELIBERATELY ignores what is already done: those files were
+    # judged from a sideways thumbnail, so the stored answer is the thing being
+    # replaced and skipping them for having one would skip the whole job. That
+    # makes "to classify" a CONSTANT for a re-judge, not a countdown - so the
+    # outstanding count can never reach zero and cannot be the completion test.
+    # Using it as one would have re-run a 19,500-file pass up to 60 times: about
+    # $530, a hundred hours, and faces would never have started.
+    #
+    # For a re-judge, completion is instead "classify_live printed `finished in`
+    # in THIS attempt's output", which it does only after draining its queue. A
+    # killed pass prints nothing and is retried, which is the behaviour wanted.
+    $onlyList = $extra -contains '--only-list'
     for ($try = 1; $try -le 60; $try++) {
         $o = Get-Outstanding $extra
         $left = [int]$o[0]; $est = [double]$o[1]
@@ -100,6 +135,10 @@ function Invoke-Classify([string] $label, [string[]] $extra) {
         if ($fresh -match 'CEILING REACHED') {
             Stop-Chain "${label} hit its spend ceiling. Raise it deliberately, or find out why the measured rate beat the estimate."
         }
+        if ($onlyList -and $fresh -match 'finished in') {
+            Say "${label}: pass completed - re-judge does not count down, so one clean pass is the finish line"
+            return $true
+        }
     }
     Stop-Chain "${label} still unfinished after 60 attempts - something is failing, not just being killed."
 }
@@ -107,8 +146,10 @@ function Invoke-Classify([string] $label, [string[]] $extra) {
 Say '=== chain start (resumable; safe to restart at any point) ==='
 
 # --- the rest of phase 3 -----------------------------------------------------
-if (-not (Invoke-Classify 'step 3b classify' @())) { exit 1 }
-Say 'step 3b done'
+if (Should-Run '3b') {
+    if (-not (Invoke-Classify 'step 3b classify' @())) { exit 1 }
+    Say 'step 3b done'
+}
 
 # Videos had no Duration, Width or Height at all - 12,988 of them, 0.0%
 # populated - because scripts/build_inventory.py hardcoded ffprobe under
@@ -118,26 +159,34 @@ Say 'step 3b done'
 #
 # This runs BEFORE the sheet so the rebuild picks the durations up, rather than
 # building a sheet that is knowingly missing a column and rebuilding it later.
-Say 'step 3a-video: re-probing videos now that ffprobe resolves'
-python -u "$repo\scripts\build_inventory.py" --video *>> $log
-if ($LASTEXITCODE -ne 0) { Say "WARNING: build_inventory exited $LASTEXITCODE - continuing; it is an independent input to the sheet" }
-Say 'step 3a-video done'
+if (Should-Run '3a-video') {
+    Say 'step 3a-video: re-probing videos now that ffprobe resolves'
+    python -u "$repo\scripts\build_inventory.py" --video *>> $log
+    if ($LASTEXITCODE -ne 0) { Say "WARNING: build_inventory exited $LASTEXITCODE - continuing; it is an independent input to the sheet" }
+    Say 'step 3a-video done'
+}
 
-Say 'step 3c: rebuilding MASTER.csv and scoring coverage'
-python -u "$repo\tools\master_sheet.py" *>> $log
-Say 'PHASE 3 COMPLETE. Review the coverage table above, then decide segmentation.'
+if (Should-Run '3c') {
+    Say 'step 3c: rebuilding MASTER.csv and scoring coverage'
+    python -u "$repo\tools\master_sheet.py" *>> $log
+    Say 'PHASE 3 COMPLETE. Review the coverage table above, then decide segmentation.'
+}
 
 # --- phase 3b ----------------------------------------------------------------
-Say 'step A: regenerating thumbnails for rotated originals'
-python -u "$repo\tools\refix_rotated.py" --apply *>> $log
-if ($LASTEXITCODE -ne 0) { Stop-Chain "refix_rotated exited $LASTEXITCODE" }
-
-if (Test-Path D:\_PhotoAudit\ROTATED-REDO.txt) {
-    if (-not (Invoke-Classify 'step B re-judge rotated' @('--only-list', 'D:\_PhotoAudit\ROTATED-REDO.txt'))) { exit 1 }
-} else {
-    Say 'step B: no ROTATED-REDO.txt - nothing to re-judge'
+if (Should-Run 'A') {
+    Say 'step A: regenerating thumbnails for rotated originals'
+    python -u "$repo\tools\refix_rotated.py" --apply *>> $log
+    if ($LASTEXITCODE -ne 0) { Stop-Chain "refix_rotated exited $LASTEXITCODE" }
 }
-Say 'step B done'
+
+if (Should-Run 'B') {
+    if (Test-Path D:\_PhotoAudit\ROTATED-REDO.txt) {
+        if (-not (Invoke-Classify 'step B re-judge rotated' @('--only-list', 'D:\_PhotoAudit\ROTATED-REDO.txt'))) { exit 1 }
+    } else {
+        Say 'step B: no ROTATED-REDO.txt - nothing to re-judge'
+    }
+    Say 'step B done'
+}
 
 # Three shards, not six. Measured on this machine 2026-09-12: one shard does
 # 0.85 images/sec and peaks at 630 MB. The CPU is an i5-1135G7 - FOUR physical
@@ -155,18 +204,23 @@ Say 'step B done'
 #
 # Resumability is by content hash in faces.csv, not by shard, so changing the
 # shard count never re-does an image that is already embedded.
-Say 'step C: faces, three shards (4 cores; six oversubscribes them)'
-$jobs = @()
-foreach ($i in 0..2) {
-    $jobs += Start-Process python -PassThru -WindowStyle Hidden -ArgumentList @(
-        '-u', "$repo\engine\faces_embed.py", '--thumbs', 'D:\_thumbs',
-        '--store', 'D:\_enrichment', '--shard', "$i/3"
-    ) -RedirectStandardOutput "D:\_PhotoAudit\faces-$i.log" -RedirectStandardError "D:\_PhotoAudit\faces-$i.err"
+if (Should-Run 'C') {
+    Say 'step C: faces, three shards (4 cores; six oversubscribes them)'
+    $jobs = @()
+    foreach ($i in 0..2) {
+        $jobs += Start-Process python -PassThru -WindowStyle Hidden -ArgumentList @(
+            '-u', "$repo\engine\faces_embed.py", '--thumbs', 'D:\_thumbs',
+            '--store', 'D:\_enrichment', '--shard', "$i/3"
+        ) -RedirectStandardOutput "D:\_PhotoAudit\faces-$i.log" -RedirectStandardError "D:\_PhotoAudit\faces-$i.err"
+    }
+    Say ("face shards: " + ($jobs.Id -join ', '))
+    $jobs | Wait-Process
+    Say 'faces done'
 }
-Say ("face shards: " + ($jobs.Id -join ', '))
-$jobs | Wait-Process
-Say 'faces done'
 
-Say 'step D: rebuilding the sheet'
-python -u "$repo\tools\master_sheet.py" *>> $log
-Say 'PHASE 3B COMPLETE. Re-run the receipt sweep now the library is fully classified.'
+if (Should-Run 'D') {
+    Say 'step D: rebuilding the sheet'
+    python -u "$repo\tools\master_sheet.py" *>> $log
+    Say 'PHASE 3B COMPLETE. Re-run the receipt sweep now the library is fully classified.'
+
+}

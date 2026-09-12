@@ -30,6 +30,7 @@
 [CmdletBinding()]
 param(
     [string] $Chain,
+    [string] $ChainArgs = '',
     [string] $TaskName = 'contentarchives-chain',
     [switch] $Status,
     [switch] $Stop
@@ -99,7 +100,7 @@ Stop-ChainWorkers
 
 $pwshExe = (Get-Process -Id $PID).Path
 $action  = New-ScheduledTaskAction -Execute $pwshExe `
-             -Argument ('-NoProfile -ExecutionPolicy Bypass -File "{0}"' -f $script) `
+             -Argument ('-NoProfile -ExecutionPolicy Bypass -File "{0}" {1}' -f $script, $ChainArgs).TrimEnd() `
              -WorkingDirectory $repo
 
 # ExecutionTimeLimit 0 = no limit. The default is three days, which would kill a
