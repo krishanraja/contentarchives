@@ -185,6 +185,33 @@ function Invoke-Classify([string] $label, [string[]] $extra) {
                 # and flatlines the moment it is alive but achieving nothing.
                 if (Test-Path $tags) { (Get-Item $tags).Length } else { 0 }
             } `
+            -Verify {
+                # Re-reads the newest rows the classifier claims to have written
+                # and checks they are real answers about real files: a hash that
+                # exists in the thumbnail cache, and a `kind` from the vocabulary
+                # rather than an empty string or an error message. A pass writing
+                # blanks, or writing against hashes nothing else knows, climbs
+                # the row count exactly as fast as a good one.
+                $chk = & python -c @"
+import csv, io, os, sys
+rows = list(csv.DictReader(io.open(r'$tags', encoding='utf-8', errors='replace', newline='')))
+recent = [r for r in rows[-400:] if r.get('tag') == 'kind']
+if len(recent) < 5:
+    print('too few new rows to judge'); sys.exit(2)
+bad = 0
+for r in recent[-25:]:
+    h = (r.get('hash') or '').strip()
+    v = (r.get('value') or '').strip()
+    if not v or len(h) < 16:
+        bad += 1; continue
+    if not os.path.exists(os.path.join(r'D:\_thumbs', h[:2], h + '.jpg')):
+        bad += 1
+print('checked {} recent kind rows, {} unusable'.format(min(25, len(recent)), bad))
+sys.exit(1 if bad > 2 else 0)
+"@ 2>&1 | Out-String
+                foreach ($ln in ($chk -split "`n" | Where-Object { $_.Trim() })) { Say "    $ln" }
+                return ($LASTEXITCODE -ne 1)
+            } `
             -Postcondition {
                 Get-Content 'D:\_PhotoAudit\cls.out' -ErrorAction SilentlyContinue | Add-Content -Path $log
                 Get-Content 'D:\_PhotoAudit\cls.err' -ErrorAction SilentlyContinue | Add-Content -Path $log
@@ -256,6 +283,15 @@ if (Should-Run '3a-video') {
         -Progress {
             if (Test-Path 'D:\_PhotoAudit\INVENTORY.csv') { (Get-Item 'D:\_PhotoAudit\INVENTORY.csv').Length } else { 0 }
         } `
+        -Verify {
+            # Re-probes videos the pass has already written and compares the
+            # duration on disk with the duration in the file. This is precisely
+            # the failure that ran 33 minutes writing nothing: the shape of
+            # INVENTORY.csv was perfect throughout.
+            $chk = & python "$repo	oolserify_inventory.py" --sample 4 2>&1 | Out-String
+            foreach ($ln in ($chk -split "`n" | Where-Object { $_.Trim() })) { Say "    $ln" }
+            return ($LASTEXITCODE -ne 1)
+        } `
         -Postcondition {
             Get-Content 'D:\_PhotoAudit\inv.out' -ErrorAction SilentlyContinue | Add-Content -Path $log
             if (-not (Test-Path 'D:\_PhotoAudit\INVENTORY.csv')) { Say '  no INVENTORY.csv'; return $false }
@@ -291,6 +327,34 @@ if (Should-Run '3c') {
             elseif (Test-Path 'D:\_PhotoAudit\MASTER.csv') { (Get-Item 'D:\_PhotoAudit\MASTER.csv').Length }
             else { 0 }
         } `
+        -Verify {
+            # A sheet is a join, and a broken join produces a complete file with
+            # an empty column - which is how OriginPath sat at 0% and Duration at
+            # 0.0% while every row looked fine. So: read the newest MASTER.csv
+            # and insist the join-dependent columns are actually populated.
+            $chk = & python -c @"
+import csv, io, sys
+p = r'D:\_PhotoAudit\MASTER.csv'
+rows = []
+with io.open(p, encoding='utf-8', errors='replace', newline='') as f:
+    for i, r in enumerate(csv.DictReader(f)):
+        rows.append(r)
+        if i > 4000: break
+if len(rows) < 100:
+    print('sheet too small to judge'); sys.exit(2)
+def pct(col):
+    return 100.0 * sum(1 for r in rows if (r.get(col) or '').strip()) / len(rows)
+bad = []
+for col, floor in (('Hash', 90), ('Side', 90), ('kind', 50), ('Bytes', 90)):
+    v = pct(col)
+    print('  {:<8} {:.1f}%'.format(col, v))
+    if v < floor: bad.append(col)
+if bad: print('join-dependent columns empty: ' + ','.join(bad))
+sys.exit(1 if bad else 0)
+"@ 2>&1 | Out-String
+            foreach ($ln in ($chk -split "`n" | Where-Object { $_.Trim() })) { Say "    $ln" }
+            return ($LASTEXITCODE -ne 1)
+        } `
         -Postcondition {
             Get-Content 'D:\_PhotoAudit\sheet.out' -ErrorAction SilentlyContinue | Add-Content -Path $log
             if (-not (Test-Path 'D:\_PhotoAudit\MASTER.csv')) { Say '  no MASTER.csv'; return $false }
@@ -325,6 +389,15 @@ if (Should-Run 'A') {
         -Progress {
             # counts "N regenerated" lines, so it rises while it works
             if (Test-Path 'D:\_PhotoAudit\refix.out') { (Get-Item 'D:\_PhotoAudit\refix.out').Length } else { 0 }
+        } `
+        -Verify {
+            # Counting regenerations proves it REWROTE thumbnails, not that it
+            # turned them the right way up. A run that rewrote all 19,870 and
+            # left every one sideways prints identical numbers. So compare the
+            # original's EXIF orientation with the thumbnail's actual shape.
+            $chk = & python "$repo\tools\verify_rotation.py" --sample 6 2>&1 | Out-String
+            foreach ($ln in ($chk -split "`n" | Where-Object { $_.Trim() })) { Say "    $ln" }
+            return ($LASTEXITCODE -ne 1)
         } `
         -Postcondition {
             Get-Content 'D:\_PhotoAudit\refix.out' -ErrorAction SilentlyContinue | Add-Content -Path $log
@@ -438,6 +511,17 @@ if (Should-Run 'C') {
             return $jobs
         } `
         -Progress { Count-FaceRows } `
+        -Verify {
+            # Re-derives embeddings from the thumbnails and compares. NOT a
+            # shape check: every shape check passed on the file that was wrong
+            # for five hours. Exit 2 means "too early to tell", which is not a
+            # failure - it must not halt a run that has simply not written
+            # enough yet.
+            $out = & python "$repo\tools\verify_faces.py" --sample 6 2>&1 | Out-String
+            foreach ($ln in ($out -split "`n" | Where-Object { $_.Trim() })) { Say "    $ln" }
+            if ($LASTEXITCODE -eq 1) { return $false }
+            return $true
+        } `
         -Postcondition {
             # "Rows exist" is far too weak. Every shard prints how many images it
             # had to look at; a finished run must have looked at essentially all
@@ -486,6 +570,34 @@ if (Should-Run 'D') {
             if (Test-Path $t) { (Get-Item $t).Length }
             elseif (Test-Path 'D:\_PhotoAudit\MASTER.csv') { (Get-Item 'D:\_PhotoAudit\MASTER.csv').Length }
             else { 0 }
+        } `
+        -Verify {
+            # A sheet is a join, and a broken join produces a complete file with
+            # an empty column - which is how OriginPath sat at 0% and Duration at
+            # 0.0% while every row looked fine. So: read the newest MASTER.csv
+            # and insist the join-dependent columns are actually populated.
+            $chk = & python -c @"
+import csv, io, sys
+p = r'D:\_PhotoAudit\MASTER.csv'
+rows = []
+with io.open(p, encoding='utf-8', errors='replace', newline='') as f:
+    for i, r in enumerate(csv.DictReader(f)):
+        rows.append(r)
+        if i > 4000: break
+if len(rows) < 100:
+    print('sheet too small to judge'); sys.exit(2)
+def pct(col):
+    return 100.0 * sum(1 for r in rows if (r.get(col) or '').strip()) / len(rows)
+bad = []
+for col, floor in (('Hash', 90), ('Side', 90), ('kind', 50), ('Bytes', 90)):
+    v = pct(col)
+    print('  {:<8} {:.1f}%'.format(col, v))
+    if v < floor: bad.append(col)
+if bad: print('join-dependent columns empty: ' + ','.join(bad))
+sys.exit(1 if bad else 0)
+"@ 2>&1 | Out-String
+            foreach ($ln in ($chk -split "`n" | Where-Object { $_.Trim() })) { Say "    $ln" }
+            return ($LASTEXITCODE -ne 1)
         } `
         -Postcondition {
             Get-Content 'D:\_PhotoAudit\sheet.out' -ErrorAction SilentlyContinue | Add-Content -Path $log

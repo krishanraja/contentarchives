@@ -176,6 +176,21 @@ def main():
                 print("  {:<28} no assertion that steps.ps1 actually loaded".format(fn))
                 continue
 
+        # Every Invoke-Step must carry a -Verify. It is Mandatory in the runner,
+        # so a missing one is already an error at run time - but at run time
+        # means "three hours into an overnight job", and the whole point of
+        # -Verify is that discovering things late is what hurts. A step whose
+        # -Verify is `{ $true }` still passes this: the aim is to make skipping
+        # correctness a visible line in a diff, not to stop a determined author.
+        for m in re.finditer(r"^\s*Invoke-Step\b", joined, re.M):
+            start = joined.count(chr(10), 0, m.start())
+            window = chr(10).join(text[start:start + 90])
+            if "-Verify" not in window:
+                failures.append((fn, [(start + 1, "Invoke-Step with no -Verify: "
+                                       "checks it is MOVING, not that it is CORRECT")]))
+                print("  {:<28} an Invoke-Step has no -Verify".format(fn))
+                break
+
         gated = blocks_of(text)
         hits = []
         for i, ln in enumerate(text):

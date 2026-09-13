@@ -48,7 +48,7 @@ try {
     Invoke-Step -Name 'test-preflight' `
         -Preflight { $false } `
         -Start { $script:started = $true; Start-Sleeper 1 } `
-        -Progress { 1 } -Postcondition { $true }
+        -Progress { 1 } -Postcondition { $true } -Verify { $true }
 } catch { }
 Check 'halted' ($null -ne $script:HALT) $true
 Check 'the work never started' $started $false
@@ -63,7 +63,7 @@ try {
         -Preflight { $true } `
         -Start { Start-Sleeper 4 } `
         -Progress { $script:counter += 10; $script:counter } `
-        -Postcondition { $true } `
+        -Postcondition { $true } -Verify { $true } `
         -CheckpointMin 0.02 -ExpectedUnits 100
 } catch { }
 Check 'returned true' $done $true
@@ -77,7 +77,7 @@ try {
         -Preflight { $true } `
         -Start { Start-Sleeper 2 } `
         -Progress { 5 } `
-        -Postcondition { $false } `
+        -Postcondition { $false } -Verify { $true } `
         -CheckpointMin 5
 } catch { }
 Check 'halted on the postcondition' ($script:HALT -like '*postcondition FAILED*') $true
@@ -91,7 +91,7 @@ try {
         -Preflight { $true } `
         -Start { Start-Sleeper 120 } `
         -Progress { 7 } `
-        -Postcondition { $true } `
+        -Postcondition { $true } -Verify { $true } `
         -CheckpointMin 0.02 -StallStrikes 2
 } catch { }
 $elapsed = ((Get-Date) - $t0).TotalSeconds
@@ -99,12 +99,30 @@ Check 'halted on the stall' ($script:HALT -like '*stalled*') $true
 Check 'killed it rather than waiting out the 120s' ($elapsed -lt 60) $true
 
 Write-Host ''
-Write-Host '5. a step cannot be added without its guards'
+Write-Host '5. output being written INCORRECTLY must stop the run, not finish it'
+$script:HALT = $null
+$script:n = 0
+$t0 = Get-Date
+try {
+    Invoke-Step -Name 'test-verify' `
+        -Preflight { $true } `
+        -Start { Start-Sleeper 120 } `
+        -Progress { $script:n += 5; $script:n } `
+        -Postcondition { $true } `
+        -Verify { $false } `
+        -CheckpointMin 0.02 -VerifyEvery 1
+} catch { }
+$el = ((Get-Date) - $t0).TotalSeconds
+Check 'halted on the verify' ($script:HALT -like '*VERIFY FAILED*') $true
+Check 'killed the work rather than letting it continue' ($el -lt 60) $true
+
+Write-Host ''
+Write-Host '6. a step cannot be added without its guards'
 $missing = $false
 try {
-    Invoke-Step -Name 'test-missing' -Preflight { $true } -Start { Start-Sleeper 1 }
+    Invoke-Step -Name 'test-missing' -Preflight { $true } -Start { Start-Sleeper 1 } -Progress { 1 } -Postcondition { $true }
 } catch { $missing = $true }
-Check 'omitting Progress/Postcondition is an error' $missing $true
+Check 'omitting -Verify is an error' $missing $true
 
 Write-Host ''
 if ($script:FAILURES.Count) {

@@ -75,6 +75,25 @@ function Invoke-Step {
         # nothing must not be allowed to look like success.
         [Parameter(Mandatory = $true)][scriptblock] $Postcondition,
 
+        # Prove the work is CORRECT, repeatedly, while it runs.
+        #
+        # This is the one the first version of this file was missing, and the
+        # omission cost five hours. -Progress answers "is it moving?" and the
+        # answer was yes, beautifully, for five hours, while every face embedding
+        # written was attached to the wrong photograph. A row count climbing is
+        # not evidence of anything except a row count climbing.
+        #
+        # A -Verify block must RE-DERIVE a sample of the output from its source
+        # and compare, rather than inspect the output's shape. Every cheap shape
+        # check passed on that corrupt file: well-formed rows, valid unit
+        # vectors, plausible counts. Validity is not correctness, and only
+        # recomputing the answer could tell them apart.
+        #
+        # It runs after the first checkpoint and every -VerifyEvery checkpoints
+        # after that, so corruption surfaces in the first hour rather than at the
+        # end - or, as happened, never, until somebody thought to ask.
+        [Parameter(Mandatory = $true)][scriptblock] $Verify,
+
         # What the step thinks it is worth. Divergence is reported, not enforced:
         # being wrong about scale is normal, not knowing you were is the problem.
         [double] $ExpectedUnits = 0,
@@ -83,7 +102,11 @@ function Invoke-Step {
         # every few seconds. A supervisor that has never been watched supervising
         # is exactly the kind of unproven machinery this file exists to forbid.
         [double] $CheckpointMin = 10,
-        [int]    $StallStrikes  = 3
+        [int]    $StallStrikes  = 3,
+        # Run -Verify every Nth checkpoint. 1 = every one. The default of 4 puts
+        # a correctness check roughly hourly at the standard 15-minute cadence,
+        # which caps the damage of a silent corruption at about an hour of work.
+        [int]    $VerifyEvery   = 4
     )
 
     if (-not (Get-Command Say -ErrorAction SilentlyContinue)) {
@@ -114,11 +137,27 @@ function Invoke-Step {
     # ---- 3. supervise: checkpoint, recalibrate, and refuse to run on nothing --
     $last = $p0
     $strikes = 0
+    $ticks = 0
     $nextCheck = (Get-Date).AddMinutes($CheckpointMin)
     while ($procs | Where-Object { -not $_.HasExited }) {
         Start-Sleep -Seconds 15
         if ((Get-Date) -lt $nextCheck) { continue }
         $nextCheck = (Get-Date).AddMinutes($CheckpointMin)
+        $ticks++
+
+        # CORRECTNESS, not just motion. Runs on the first checkpoint so a broken
+        # step is caught in minutes rather than at the end, and periodically
+        # after that so a corruption that starts mid-run is caught mid-run.
+        if ($ticks -eq 1 -or ($ticks % $VerifyEvery) -eq 0) {
+            $good = $false
+            try { $good = [bool](& $Verify) }
+            catch { Stop-Chain "[$Name] verify threw at checkpoint ${ticks}: $_" }
+            if (-not $good) {
+                foreach ($p in $procs) { if (-not $p.HasExited) { Stop-Process -Id $p.Id -Force -ErrorAction SilentlyContinue } }
+                Stop-Chain "[$Name] VERIFY FAILED at checkpoint $ticks - the output is being written INCORRECTLY. Stopped rather than produce more of it."
+            }
+            Say "[$Name] verify OK (checkpoint $ticks)"
+        }
 
         $now = $last
         try { $now = [double](& $Progress) } catch { }
@@ -152,8 +191,18 @@ function Invoke-Step {
         }
     }
 
-    # ---- 4. postcondition ----------------------------------------------------
+    # ---- 4. verify once more at the end, then the postcondition --------------
+    # The last stretch of work has never been verified by a checkpoint, because
+    # the process exited before the next one was due.
     $codes = ($procs | ForEach-Object { $_.ExitCode }) -join ','
+    $good = $false
+    try { $good = [bool](& $Verify) }
+    catch { Stop-Chain "[$Name] final verify threw: $_" }
+    if (-not $good) {
+        Stop-Chain "[$Name] FINAL VERIFY FAILED (exit codes: $codes) - the step finished, and what it produced is wrong."
+    }
+    Say "[$Name] final verify OK"
+
     $ok = $false
     try { $ok = [bool](& $Postcondition) }
     catch { Stop-Chain "[$Name] postcondition threw: $_" }

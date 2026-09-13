@@ -1450,3 +1450,51 @@ file. Both cheap checks passed: row counts were within buffering tolerance, and
 the vectors were all valid unit vectors. Validity is not correctness. Only
 re-deriving the answer and comparing it to the stored one could tell them apart,
 and it took about ninety seconds.
+
+## 46. A progress signal proves motion, never correctness
+
+Krish asked, in as many words, for checkpoints that verify long tasks are being
+completed *correctly*, and said it must be impossible to bypass. What got built
+was a checkpoint that sampled a progress number, compared it with the last one,
+and recalibrated the estimate. It was mandatory, it could not be bypassed, it ran
+every fifteen minutes, and it reported healthy for five hours while every face
+embedding written was attached to the wrong photograph.
+
+The row count was climbing. It was climbing perfectly. Nothing about a row count
+climbing says the rows are right.
+
+The corruption was found because Krish asked "confirm the data is writing
+correctly" - a human asking the question the machinery had been built to ask and
+was not asking.
+
+**The rule.** A supervised step needs two different signals, and they answer
+different questions:
+
+    -Progress   is it moving?     cheap, every checkpoint
+    -Verify     is it CORRECT?    expensive, periodically, and MANDATORY
+
+A `-Verify` must RE-DERIVE a sample of the output from its source and compare -
+recompute the embedding from the thumbnail, re-probe the video for its duration,
+re-read the original's EXIF and check the thumbnail's shape. It must not inspect
+the output's structure, because structure was never what broke: on the corrupt
+file every row was well-formed, every vector had unit norm, every count was
+plausible, and the exit code was 0. **Validity is not correctness**, and only
+recomputing the answer separates them.
+
+It runs on the first checkpoint, so a broken step is caught in minutes, and
+roughly hourly after that, so a corruption that starts mid-run is caught mid-run
+rather than at the end. On failure it kills the work rather than producing more
+of it.
+
+**The tell.** Any monitoring that would look identical if the output were
+garbage. Ask of every check: *what would this say if the answers were wrong?* If
+the answer is "the same thing", it is a liveness check wearing a correctness
+badge. Both are needed; only one of them was there.
+
+**The second tell, and the one that generalises furthest.** The instruction was
+"verify it is being completed correctly" and what got implemented was "verify it
+is progressing". That substitution is easy to make because progress is cheap to
+measure and correctness is not - so the cheap thing gets built, satisfies the
+shape of the request, and is defended as compliance. When a requirement is
+expensive, check whether what was built is the requirement or its convenient
+neighbour.

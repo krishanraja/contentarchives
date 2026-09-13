@@ -71,6 +71,36 @@ Invoke-Step -Name 'thumbnails' -ExpectedUnits 97000 -CheckpointMin 15 `
         return $jobs
     } `
     -Progress { Count-Thumbs } `
+    -Verify {
+        # A thumbnail count proves files appeared, not that they are pictures.
+        # thumbnail.py spent weeks writing landscape thumbnails of portrait
+        # photographs and the count was perfect throughout. So open a few of the
+        # newest and check they decode, have sensible dimensions, and are not
+        # uniformly blank.
+        $chk = & python -c @"
+import glob, os, sys
+import numpy as np
+from PIL import Image
+files = sorted(glob.glob(r'D:\_thumbs\**\*.jpg', recursive=True),
+               key=os.path.getmtime)[-6:]
+if len(files) < 3:
+    print('too few thumbnails yet'); sys.exit(2)
+bad = 0
+for p in files:
+    try:
+        im = Image.open(p); im.load()
+        w, h = im.size
+        a = np.asarray(im.convert('L'), dtype=np.float32)
+        if max(w, h) < 64 or max(w, h) > 4096 or a.std() < 1.0:
+            bad += 1; print('  {} {}x{} std {:.1f}'.format(os.path.basename(p)[:20], w, h, a.std()))
+    except Exception as e:
+        bad += 1; print('  {} will not open: {}'.format(os.path.basename(p)[:20], e))
+print('checked {} newest thumbnails, {} unusable'.format(len(files), bad))
+sys.exit(1 if bad else 0)
+"@ 2>&1 | Out-String
+        foreach ($ln in ($chk -split "`n" | Where-Object { $_.Trim() })) { Say "    $ln" }
+        return ($LASTEXITCODE -ne 1)
+    } `
     -Postcondition {
         $n = Count-Thumbs
         Say "  thumbnails on disk: $n"
