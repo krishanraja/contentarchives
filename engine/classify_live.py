@@ -68,20 +68,71 @@ SOURCE = "google/" + MODEL
 CATS = ["HARM_CATEGORY_HARASSMENT", "HARM_CATEGORY_HATE_SPEECH",
         "HARM_CATEGORY_SEXUALLY_EXPLICIT", "HARM_CATEGORY_DANGEROUS_CONTENT"]
 MAX_FRAMES = 4
+RICH_PROMPT = """Describe this for a personal photo library, richly enough that
+someone could find it years later from a half-remembered detail. If several
+images are shown they are frames from ONE video - describe the video as a whole.
+
+Reply with ONLY a JSON object, no prose:
+{"description":"...","objects":"...","activity":"...","text":"...",
+ "occasion":"...","mood":"...","confidence":0.0}
+
+description  One or two full sentences saying what is actually visible: who (by
+             appearance and apparent age, never by name), what they are doing,
+             where, and what stands out. Write it the way you would describe a
+             photograph to someone who cannot see it. Do NOT write a label like
+             "beach scene" - that already exists elsewhere and is not useful.
+
+objects      Comma-separated notable things actually visible: "red umbrella,
+             birthday cake, golden retriever, Christmas tree". Concrete nouns
+             only, at most 10, most distinctive first. Empty if nothing stands
+             out.
+
+activity     What is happening, a few words: "blowing out candles", "walking on
+             sand", "posing for a group photo", "nobody present".
+
+text         Any legible text, transcribed verbatim - signage, headlines,
+             captions, handwriting, screen contents. This is how a document or
+             screenshot becomes findable. Empty string if none. Do not guess at
+             blurred text.
+
+occasion     The kind of occasion if evident: birthday, wedding, holiday,
+             christmas, graduation, funeral, everyday, work, travel, party,
+             sport, unclear.
+
+mood         The feeling of the image in one or two words: celebratory, quiet,
+             candid, formal, playful, sombre, unclear.
+
+confidence   0.0-1.0
+
+Describe what is actually there. Do not invent detail you cannot see, and do not
+speculate about relationships between people - you cannot know who is related to
+whom, so say "two adults" rather than "a couple"."""
+
+RICH_FIELDS = ("description", "objects", "activity", "text", "occasion", "mood")
+
 FIELDS = ("kind", "people", "subject", "keep", "sensitivity",
           "setting", "place", "era")
 
 
-def call(paths, key, timeout=120):
+def call(paths, key, prompt=PROMPT, max_out=800, timeout=120):
+    """The prompt is a PARAMETER, not a global.
+
+    It was a global, read straight from PROMPT inside here, while main() chose a
+    different one for --rich and passed it nowhere. The rich pass would have sent
+    the old five-word prompt, stored the answers under the rich source id and the
+    rich field names, and produced a "description" column full of four-word
+    labels - a complete, plausible, expensive result that was silently the thing
+    it was meant to replace.
+    """
     parts = []
     for p in paths[:MAX_FRAMES]:
         with open(p, "rb") as f:
             parts.append({"inline_data": {
                 "mime_type": "image/jpeg",
                 "data": base64.b64encode(f.read()).decode()}})
-    parts.append({"text": PROMPT})
+    parts.append({"text": prompt})
     body = {"contents": [{"parts": parts}],
-            "generationConfig": {"maxOutputTokens": 800},
+            "generationConfig": {"maxOutputTokens": max_out},
             "safetySettings": [{"category": c, "threshold": "BLOCK_NONE"}
                                for c in CATS]}
     r = urllib.request.Request(
@@ -129,6 +180,11 @@ def main():
     ap.add_argument("--limit", type=int, default=0)
     ap.add_argument("--max-usd", type=float, default=60.0)
     ap.add_argument("--apply", action="store_true")
+    ap.add_argument("--rich", action="store_true",
+                    help="the DESCRIPTION pass: full sentences, objects, "
+                         "legible text, occasion and mood. Writes new fields "
+                         "alongside the existing labels and replaces nothing, "
+                         "under its own source id so both survive.")
     ap.add_argument("--dry-run", action="store_true")
     ap.add_argument("--only-list", default="",
                     help="file of content hashes, one per line: judge ONLY these, and judge them even if this model already has - for re-doing files whose thumbnail was rebuilt")
@@ -138,10 +194,22 @@ def main():
     if not key:
         sys.exit("GOOGLE_API_KEY is not set")
 
+    # The rich pass is a SECOND opinion, not a replacement: its own source id,
+    # its own fields, its own marker. The four-word `subject` stays exactly
+    # where it is, so nothing already paid for is lost or overwritten.
+    prompt, fields, source = PROMPT, FIELDS, SOURCE
+    marker = "kind"
+    max_out = 800
+    if a.rich:
+        prompt, fields = RICH_PROMPT, RICH_FIELDS
+        source = SOURCE + "-rich"
+        marker = "description"
+        max_out = 1400        # a transcription needs more room than a label
+
     st = Store(a.store)
     done = set()
     for r in st._read(TAGS):
-        if r.get("tag") == "kind" and r.get("source") == SOURCE:
+        if r.get("tag") == marker and r.get("source") == source:
             done.add(r["hash"])
     assets = assets_for(a.thumbs)
     if a.only_list:
@@ -192,7 +260,7 @@ def main():
             txt = None
             for attempt in range(4):
                 try:
-                    txt, ti, to = call(assets[h], key)
+                    txt, ti, to = call(assets[h], key, prompt, max_out)
                     with lock:
                         stats["tin"] += ti
                         stats["tout"] += to
@@ -233,9 +301,9 @@ def main():
             # The store is CSV append; two threads writing at once interleave
             # rows. Serialise the write, not the call.
             with lock:
-                for f in FIELDS:
+                for f in fields:
                     if f in d and d[f] != "":
-                        st.tag(h, f, str(d[f]), SOURCE, conf)
+                        st.tag(h, f, str(d[f]), source, conf)
                 stats["ok"] += 1
                 n = stats["ok"] + stats["fail"] + stats["blocked"]
                 if n % 250 == 0:
