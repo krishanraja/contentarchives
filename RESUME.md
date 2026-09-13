@@ -105,10 +105,14 @@ Then, in order, and only the first is autonomous:
 
 ### Open questions Krish has NOT answered
 
-- **Face coverage.** Detection only opens images the classifier said contain a
-  person, so **23,835 photographs are never examined**. A 300-image sample was
-  run on 2026-09-13 to size the loss; see `tools/sample_missed_faces.py` and the
-  history log for the result. Closing it fully costs about 11 hours.
+- **Face coverage: ANSWERED, and the shortcut is sound.** Detection only opens
+  images the classifier said contain a person, leaving 23,646 photographs
+  unexamined. A random 300 of them were opened on 2026-09-13
+  (`tools/sample_missed_faces.py`): **2.3% had any face, 0.7% a confident one,
+  and both confident hits were a statue of Lord Shiva and a restaurant mural.**
+  The classifier was right and the detector was wrong. Extrapolated the entire
+  gap is ~157 images, almost all statues, murals and photos-of-photos. **Do not
+  spend eleven hours on this.**
 - **Descriptive richness.** The median `subject` is FOUR WORDS - "rocky coastal
   cliff". It is enough to find things, not to read them. A richer pass costs
   about $27 and 12 hours and is not scheduled.
