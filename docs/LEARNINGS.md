@@ -1407,3 +1407,46 @@ success, against the same file. The first left the file untouched; the second
 assumed the first had applied. When a multi-part change is made by more than one
 tool, verify the parts together afterwards - `grep` for the thing that should
 now be there - rather than trusting each step's own report.
+
+## 45. Two files matched by position will drift apart, and nothing will say so
+
+`faces_embed.py` wrote one CSV row per detected face and one 512-float vector to
+a parallel `faces.f16`, matched **by position**: the Nth row described the Nth
+vector. Two files, two buffers, on a machine that kills long jobs routinely.
+
+The CSV was flushed before the binary, and the binary buffer drained faster, so
+at any instant the binary held more records than the CSV. A kill in that gap left
+the binary permanently longer. On resume both were appended to, and every
+embedding after that point belonged to a different photograph than the row
+claiming it.
+
+Measured by recomputing embeddings and comparing them to their stored slots:
+aligned at slots 5, 50, 500, 627, 690, 722 - broken from 754 onwards, cosine
+**0.00 instead of 1.00**, all the way to the end. Of 11,611 images processed,
+**264 were trustworthy**. Nothing errored. Nothing warned. Every row was
+well-formed, every vector had unit norm, the row count looked plausible, and the
+face clusters built from it would have confidently grouped strangers together
+and been impossible to argue with.
+
+Five hours of compute were discarded. That was the cheap outcome.
+
+**The rule.** Do not couple two files by position when either can be truncated
+independently. Put the payload in the record that describes it. The embedding
+now lives in its own CSV row as base64 float16: one file, one buffer, one append
+per face. A kill loses the last row, which is re-done on resume, and it cannot
+shift anything. The cost is a 180 MB CSV instead of a 167 MB binary plus an
+index, which buys the failure being *impossible* rather than *unlikely*.
+
+**The tell.** A consistency check that is only ever run at the end, or never.
+Two derived artefacts that must agree, where nothing compares them. Ask: *if
+these two got out of step, what would tell me?* Here the answer was "nothing,
+until a person looked at a face cluster months later and did not recognise the
+grouping", and by then the source images would be long gone from anyone's memory
+of what was run.
+
+**The check that found it, worth reusing.** Recompute a sample of the derived
+value from the source and compare - at the start, the middle and the end of the
+file. Both cheap checks passed: row counts were within buffering tolerance, and
+the vectors were all valid unit vectors. Validity is not correctness. Only
+re-deriving the answer and comparing it to the stored one could tell them apart,
+and it took about ninety seconds.

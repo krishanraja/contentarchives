@@ -17,13 +17,33 @@ whether looking is worthwhile.
 
 WHAT IT WRITES
 
-  faces.csv    one row per detected face: hash, index, bbox, detector score
-  faces.f16    the embeddings, 512 float16 each, in row order
+  faces.csv    one row per detected face: hash, index, bbox, detector score,
+               and the 512-d embedding itself, base64 of float16, in the row
 
-Split because 163,000 x 512 floats is 167 MB as float16 and does not belong in
-a CSV. float16 rather than float32 because these are compared by cosine
-similarity at a threshold around 0.5, and half precision is far below the noise
-floor of that decision while halving the file.
+ONE FILE, BECAUSE TWO FILES DRIFTED APART AND CORRUPTED 11,000 IMAGES
+
+The embeddings used to live in a parallel faces.f16, matched to the CSV BY
+POSITION - the Nth row described the Nth vector. Two files, two buffers, and a
+machine that kills long jobs routinely. A kill between the CSV flush and the
+binary flush leaves the binary longer than the CSV, and on resume both append,
+so every embedding after that point belongs to a different photograph than the
+row claiming it.
+
+That happened. Measured on 2026-09-13 by recomputing embeddings and comparing
+them to their stored slots: aligned at slots 5, 50, 500, 627, 690, 722 - and
+broken from slot 754 onwards, cosine ~0.00 instead of ~1.00, all the way to the
+end. Of 11,611 images processed, 264 were trustworthy. Nothing errored, nothing
+warned, and the clusters built from it would have confidently grouped strangers
+together.
+
+The vector now lives in the row that describes it. One file, one buffer, one
+append per face: a kill can lose the last row, which is re-done on resume, and
+it cannot shift anything. A CSV of ~131,000 rows at ~1.4 KB is about 180 MB -
+which is the price of the failure being impossible rather than merely unlikely.
+
+float16 rather than float32 because these are compared by cosine similarity at
+a threshold around 0.5, and half precision is far below the noise floor of that
+decision while halving the size.
 
 RESUMABLE AND SHARDED
 
@@ -100,10 +120,8 @@ def main() -> None:
         todo = todo[:a.limit]
 
     out_csv = os.path.join(a.store, "faces.csv")
-    out_emb = os.path.join(a.store, "faces.f16")
     if shard_n:
         out_csv = out_csv.replace(".csv", ".{}.csv".format(shard_i))
-        out_emb = out_emb.replace(".f16", ".{}.f16".format(shard_i))
 
     done = set()
     if os.path.exists(out_csv):
@@ -125,8 +143,7 @@ def main() -> None:
     cf = open(out_csv, "a", newline="", encoding="utf-8")
     cw = csv.writer(cf)
     if fresh:
-        cw.writerow(["hash", "face_index", "bbox", "det_score", "said"])
-    ef = open(out_emb, "ab")
+        cw.writerow(["hash", "face_index", "bbox", "det_score", "said", "emb"])
 
     t0 = time.time()
     nf = 0
@@ -140,27 +157,25 @@ def main() -> None:
             v = np.asarray(fc.embedding, dtype=np.float32)
             n = float(np.linalg.norm(v))
             if n > 0:
-                v = v / n                        # normalise once, here, so the
-            ef.write(v.astype(np.float16).tobytes())   # clusterer never has to
-            cw.writerow([h, j,
+                v = v / n                    # normalise once, here, so the
+            cw.writerow([h, j,               # clusterer never has to
                          ",".join("{:.0f}".format(x) for x in fc.bbox),
                          "{:.3f}".format(float(fc.det_score)),
-                         people.get(h, 0)])
+                         people.get(h, 0),
+                         base64.b64encode(v.astype(np.float16).tobytes()).decode("ascii")])
             nf += 1
         # A row with no faces still has to be recorded, or every resumed run
         # re-examines every image the detector found nothing in.
         if not faces:
-            cw.writerow([h, -1, "", "0.000", people.get(h, 0)])
+            cw.writerow([h, -1, "", "0.000", people.get(h, 0), ""])
         if i % 200 == 0:
             cf.flush()
-            ef.flush()
             el = time.time() - t0
             rate = i / max(el, 1)
             print("  {:,}/{:,}  {:,} faces  {:.1f} img/s  ~{:.0f} min left"
                   .format(i, len(todo), nf, rate,
                           (len(todo) - i) / max(rate, 0.01) / 60), flush=True)
     cf.close()
-    ef.close()
     print("shard {} done: {:,} images, {:,} faces, {:.0f} min".format(
         shard_i, len(todo), nf, (time.time() - t0) / 60))
 
