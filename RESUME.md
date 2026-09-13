@@ -34,84 +34,95 @@ exclusion, deletion or classification rule.**
 
 ----
 
-## RIGHT NOW: faces run overnight, then the library is fully enriched (2026-09-12, 18:30)
+## RIGHT NOW: faces running unattended, self-verifying (2026-09-13, 16:00)
 
-**Check before doing anything else.** Nothing is waiting on you:
+**Nothing needs a human.** The chain is a scheduled task that restarts itself,
+resumes from where it died, and checks its own output is CORRECT every hour.
 
 ```powershell
 pwsh -NoProfile -File scripts\chains\arm.ps1 -Status
-Get-Content D:\_PhotoAudit\phase3.log -Tail 3
+Get-Content D:\_PhotoAudit\phase3.log -Tail 5
 ```
 
-`state : Running` with the log climbing means healthy. The chain runs unattended
-to its last line, `PHASE 3B COMPLETE`.
+Healthy looks like `state : Running`, a `CHECKPOINT` line every 15 minutes and a
+`verify OK` line every hour. Its last line will be `PHASE 3B COMPLETE`.
 
-### Done, and verified
+### No Anthropic API is required, by design
 
-- **Classification is COMPLETE.** 79,020 assets judged by gemini-3.1-flash-lite,
-  **0 failed, 0 blocked**, about **$27** all in. The retry loop confirmed it by
-  asking the store what was outstanding rather than assuming: `nothing
-  outstanding`.
-- **442 receipts deleted** through `guarded_delete.py`, 0 refused.
-- **The Personal/Communal split audited at folder level**: 0 of 459 folders hold
-  both sides.
+Krish turned Anthropic access off on 2026-09-13 and nothing here needs it.
+Classification is FINISHED and used Google Gemini in any case
+(`generativelanguage.googleapis.com`, `GOOGLE_API_KEY`). Everything still to run
+is local: `faces_embed` is insightface on local thumbnails, the verifiers are
+local, `master_sheet` and `build_db` are local. The only Anthropic code in the
+repo is `engine/bakeoff.py`, `engine/batch_classify.py` and `engine/classify.py`,
+none of which the chain invokes.
 
-### Running now, in order
+### Done and verified
 
-| step | what | roughly |
-|---|---|---|
-| 3a-video | re-probe 12,988 videos for duration (the ffprobe bug) | ~90 min |
-| 3c | rebuild MASTER.csv | ~25 min |
-| A | regenerate sideways thumbnails | ~20 min |
-| B | re-judge only those | ~30 min |
-| **C** | **faces, 3 shards over 51,797 images** | **~14 h, the long pole** |
-| D | rebuild the sheet | ~25 min |
+- **Classification COMPLETE** - 79,769 files, 0 failures, about $27.
+- **Location** - 33,841 files geocoded offline; `place` 52%, `country` 41%.
+- **Video metadata** - Duration 0.0% -> 99.9% after the ffprobe fix.
+- **`library.db`** - SQLite + FTS5, 85.1% field completeness.
+- **Face data is PROVEN correct** - 15 embeddings recomputed from thumbnails
+  across the whole file, all cosine 1.0000, including the newest row.
 
-Faces is CPU-bound at roughly **1 image/sec** on this 4-core i5 and finishes
-around **08:00**. Three shards rather than six is deliberate: measured at 0.85
-img/s and 630 MB each, six would oversubscribe four cores and hold 3.8 GB on a
-box that kills long jobs at 2.7 GB free. `--det-size` is the only lever that
-would shorten it, and it trades away small and distant faces, so it is Krish's
-call and stays at 512.
+### The rule that now governs every long step
 
-### Run these when `PHASE 3B COMPLETE` appears
+`Invoke-Step` in `scripts/chains/steps.ps1` makes five things mandatory:
+`-Preflight`, `-Start`, `-Progress`, `-Postcondition` and **`-Verify`**.
+
+`-Verify` must RE-DERIVE a sample of the output from its source and compare. It
+must never inspect the output's shape. On 2026-09-13 a five-hour face run was
+corrupt in a way where every row was well-formed, every vector had unit norm,
+every count was plausible and the exit code was 0. **Validity is not
+correctness.** Only recomputing the answer separates them.
+
+`tests/test_chain_gating.py` fails the build if any chain launches a subprocess
+outside `Invoke-Step`, or declares a step without a `-Verify`, or calls
+`Invoke-Step` without loading it. Run the four test files before trusting a
+change.
+
+### When `PHASE 3B COMPLETE` appears
 
 ```powershell
-python tools\geocode_library.py            # count first
-python tools\geocode_library.py --apply    # ~24,000 files gain a place name, free
-python tools\build_db.py                   # library.db: SQLite + FTS5
+python tools\verify_faces.py --sample 20     # prove it before building on it
+python tools\build_db.py                     # rebuild the index with faces
 ```
 
-Already run once ad hoc on 2026-09-12 while faces ran overnight: 33,841 files geocoded
-(`c5a5ff4`, `6bef342`), `library.db` built at 82,193 files and 752,200 tag rows
-(`6bef342`). Both are idempotent, so re-running after `PHASE 3B COMPLETE` to pick up
-the finished face pass is safe, not a redo.
+Then, in order, and only the first is autonomous:
 
-Then the three that need judgement, in this order:
-
-1. **Re-run the receipt sweep.** The first ran against a 60%-classified library.
-   **Do not widen the pattern** - the next matches are a PAN card, an HMRC
-   letter, a bank statement, a Form 1042-S. Those are identity records for
+1. **Re-run the receipt sweep** now the library is fully classified. **Do not
+   widen the pattern** - the next matches are a PAN card, an HMRC letter, a bank
+   statement, a Form 1042-S. Those are identity records for
    `Archive\Personal\01-Identity\`, not a deletion sweep.
-2. **Cluster the faces and name the top ~50.** This is the game's first session
-   and the highest-leverage work in the project: one answer labels hundreds to
-   thousands of files. Record it through `engine/answers.py`, never by editing
-   the store or the database.
+2. **Cluster faces, then Krish names the top ~50.** The highest-leverage hour in
+   the project: one answer labels hundreds of files. Record it through
+   `engine/answers.py`, never by editing the store or the database.
 3. **Segment** the 9,833 `Pending-Segmentation` (Krish approved Personal as the
-   default), the 5,844 `_Review` and the 2,876 `NoDate`, and flatten the 227
-   files still carrying raw Windows profile paths up to 16 deep. Moving files
-   invalidates the path->hash index, so it happens once, cleanly, with the index
-   updated in the same step.
+   default), 5,844 `_Review`, 2,876 `NoDate`, and flatten the 227 files still
+   carrying raw Windows profile paths up to 16 deep.
+4. **Mirror to H:**, then purge Elements - in that order, never the reverse.
+
+### Open questions Krish has NOT answered
+
+- **Face coverage.** Detection only opens images the classifier said contain a
+  person, so **23,835 photographs are never examined**. A 300-image sample was
+  run on 2026-09-13 to size the loss; see `tools/sample_missed_faces.py` and the
+  history log for the result. Closing it fully costs about 11 hours.
+- **Descriptive richness.** The median `subject` is FOUR WORDS - "rocky coastal
+  cliff". It is enough to find things, not to read them. A richer pass costs
+  about $27 and 12 hours and is not scheduled.
+- **`_Review`** has no agreed rule. A rule got this wrong once at 13,446 files.
 
 ### Do not
 
-- **Re-arm while work is running** unless you mean it. `arm.ps1` reaps orphaned
-  workers now, but a re-arm restarts the chain from step 3b.
-- **Run memory-hungry jobs alongside the chain.** Something on this box kills
-  long jobs under memory pressure; tracked background commands are the first to
-  go, and it killed a benchmark today for exactly this reason.
-- **Write human answers anywhere but `engine/answers.py`.** Everything else here
-  is derived and can be rebuilt for money or time. A person's judgement cannot.
+- **Write a human answer anywhere but `engine/answers.py`.** Everything else is
+  derived and can be rebuilt for money or time. A person's judgement cannot.
+- **Delete from Elements.** It is the only second copy until the H: mirror
+  exists. D: (Boogles) has 3.7 TB free - there is no space pressure to relieve.
+- **Run memory-hungry jobs beside the chain.** Something kills long jobs on this
+  box under memory pressure. It can no longer corrupt anything, but it costs
+  restarts.
 
 ----
 
