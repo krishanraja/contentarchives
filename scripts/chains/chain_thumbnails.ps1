@@ -32,6 +32,12 @@ if (Test-Path 'D:\_PhotoAudit\H-COPY-FAILURES.csv') {
 $env:PYTHONIOENCODING = 'utf-8'
 $eng = 'C:\Users\krish\dev\contentarchives\engine\thumbnail.py'
 . "$PSScriptRoot\steps.ps1"
+# A supervisor that failed to load is indistinguishable from one that approved
+# everything, because PowerShell reports an unknown command and carries on.
+if (-not (Get-Command Invoke-Step -ErrorAction SilentlyContinue)) {
+    Say 'STOPPED: steps.ps1 did not load - nothing could be supervised.'
+    exit 1
+}
 
 # Stop-Chain is what Invoke-Step calls on a failed guard; this chain had no such
 # concept, so give it one rather than let the runner throw an unhandled error.

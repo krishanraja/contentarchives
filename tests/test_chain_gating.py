@@ -157,6 +157,25 @@ def main():
             print("  {:<28} allowed: {}".format(fn, ALLOW[fn]))
             continue
         checked += 1
+
+        # A chain that CALLS Invoke-Step without dot-sourcing steps.ps1 is worse
+        # than one that never used it: PowerShell reports an unknown command and
+        # carries on by default, so every step is skipped in silence and the
+        # chain prints its completion message anyway. That happened on
+        # 2026-09-13 - "faces done" and "PHASE 3B COMPLETE" at 02:06, with no
+        # faces run at all - because an edit inserting the dot-source aborted
+        # before writing while the calls landed. The structural check is cheap.
+        joined = "\n".join(text)
+        if re.search(r"^\s*Invoke-Step\b", joined, re.M):
+            if not re.search(r"^\s*\.\s+[\"'][^\"']*steps\.ps1[\"']", joined, re.M):
+                failures.append((fn, [(0, "calls Invoke-Step but never dot-sources steps.ps1")]))
+                print("  {:<28} CALLS Invoke-Step WITHOUT LOADING IT".format(fn))
+                continue
+            if not re.search(r"Get-Command\s+Invoke-Step", joined):
+                failures.append((fn, [(0, "dot-sources steps.ps1 but never asserts it loaded")]))
+                print("  {:<28} no assertion that steps.ps1 actually loaded".format(fn))
+                continue
+
         gated = blocks_of(text)
         hits = []
         for i, ln in enumerate(text):

@@ -1359,3 +1359,51 @@ $errs = $null
 and check the *meaning* of a status string against the tool's own vocabulary
 rather than against ordinary English. Both of these were caught by a parser and
 by a cross-check, not by review.
+
+## 44. A guard that did not load is indistinguishable from a guard that passed
+
+At 02:06 the chain printed `faces done` and `PHASE 3B COMPLETE` having run no
+faces at all. Every step before it logged `skipping ... (already done)`, the task
+exited 0, and the monitor reported completion. Everything about the output said
+success.
+
+The chain called `Invoke-Step` six times and never dot-sourced the file that
+defines it. An edit that inserted the dot-source had aborted on an assertion
+before writing the file, while the `Invoke-Step` calls - added separately, with
+a different tool - landed fine. PowerShell's default on an unknown command is to
+write an error to stderr and **carry on**, and a scheduled task's stderr goes
+nowhere anybody reads. So every supervised step silently evaporated and the
+unconditional `Say 'faces done'` on the next line printed as though it had run.
+
+The safeguard system built that same evening, specifically to stop work
+reporting success without doing anything, failed in exactly that way - because
+nothing verified that the safeguard itself was installed.
+
+**The rule.** Loading a guard and having a guard are different facts, and only
+one of them is visible. Assert the guard exists, immediately after loading it
+and before anything depends on it:
+
+```powershell
+. "$PSScriptRoot\steps.ps1"
+if (-not (Get-Command Invoke-Step -ErrorAction SilentlyContinue)) {
+    Say 'STOPPED: steps.ps1 did not load'; exit 1
+}
+```
+
+`tests/test_chain_gating.py` now fails a chain that calls `Invoke-Step` without
+dot-sourcing `steps.ps1`, and one that dot-sources it without asserting it
+loaded. The test previously passed this chain, because it checked that launches
+sat inside `Invoke-Step` blocks textually and never asked whether `Invoke-Step`
+would exist at run time. Structure is not availability.
+
+**The tell.** A completion message that is a separate statement from the work it
+describes. `Say 'faces done'` sat on the line after the step rather than inside
+it, so it could not tell the difference between a step that finished and a step
+that never happened. Any log line asserting success should be produced BY the
+thing that succeeded, not next to it.
+
+**The second tell.** An edit that reports an error and a later edit that reports
+success, against the same file. The first left the file untouched; the second
+assumed the first had applied. When a multi-part change is made by more than one
+tool, verify the parts together afterwards - `grep` for the thing that should
+now be there - rather than trusting each step's own report.

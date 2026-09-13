@@ -91,6 +91,23 @@ if (Test-Path $halt) {
 }
 
 
+# Invoke-Step is the only sanctioned way to run work here: it makes a preflight,
+# a progress signal and a postcondition mandatory, checkpoints long runs, and
+# refuses a step that is alive but achieving nothing.
+#
+# THE ASSERTION BELOW IS NOT DECORATION. On 2026-09-13 this dot-source was
+# missing - an edit that inserted it aborted before writing the file, while the
+# Invoke-Step CALLS landed fine. PowerShell's default is to report an unknown
+# command and CARRY ON, so the chain skipped every step in silence and printed
+# "faces done" and "PHASE 3B COMPLETE" at 02:06 having run no faces at all. A
+# guard that is not loaded is indistinguishable from a guard that passes, which
+# makes a missing supervisor worse than no supervisor.
+. "$PSScriptRoot\steps.ps1"
+if (-not (Get-Command Invoke-Step -ErrorAction SilentlyContinue)) {
+    Say 'STOPPED: steps.ps1 did not load - Invoke-Step is unavailable, so no step could be supervised.'
+    exit 1
+}
+
 # What is still outstanding, asked of the store rather than assumed. Returns
 # @(files, estimated_usd), or @(-1, 0) if the answer could not be read - which
 # is treated as a stop, not as zero.
