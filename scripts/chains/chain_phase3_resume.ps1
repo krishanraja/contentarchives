@@ -345,19 +345,27 @@ if (Should-Run 'B') {
     Say 'step B done'
 }
 
-# Three shards, not six. Measured on this machine 2026-09-12: one shard does
-# 0.85 images/sec and peaks at 630 MB. The CPU is an i5-1135G7 - FOUR physical
-# cores - and detection runs on CPUExecutionProvider, so six shards each taking
-# an onnxruntime thread pool oversubscribe the cores several times over and add
-# contention rather than throughput. Six would also hold ~3.8 GB against ~2.7 GB
-# free, and memory pressure is what has been killing long jobs on this box all
-# day. Three holds ~1.9 GB and still saturates four cores.
+# ONE shard. Not three, and certainly not six. Measured on this machine at 02:30
+# on 2026-09-13, same library, same thumbnails, 150-second samples after letting
+# the model load:
 #
-# Aggregate throughput is CPU-bound at roughly 1 image/sec whatever the shard
-# count, so the 51,797 images with a face in them are an overnight job. Shard
-# count is a safety choice here, not a speed one. The lever that WOULD change
-# the runtime is --det-size, and it trades away small and distant faces, so it
-# is Krish's call rather than a default to quietly change.
+#     1 shard   107 face rows/min      <- fastest by half again
+#     2 shards   70 face rows/min
+#     3 shards   70 face rows/min
+#
+# Parallelism actively HURTS here, which is the opposite of the assumption the
+# six-shard original was built on. onnxruntime already spreads one session
+# across all four physical cores of this i5-1135G7, so a second process does not
+# find idle cores to use - it takes threads and cache from the first, and adds
+# ~450 MB on a box that has been killing jobs at ~1 GB free all day.
+#
+# The three-shard run was on track for about 30 hours. One shard is about 20.
+# That difference was invisible until a checkpoint measured the real rate and
+# reported it, which is the entire argument for checkpoints.
+#
+# The remaining lever is --det-size, which trades away small and distant faces -
+# in a family library that means people in group shots and backgrounds. That is
+# Krish's call, not a default to quietly change, so it stays at 512.
 #
 # Resumability is by content hash in faces.csv, not by shard, so changing the
 # shard count never re-does an image that is already embedded.
@@ -386,7 +394,12 @@ if (Should-Run 'C') {
             (Get-Content $_.FullName -ErrorAction SilentlyContinue | Measure-Object -Line).Lines
         } | Measure-Object -Sum).Sum
     }
-    Invoke-Step -Name 'C faces' -ExpectedUnits 51797 -CheckpointMin 15 -StallStrikes 3 `
+    # ExpectedUnits must be in the SAME UNIT as -Progress, and -Progress counts
+    # face ROWS, not images. Set to 51,797 (images) it produced an ETA of 720
+    # minutes for work that was really ~131,000 rows away - the recalibration
+    # said half the truth, confidently. Measured on this library: 2.75 faces per
+    # image across 47,721 images with a face in them.
+    Invoke-Step -Name 'C faces' -ExpectedUnits 131000 -CheckpointMin 15 -StallStrikes 3 `
         -Preflight {
             # Fourteen hours is the most expensive thing in this pipeline, so the
             # mechanism is proved on fifteen images first. Two conditions, because
@@ -411,26 +424,41 @@ if (Should-Run 'C') {
             return $true
         } `
         -Start {
-            Say 'faces: three shards (4 cores; six oversubscribes them)'
-            $jobs = @()
-            foreach ($i in 0..2) {
-                $jobs += Start-Process python -PassThru -WindowStyle Hidden -ArgumentList @(
-                    '-u', "$repo\engine\faces_embed.py", '--thumbs', 'D:\_thumbs',
-                    '--store', 'D:\_enrichment', '--shard', "$i/3"
-                ) -RedirectStandardOutput "D:\_PhotoAudit\faces-$i.log" -RedirectStandardError "D:\_PhotoAudit\faces-$i.err"
-            }
-            Say ("face shards: " + ($jobs.Id -join ', '))
+            # Stale shard logs would poison the postcondition, which reads each
+            # shard's own "images to look at" line - a leftover log from a
+            # different shard count reports thousands outstanding for ever.
+            Remove-Item 'D:\_PhotoAudit\faces-*.log' -ErrorAction SilentlyContinue
+            Say 'faces: ONE shard (measured: 1 is 1.5x faster than 2 or 3 here)'
+            $jobs = @(Start-Process python -PassThru -WindowStyle Hidden -ArgumentList @(
+                '-u', "$repo\engine\faces_embed.py", '--thumbs', 'D:\_thumbs',
+                '--store', 'D:\_enrichment', '--shard', "0/1"
+            ) -RedirectStandardOutput 'D:\_PhotoAudit\faces-0.log' `
+              -RedirectStandardError  'D:\_PhotoAudit\faces-0.err')
+            Say ("face shard: " + ($jobs.Id -join ', '))
             return $jobs
         } `
         -Progress { Count-FaceRows } `
         -Postcondition {
-            # Three shards must ALL have produced something. One silently
-            # selecting nothing would look identical to one that finished, and
-            # the shard count changed from 6 to 3 today.
-            $files = Get-ChildItem 'D:\_enrichment\faces.*.csv' -ErrorAction SilentlyContinue
-            Say ("  shard files: {0}, total face rows: {1:N0}" -f $files.Count, (Count-FaceRows))
-            if ($files.Count -lt 3) { Say '  fewer than three shard files'; return $false }
-            return ((Count-FaceRows) -gt 0)
+            # "Rows exist" is far too weak. Every shard prints how many images it
+            # had to look at; a finished run must have looked at essentially all
+            # of them. Without this, killing two of three shards leaves the step
+            # reporting success with a third of the library unprocessed - which
+            # is exactly what nearly happened while tuning the shard count.
+            $remaining = 0
+            foreach ($f in (Get-ChildItem 'D:\_PhotoAudit\faces-*.log' -ErrorAction SilentlyContinue)) {
+                $m = Select-String -Path $f.FullName -Pattern 'shard \S+: ([\d,]+) images to look at' |
+                     Select-Object -Last 1
+                if ($m) { $remaining += [int]($m.Matches[0].Groups[1].Value -replace ',', '') }
+            }
+            $rows = Count-FaceRows
+            Say ("  face rows: {0:N0}; images still outstanding per the shard logs: {1:N0}" -f $rows, $remaining)
+            if ($rows -le 0) { Say '  no face rows at all'; return $false }
+            # A shard that finished re-reports 0 outstanding on its final line.
+            if ($remaining -gt 500) {
+                Say "  $remaining images were never looked at - this step did not finish"
+                return $false
+            }
+            return $true
         }
     Say 'faces done'
 }
