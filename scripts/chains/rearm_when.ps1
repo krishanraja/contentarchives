@@ -110,7 +110,22 @@ while ((Get-Date) -lt $deadline) {
         # cannot silently change what is being waited for.
         if ((Get-NewText).Contains($Marker)) {
             Note "saw '$Marker' - re-arming with: $ChainArgs"
-            & (Join-Path $here 'arm.ps1') -Chain $Chain -ChainArgs $ChainArgs *>> $Log
+            # NOT `*>> $Log`. That appends to the chain's own log - the file the
+            # chain is writing at the very moment this fires, because this fires
+            # ON something the chain just wrote. On 2026-09-13 at 02:03:15 that
+            # collided, threw under ErrorActionPreference='Stop', and killed the
+            # watcher with exit 1 and NO error recorded anywhere, because the
+            # thing that failed was the logging. The chain sailed on ungated.
+            #
+            # A watcher must never write to the file it is watching.
+            try {
+                & (Join-Path $here 'arm.ps1') -Chain $Chain -ChainArgs $ChainArgs *>&1 |
+                    ForEach-Object { Note "  arm: $_" }
+            } catch {
+                Note "FAILED to re-arm: $_"
+                Note "the chain is still running whatever it was running - check it by hand"
+                exit 1
+            }
             Note "re-armed. Unregistering self so this cannot fire twice."
             Unregister-ScheduledTask -TaskName $TaskName -Confirm:$false -ErrorAction SilentlyContinue
             exit 0
