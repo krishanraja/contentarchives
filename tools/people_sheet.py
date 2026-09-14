@@ -47,21 +47,128 @@ OUT = r"D:\_PhotoAudit\PEOPLE.html"
 
 HEAD = """<!doctype html><meta charset="utf-8"><title>Who is this?</title>
 <style>
- body{font:14px/1.5 system-ui,sans-serif;margin:24px;background:#111;color:#eee}
- h1{font-size:20px;margin:0 0 4px} .sub{color:#999;margin-bottom:24px}
+ body{font:14px/1.5 system-ui,sans-serif;margin:24px 24px 140px;background:#111;color:#eee}
+ h1{font-size:20px;margin:0 0 4px} .sub{color:#999;margin-bottom:20px}
  .row{border-top:1px solid #333;padding:14px 0;display:flex;gap:16px;align-items:flex-start}
- .meta{min-width:250px}
+ .row.done{background:#14210f}
+ .row.skip{opacity:.4}
+ .meta{min-width:260px}
  .id{font-size:17px;font-weight:600}
  .n{color:#9ad;font-size:13px}
- code{background:#222;padding:3px 6px;border-radius:4px;font-size:12px;
-      color:#8f8;display:inline-block;margin-top:6px;user-select:all}
+ .yr{color:#777;font-size:12px;margin-bottom:8px}
+ input[type=text]{width:190px;padding:7px 9px;font-size:15px;border-radius:6px;
+   border:1px solid #444;background:#1c1c1c;color:#fff}
+ input[type=text]:focus{outline:2px solid #4a8;border-color:#4a8}
+ .skipbtn{margin-left:6px;padding:7px 9px;font-size:12px;border-radius:6px;
+   border:1px solid #444;background:#1c1c1c;color:#aaa;cursor:pointer}
  .faces img{height:104px;width:104px;object-fit:cover;border-radius:6px;
             margin:0 5px 5px 0;background:#222}
- .yr{color:#777;font-size:12px}
+ #bar{position:fixed;left:0;right:0;bottom:0;background:#000;border-top:1px solid #333;
+   padding:12px 24px;display:flex;gap:16px;align-items:center;flex-wrap:wrap}
+ #bar b{color:#8f8}
+ button.primary{padding:10px 16px;font-size:15px;border-radius:8px;border:0;
+   background:#2d7;color:#052;font-weight:600;cursor:pointer}
+ button.ghost{padding:10px 14px;font-size:13px;border-radius:8px;
+   border:1px solid #444;background:#1c1c1c;color:#ccc;cursor:pointer}
+ #out{width:100%;height:96px;margin-top:10px;background:#1c1c1c;color:#8f8;
+   border:1px solid #444;border-radius:6px;padding:8px;font-family:ui-monospace,monospace;
+   font-size:12px;display:none}
 </style>
 <h1>Who is this?</h1>
-<div class="sub">One row per person. Naming a row labels every photograph in it.
-Copy the command, or just tell Claude "c14 is Mum".</div>
+<div class="sub">Type a name, press <b>Enter</b> to jump to the next one. Blank rows are ignored.
+Names are kept in this browser, so you can close it and come back.
+When you are done, hit <b>Copy all answers</b> and paste them to Claude.</div>
+"""
+
+TAIL = """
+<div id="bar">
+  <div><b id="tally">0</b> named &middot; <b id="reach">0</b> photographs covered</div>
+  <button class="primary" onclick="copyAll()">Copy all answers</button>
+  <button class="ghost" onclick="clearAll()">Clear</button>
+  <span id="msg" style="color:#8f8"></span>
+  <textarea id="out" readonly></textarea>
+</div>
+<script>
+// Kept in localStorage so a closed tab is not a lost hour. It is only a
+// convenience copy - the real record is the answers journal, written when these
+// are pasted back and recorded through engine/answers.py.
+const KEY = 'contentarchives.people.v1';
+const saved = JSON.parse(localStorage.getItem(KEY) || '{}');
+
+function rows() { return Array.from(document.querySelectorAll('.row')); }
+
+function refresh() {
+  let n = 0, reach = 0;
+  rows().forEach(r => {
+    const inp = r.querySelector('input');
+    const v = (inp.value || '').trim();
+    r.classList.toggle('done', !!v && v !== '-');
+    r.classList.toggle('skip', v === '-');
+    if (v && v !== '-') { n++; reach += parseInt(r.dataset.photos, 10) || 0; }
+  });
+  document.getElementById('tally').textContent = n;
+  document.getElementById('reach').textContent = reach.toLocaleString();
+}
+
+function save() {
+  const o = {};
+  rows().forEach(r => {
+    const v = (r.querySelector('input').value || '').trim();
+    if (v) o[r.dataset.cid] = v;
+  });
+  localStorage.setItem(KEY, JSON.stringify(o));
+  refresh();
+}
+
+function answers() {
+  return rows().map(r => {
+    const v = (r.querySelector('input').value || '').trim();
+    return (v && v !== '-') ? r.dataset.cid + ' = ' + v : null;
+  }).filter(Boolean).join('\\n');
+}
+
+function copyAll() {
+  const txt = answers();
+  const msg = document.getElementById('msg');
+  if (!txt) { msg.textContent = 'nothing named yet'; return; }
+  const out = document.getElementById('out');
+  // Shown as well as copied: this is a file:// page, where the clipboard API is
+  // often blocked, and a button that silently does nothing is worse than a
+  // textarea you can select.
+  out.style.display = 'block';
+  out.value = txt;
+  out.select();
+  let ok = false;
+  try { ok = document.execCommand('copy'); } catch (e) {}
+  if (navigator.clipboard) { navigator.clipboard.writeText(txt).catch(() => {}); }
+  msg.textContent = ok ? 'copied - paste it to Claude' : 'select the text below and copy';
+}
+
+function clearAll() {
+  if (!confirm('Clear every name you have typed?')) return;
+  rows().forEach(r => r.querySelector('input').value = '');
+  localStorage.removeItem(KEY);
+  document.getElementById('out').style.display = 'none';
+  refresh();
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  const inputs = rows().map(r => r.querySelector('input'));
+  rows().forEach((r, i) => {
+    const inp = inputs[i];
+    if (saved[r.dataset.cid]) inp.value = saved[r.dataset.cid];
+    inp.addEventListener('input', save);
+    inp.addEventListener('keydown', e => {
+      if (e.key === 'Enter') { e.preventDefault(); (inputs[i+1] || inp).focus(); }
+    });
+    r.querySelector('.skipbtn').addEventListener('click', () => {
+      inp.value = inp.value === '-' ? '' : '-';
+      save();
+    });
+  });
+  refresh();
+});
+</script>
 """
 
 
@@ -156,16 +263,20 @@ def main() -> int:
         if not imgs:
             continue
         out.append(
-            '<div class="row"><div class="meta"><div class="id">{cid}</div>'
+            '<div class="row" data-cid="{cid}" data-photos="{n}">'
+            '<div class="meta"><div class="id">{cid}</div>'
             '<div class="n">{n:,} photographs</div>'
             '<div class="yr">{span}</div>'
-            '<code>j.record("cluster", "{cid}", "person", "NAME")</code>'
+            '<input type="text" placeholder="who is this?" autocomplete="off" '
+            'spellcheck="false">'
+            '<button class="skipbtn" title="not a person / skip">&ndash;</button>'
             '</div><div class="faces">{imgs}</div></div>'.format(
                 cid=cid, n=len(hashes), span=span, imgs="".join(imgs)))
         print("  {:<8} {:>6,} photographs  {}".format(cid, len(hashes), span))
 
     out.append('<p class="sub" style="margin-top:24px">{} rows shown, '
                'covering {:,} photographs.</p>'.format(len(ranked), total))
+    out.append(TAIL)
     io.open(a.out, "w", encoding="utf-8").write("".join(out))
     print()
     print("wrote {}  ({:.1f} MB)".format(a.out, os.path.getsize(a.out) / 1048576))
