@@ -81,7 +81,11 @@ OUT = os.path.join(MS.AUDIT, "library.db")
 
 # Fields a human or a geocoder may override, resolved into one value per file.
 RESOLVED = ["kind", "people", "subject", "keep", "sensitivity", "setting",
-            "place", "region", "country", "era", "person", "event"]
+            "place", "region", "country", "era", "person", "event",
+            # from the description pass - the sentence, the things in it, and
+            # any text legible in the image, which is what makes a photograph
+            # findable by a word nobody ever typed
+            "description", "objects", "activity", "text", "occasion", "mood"]
 
 
 def connect(path: str) -> sqlite3.Connection:
@@ -310,16 +314,21 @@ def build_views(db: sqlite3.Connection) -> None:
     db.executescript("""
     CREATE VIRTUAL TABLE search USING fts5(
         path, subject, place, region, country, person, event, kind, era,
+        description, objects, activity, text, occasion, mood,
         tokenize = 'porter unicode61'
     );
     """)
     db.execute("""
     INSERT INTO search (path, subject, place, region, country, person, event,
-                        kind, era)
+                        kind, era, description, objects, activity, text,
+                        occasion, mood)
     SELECT path,
            COALESCE(subject,''), COALESCE(place,''), COALESCE(region,''),
            COALESCE(country,''), COALESCE(person,''), COALESCE(event,''),
-           COALESCE(kind,''), COALESCE(era,'')
+           COALESCE(kind,''), COALESCE(era,''),
+           COALESCE(description,''), COALESCE(objects,''),
+           COALESCE(activity,''), COALESCE(text,''),
+           COALESCE(occasion,''), COALESCE(mood,'')
     FROM v_files
     """)
 

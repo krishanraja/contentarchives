@@ -1498,3 +1498,42 @@ measure and correctness is not - so the cheap thing gets built, satisfies the
 shape of the request, and is defended as compliance. When a requirement is
 expensive, check whether what was built is the requirement or its convenient
 neighbour.
+
+## 47. A postcondition that reads a startup line can never pass
+
+At 07:57 on 2026-09-14 the face step finished perfectly - 47,284 images examined,
+117,866 faces written, and `final verify OK` two lines earlier confirming by
+recomputation that the embeddings were correct. The very next line halted the
+chain: `postcondition FAILED. The step finished without doing what it claims to
+do.`
+
+It had. The postcondition was wrong, and wrong in a way that made it
+**structurally incapable of succeeding**. It counted outstanding work by parsing
+
+    shard 0/1: 47,284 images to look at, 721 already done
+
+out of the shard log. That line is printed ONCE, AT STARTUP, saying what was
+outstanding at the moment the run began, and is never rewritten. So a flawless
+run ends with the log still declaring 47,284 outstanding, the check compares that
+against its threshold of 500, and fails. Every time. Under all circumstances.
+
+It had never run to completion before, so it had never been wrong out loud.
+
+**The rule.** A completion check must ask the system what is true NOW, not read
+what something announced earlier. Re-invoking `faces_embed` recomputes the
+outstanding set from the store and the thumbnail cache and prints `0 images to
+look at` - a fact, cheap to obtain, and impossible to confuse with a stale
+announcement. The same distinction runs through this whole project: the classify
+loop asks the store rather than counting its own attempts, and `--only-list`
+broke precisely because a number that looked like a countdown was a constant.
+
+**The tell.** A check that parses a log rather than querying a source of truth.
+Logs are a narration of the past; a postcondition is a question about the
+present. If the only evidence a guard has is something the program said about
+its own intentions at startup, it is measuring intent, not outcome.
+
+**The second tell, which is the expensive one.** A guard whose passing path has
+never executed. This one had run four times and failed in the same way once, at
+the only moment it mattered. Ask of any new guard: *have I seen this succeed?*
+If it has only ever been exercised on the failure side - or not at all - it is
+untested code sitting on the critical path, holding a veto.

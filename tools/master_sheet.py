@@ -87,6 +87,7 @@ OUT = os.path.join(AUDIT, "MASTER.csv")
 # taken than a model's guess from the pixels, and worse evidence than Krish
 # saying where he was.
 SOURCE_RANK = {"human": 0, "geonames": 1, "google/gemini-3.1-flash-lite": 2,
+               "google/gemini-3.1-flash-lite-rich": 2,
                "google/gemini-3.5-flash-lite": 3, "model:haiku": 4}
 # Fields where a model disagreeing with another model is recorded rather than
 # resolved. Only `kind` so far, because only `kind` has been shown to need it.
@@ -107,10 +108,19 @@ APPLIES = {"Duration": {"video"},
            "Width": {"image", "video"}, "Height": {"image", "video"}}
 # Geotags exist only if the camera wrote them. This can never reach 100% and is
 # reported separately so it does not drag the mission number down for ever.
-OPPORTUNISTIC = {"Lat", "Lon", "place", "region", "country"}
+OPPORTUNISTIC = {"Lat", "Lon", "place", "region", "country",
+                 "objects", "text", "occasion", "mood", "activity"}
+
+# The description pass (classify_live --rich) writes these under its own source
+# id. They are additive: `subject` is still the four-word label, and these are
+# the sentence, the objects, the transcribed text, the occasion and the mood.
+# OPPORTUNISTIC below excludes them from the completeness score, because a
+# photograph of a blank wall legitimately has no legible text and should not drag
+# the number down for ever.
+RICH = ["description", "objects", "activity", "text", "occasion", "mood"]
 
 ENRICH = ["kind", "people", "subject", "keep", "sensitivity", "setting",
-          "place", "region", "country", "era"]
+          "place", "region", "country", "era"] + RICH
 TECH = ["Bytes", "Ext", "DateTaken", "DateSource", "Make", "Model",
         "Width", "Height", "Duration", "Lat", "Lon"]
 COLS = (["LibraryPath", "Hash", "Side", "Year", "Month"] + TECH

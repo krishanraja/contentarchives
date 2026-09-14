@@ -528,18 +528,30 @@ if (Should-Run 'C') {
             # of them. Without this, killing two of three shards leaves the step
             # reporting success with a third of the library unprocessed - which
             # is exactly what nearly happened while tuning the shard count.
-            $remaining = 0
-            foreach ($f in (Get-ChildItem 'D:\_PhotoAudit\faces-*.log' -ErrorAction SilentlyContinue)) {
-                $m = Select-String -Path $f.FullName -Pattern 'shard \S+: ([\d,]+) images to look at' |
-                     Select-Object -Last 1
-                if ($m) { $remaining += [int]($m.Matches[0].Groups[1].Value -replace ',', '') }
-            }
+            # ASK THE TOOL WHAT IS LEFT. Do not read a number out of the log.
+            #
+            # This used to parse "shard 0/1: N images to look at" from faces-0.log
+            # - a line printed ONCE AT STARTUP saying how many were outstanding
+            # then, and never rewritten. So after a flawless run it still read
+            # 47,284, and the postcondition could not pass under any
+            # circumstances. It halted the chain at 07:57 on 2026-09-14, two
+            # lines after "final verify OK", on a run that had just examined
+            # 47,284 images and written 117,866 faces perfectly.
+            #
+            # Re-invoking faces_embed recomputes the outstanding set from the
+            # store and the thumbnail cache and prints what is ACTUALLY left,
+            # which is a fact rather than a stale announcement.
             $rows = Count-FaceRows
-            Say ("  face rows: {0:N0}; images still outstanding per the shard logs: {1:N0}" -f $rows, $remaining)
             if ($rows -le 0) { Say '  no face rows at all'; return $false }
-            # A shard that finished re-reports 0 outstanding on its final line.
-            if ($remaining -gt 500) {
-                Say "  $remaining images were never looked at - this step did not finish"
+            $out = & python "$repo\engine\faces_embed.py" --thumbs D:\_thumbs `
+                     --store D:\_enrichment --shard 0/1 --limit 1 2>&1 | Out-String
+            $m = [regex]::Match($out, 'images to look at')
+            $left = [regex]::Match($out, '([\d,]+) images to look at')
+            $n = if ($left.Success) { [int]($left.Groups[1].Value -replace ',', '') } else { -1 }
+            Say ("  face rows {0:N0}; images genuinely still outstanding: {1}" -f $rows, $n)
+            if ($n -lt 0) { Say '  could not read the outstanding count'; return $false }
+            if ($n -gt 200) {
+                Say "  $n images were never looked at - this step did not finish"
                 return $false
             }
             return $true
