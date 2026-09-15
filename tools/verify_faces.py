@@ -45,6 +45,8 @@ def main() -> int:
         formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--csv", default=r"D:\_enrichment\faces.0.csv")
     ap.add_argument("--thumbs", default=r"D:\_thumbs")
+    ap.add_argument("--frames", default=r"D:\_frames",
+                    help="for faces.video.csv, whose rows name their frame")
     ap.add_argument("--sample", type=int, default=8)
     ap.add_argument("--quiet", action="store_true")
     a = ap.parse_args()
@@ -85,7 +87,11 @@ def main() -> int:
     checked = mismatch = 0
     for r in picks:
         h = r["hash"]
-        p = os.path.join(a.thumbs, h[:2], h + ".jpg")
+        # a video face is re-derived from the frame it was found in
+        if r.get("image"):
+            p = os.path.join(a.frames, h[:2], r["image"] + ".jpg")
+        else:
+            p = os.path.join(a.thumbs, h[:2], h + ".jpg")
         if not os.path.exists(p):
             continue
         try:

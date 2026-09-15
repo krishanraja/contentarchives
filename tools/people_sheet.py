@@ -45,6 +45,9 @@ FACES = r"D:\_enrichment\faces.0.csv"
 THUMBS = r"D:\_thumbs"
 OUT = r"D:\_PhotoAudit\PEOPLE.html"
 ASSIGN = r"D:\_PhotoAudit\FACE-CLUSTERS.csv"
+# video faces, from assign_video_faces.py; each row names the FRAME it came from
+VIDEO_ASSIGN = r"D:\_PhotoAudit\FACE-CLUSTERS-VIDEO.csv"
+FRAMES = r"D:\_frames"
 MERGES = r"D:\_PhotoAudit\CLUSTER-MERGES.csv"
 # os.path.join, not a literal with a backslash in it. This line was generated
 # as "D:\_enrichment\answers.csv", the backslash-a became a BEL character,
@@ -216,6 +219,8 @@ def main() -> int:
     ap.add_argument("--assign", default=ASSIGN,
                     help="per-face cluster assignments from cluster_faces.py")
     ap.add_argument("--thumbs", default=THUMBS)
+    ap.add_argument("--video-assign", default=VIDEO_ASSIGN)
+    ap.add_argument("--frames", default=FRAMES)
     ap.add_argument("--out", default=OUT)
     ap.add_argument("--top", type=int, default=60)
     ap.add_argument("--per-row", type=int, default=12)
@@ -247,6 +252,14 @@ def main() -> int:
                                     errors="replace", newline="")):
         if r.get("bbox"):
             clusters[group_of.get(r["cluster"], r["cluster"])].append(r)
+    if os.path.exists(a.video_assign):
+        nv = 0
+        for r in csv.DictReader(io.open(a.video_assign, encoding="utf-8",
+                                        errors="replace", newline="")):
+            if r.get("bbox"):
+                clusters[group_of.get(r["cluster"], r["cluster"])].append(r)
+                nv += 1
+        print("video faces: {:,}".format(nv))
     print("face groups: {:,}".format(len(clusters)))
 
     # Already answered? Do not ask again. A name recorded by a human covers the
@@ -308,7 +321,11 @@ def main() -> int:
         for r in cand:
             if len(imgs) >= a.per_row:
                 break
-            p = os.path.join(a.thumbs, r["hash"][:2], r["hash"] + ".jpg")
+            # a video face's box was measured on its frame, not the thumbnail
+            if r.get("image"):
+                p = os.path.join(a.frames, r["hash"][:2], r["image"] + ".jpg")
+            else:
+                p = os.path.join(a.thumbs, r["hash"][:2], r["hash"] + ".jpg")
             if not os.path.exists(p):
                 continue
             b64 = crop(p, r["bbox"])

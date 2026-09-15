@@ -1,6 +1,7 @@
 r"""Detect and embed faces, but only where the classifier says a face exists.
 
     python faces_embed.py --thumbs D:\_thumbs --store D:\_enrichment --shard 0/6
+    python faces_embed.py --frames D:\_frames --store D:\_enrichment
 
 WHY THIS IS CHEAP
 
@@ -15,10 +16,20 @@ found 1, or said 4 and found none: both happen, and the detector wins, because
 it is the thing that actually located a face. The count is only used to decide
 whether looking is worthwhile.
 
+VIDEO FRAMES (--frames)
+
+The filter above was built from ONE thumbnail per video, taken 10% in. A video
+whose thumbnail showed nobody can be full of people three minutes later, so
+--frames reads every frame video_face_frames.py sampled, with no filter at all.
+It writes faces.video.csv, which carries the frame each face came from, because
+a bounding box is meaningless without the image it was measured on - drawing a
+frame's box on the video's thumbnail crops a stranger or a wall.
+
 WHAT IT WRITES
 
-  faces.csv    one row per detected face: hash, index, bbox, detector score,
-               and the 512-d embedding itself, base64 of float16, in the row
+  faces.csv        one row per detected face: hash, index, bbox, detector score,
+                   and the 512-d embedding itself, base64 of float16, in the row
+  faces.video.csv  the same, plus `image`: the frame the face was found in
 
 ONE FILE, BECAUSE TWO FILES DRIFTED APART AND CORRUPTED 11,000 IMAGES
 
@@ -49,7 +60,11 @@ RESUMABLE AND SHARDED
 
 Shards split on a hash of the file path, deterministic and disjoint, so six
 workers never touch the same image and none of them need to coordinate. A hash
-already in faces.csv is skipped, so a killed run resumes where it stopped.
+already in faces.csv is skipped, so a killed run resumes where it stopped. In
+--frames mode the resume key is the FRAME, since one video has many.
+
+One shard is fastest on this machine (measured 2026-09-13: 107 face rows/min on
+one, 70 on two or three), because onnxruntime already uses every core.
 """
 
 from __future__ import annotations
@@ -59,6 +74,7 @@ import base64
 import collections
 import csv
 import os
+import re
 import sys
 import time
 import zlib
@@ -68,6 +84,7 @@ sys.path.insert(0, HERE)
 from batch_classify import assets_for                            # noqa: E402
 
 TAGS = "content_tags.csv"
+FRAME = re.compile(r"^([0-9a-f]{64})_t(\d+)\.jpg$")
 
 
 def load_people(store: str) -> dict:
@@ -87,16 +104,38 @@ def load_people(store: str) -> dict:
     return out
 
 
+def frame_images(root: str) -> list[tuple[str, str, str]]:
+    """-> [(hash, frame stem, path)] for every sampled video frame under root.
+
+    Matches finished frames only: video_face_frames.py writes <x>.tmp.jpg and
+    renames, so a half-written frame never looks like one."""
+    out = []
+    for sub in sorted(os.listdir(root)):
+        d = os.path.join(root, sub)
+        if not os.path.isdir(d):
+            continue
+        for fn in os.listdir(d):
+            m = FRAME.match(fn)
+            if m:
+                out.append((m.group(1), fn[:-4], os.path.join(d, fn)))
+    return out
+
+
 def main() -> None:
     ap = argparse.ArgumentParser(
         description=__doc__,
         formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--thumbs", required=True)
+    ap.add_argument("--thumbs", default="",
+                    help="photograph thumbnails, filtered by the classifier")
+    ap.add_argument("--frames", default="",
+                    help="video frames from video_face_frames.py, unfiltered")
     ap.add_argument("--store", required=True)
     ap.add_argument("--shard", default="")
     ap.add_argument("--limit", type=int, default=0)
     ap.add_argument("--det-size", type=int, default=512)
     a = ap.parse_args()
+    if bool(a.thumbs) == bool(a.frames):
+        ap.error("pass exactly one of --thumbs or --frames")
 
     shard_i = shard_n = 0
     if a.shard:
@@ -106,20 +145,31 @@ def main() -> None:
     from PIL import Image
     from insightface.app import FaceAnalysis
 
-    people = load_people(a.store)
-    assets = assets_for(a.thumbs)
+    # todo rows are (resume key, hash, image path)
     todo = []
-    for h, paths in assets.items():
-        if people.get(h, 0) < 1:
-            continue
-        if shard_n and (zlib.crc32(h.encode()) % shard_n) != shard_i:
-            continue
-        todo.append((h, paths[0]))
+    if a.frames:
+        people = {}
+        for h, stem, path in frame_images(a.frames):
+            if shard_n and (zlib.crc32(h.encode()) % shard_n) != shard_i:
+                continue
+            todo.append((stem, h, path))
+        out_csv = os.path.join(a.store, "faces.video.csv")
+        header = ["hash", "image", "face_index", "bbox", "det_score", "emb"]
+        key_col = 1
+    else:
+        people = load_people(a.store)
+        for h, paths in assets_for(a.thumbs).items():
+            if people.get(h, 0) < 1:
+                continue
+            if shard_n and (zlib.crc32(h.encode()) % shard_n) != shard_i:
+                continue
+            todo.append((h, h, paths[0]))
+        out_csv = os.path.join(a.store, "faces.csv")
+        header = ["hash", "face_index", "bbox", "det_score", "said", "emb"]
+        key_col = 0
     todo.sort()
     if a.limit:
         todo = todo[:a.limit]
-
-    out_csv = os.path.join(a.store, "faces.csv")
     if shard_n:
         out_csv = out_csv.replace(".csv", ".{}.csv".format(shard_i))
 
@@ -127,8 +177,8 @@ def main() -> None:
     if os.path.exists(out_csv):
         with open(out_csv, newline="", encoding="utf-8") as f:
             for r in csv.reader(f):
-                if r:
-                    done.add(r[0])
+                if len(r) > key_col:
+                    done.add(r[key_col])
     todo = [t for t in todo if t[0] not in done]
 
     print("shard {}/{}: {:,} images to look at, {:,} already done".format(
@@ -143,11 +193,11 @@ def main() -> None:
     cf = open(out_csv, "a", newline="", encoding="utf-8")
     cw = csv.writer(cf)
     if fresh:
-        cw.writerow(["hash", "face_index", "bbox", "det_score", "said", "emb"])
+        cw.writerow(header)
 
     t0 = time.time()
     nf = 0
-    for i, (h, path) in enumerate(todo, 1):
+    for i, (key, h, path) in enumerate(todo, 1):
         try:
             img = np.array(Image.open(path).convert("RGB"))[:, :, ::-1]
             faces = app.get(img)
@@ -158,16 +208,21 @@ def main() -> None:
             n = float(np.linalg.norm(v))
             if n > 0:
                 v = v / n                    # normalise once, here, so the
-            cw.writerow([h, j,               # clusterer never has to
-                         ",".join("{:.0f}".format(x) for x in fc.bbox),
-                         "{:.3f}".format(float(fc.det_score)),
-                         people.get(h, 0),
-                         base64.b64encode(v.astype(np.float16).tobytes()).decode("ascii")])
+            bbox = ",".join("{:.0f}".format(x) for x in fc.bbox)  # clusterer
+            det = "{:.3f}".format(float(fc.det_score))            # never has to
+            emb = base64.b64encode(v.astype(np.float16).tobytes()).decode("ascii")
+            if a.frames:
+                cw.writerow([h, key, j, bbox, det, emb])
+            else:
+                cw.writerow([h, j, bbox, det, people.get(h, 0), emb])
             nf += 1
         # A row with no faces still has to be recorded, or every resumed run
         # re-examines every image the detector found nothing in.
         if not faces:
-            cw.writerow([h, -1, "", "0.000", people.get(h, 0), ""])
+            if a.frames:
+                cw.writerow([h, key, -1, "", "0.000", ""])
+            else:
+                cw.writerow([h, -1, "", "0.000", people.get(h, 0), ""])
         if i % 200 == 0:
             cf.flush()
             el = time.time() - t0

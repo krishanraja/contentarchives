@@ -195,6 +195,27 @@ What it needs to become a daily habit:
 
 **Done when:** it is worth playing. That is a product judgement, not a checklist.
 
+### Decided by Krish, 2026-09-15
+
+- **Where it runs: a hosted page on a subdomain of krishraja.com.** krishraja.com is
+  the Vercel project `krish-raja`. That closes the LAN-or-hosted question. What gets
+  uploaded is a working set of thumbnails for the questions being asked, never the
+  whole ~4.8 GB, and because these are family photographs the page needs access
+  control rather than an unguessable URL.
+- **Bharti plays only the Communal side.** Her queue is questions whose evidence is
+  Communal photographs. A cluster answer still labels the person everywhere they
+  appear; the rule decides what she is *shown*, not how far her answer reaches.
+  Her first questions are already in the journal as `needs_identifying = Bharti`
+  (c847, c118, c283, c431, c167), each mostly Communal photographs.
+- **Communal will grow a lot.** Old photo libraries and digitised VHS home videos are
+  still to come, and all of them are Communal. Anything built for the game or for
+  ingest must assume the Communal side is the one that grows.
+- **Every video gets faces, not only its thumbnail.** Measured the same day: face
+  detection had seen one frame per video, and only for videos the classifier said
+  had people in them, so 4,237 of 12,805 videos had a clustered face. A digitised
+  VHS tape is hours of footage in one file; a fixed five-frame cap would miss most
+  of the people on it, so face sampling scales with duration.
+
 ---
 
 ## Phase 9 — Asking  ·  the reason the sheet exists
@@ -232,7 +253,6 @@ knowing what a column is called.
 
 | decision | why it is open |
 |---|---|
-| Where the game runs — LAN server or hosted page | the images are on a local disk and ~4.8 GB of thumbnails cannot all be published |
 | Whether `_Review` is ever emptied, and by what rule | Krish reviews it; a rule already got this wrong once, at 13,446 files |
 | Whether `Archive\` and `ContentProduction\` move inside the media root | decides the root of the mirror (`docs/SEGMENTATION.md` section 3) |
 | Whether the 51 derived copies are memories or clutter | some are edits Krish made, not machine transcodes |
