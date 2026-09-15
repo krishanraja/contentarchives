@@ -103,8 +103,25 @@ try:
                             ("ffmpeg.exe", 0)):
         if out.count(name) > allowance:
             busy.append(f"{name} x{out.count(name) - allowance}")
-    check("no jobs left running from the previous session", not busy,
-          f"running: {', '.join(busy)}" if busy else "clean (this audit excluded)")
+    # A chain armed on purpose owns processes that are SUPPOSED to be running.
+    # On 2026-09-15 the video-faces chain made this check print "python.exe x3,
+    # ffmpeg.exe x3" as a FAIL, which a resuming session is told to treat as
+    # something to deal with - i.e. kill a day of face detection as orphans.
+    armed = []
+    q = subprocess.run(["schtasks", "/query", "/fo", "csv", "/nh"],
+                       capture_output=True, text=True).stdout
+    for ln in q.splitlines():
+        parts = [p.strip().strip('"') for p in ln.split('","')]
+        if (len(parts) >= 3 and "contentarchives" in parts[0].lower()
+                and parts[-1].lower() == "running"):
+            armed.append(parts[0].lstrip("\\"))
+    if busy and armed:
+        check("running jobs belong to an armed chain", True,
+              f"{', '.join(busy)} owned by {', '.join(sorted(set(armed)))} - running "
+              "ON PURPOSE, do NOT kill; see RESUME.md RIGHT NOW")
+    else:
+        check("no jobs left running from the previous session", not busy,
+              f"running: {', '.join(busy)}" if busy else "clean (this audit excluded)")
 except Exception as e:
     check("process check", False, str(e))
 

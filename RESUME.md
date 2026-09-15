@@ -38,6 +38,16 @@ exclusion, deletion or classification rule.**
 
 **One chain is running and nothing needs a human until it finishes.**
 
+**What the audit above prints, and what it means** (as of 2026-09-15, 15:15):
+
+- `[PASS] running jobs belong to an armed chain ... do NOT kill` - the python and
+  ffmpeg processes are the video-faces chain doing its work. Never kill them as
+  leftovers. If this line instead says `[FAIL] no jobs left running`, the chain's
+  task has ended: check the log below before anything else.
+- `[FAIL] identity documents moved out of the chronology - 5 still` - known and
+  deliberate, waiting on Krish (see "Waiting on the user"). Report it, do not act.
+- Every other check passed. Anything else failing is new: report it first.
+
 ```powershell
 pwsh -NoProfile -File scripts\chains\arm.ps1 -Status -TaskName contentarchives-video-faces
 Get-Content D:\_PhotoAudit\video-faces.log -Tail 8
