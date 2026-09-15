@@ -11,6 +11,12 @@ is never more than a day behind the tree. Chronology lives in `docs/history/LOG.
 This repository's own rules and deeper state: `RESUME.md`. They outrank the
 canon below on anything specific to this repository.
 
+The code is a conveyor of stages (`stages/01_sources` ... `stages/12_canon`, plus
+`guards/`). Before changing anything, read the `STAGE.md` of the stage it belongs
+to: its Lessons table names the learnings that stage owns and the exact code or
+test enforcing each. `tests/test_stage_contracts.py` fails if a file has no stage,
+a learning has no owner, or a cited enforcement no longer exists.
+
 <!-- krish-canon:start release=v2026.09.08.2 sha=886678195379 rendered=2026-09-08 -->
 ## Krish canon
 

@@ -22,6 +22,8 @@ where the work is paused, what to do next, and which decisions are already settl
 | Read first | |
 |---|---|
 | [`RESUME.md`](RESUME.md) | start here — current position and next actions |
+| [`stages/`](stages/) | the conveyor: twelve stages in process order, each `STAGE.md` naming its inputs, outputs, invariants, code, tests and the learnings it owns |
+| [`guards/`](guards/STAGE.md) | the lessons as code every stage imports, and the chain machinery; `tests/test_stage_contracts.py` fails the build if a learning has no owner or its enforcement no longer exists |
 | [`AGENTS.md`](AGENTS.md) | entry file for coding agents, carrying the fleet's shared canon block |
 | [`state/STATE.json`](state/STATE.json) | current state, generated — cannot have drifted |
 | [`state/PROGRESS.md`](state/PROGRESS.md) | the same, readable |

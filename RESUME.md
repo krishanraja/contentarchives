@@ -34,6 +34,46 @@ exclusion, deletion or classification rule.**
 
 ----
 
+## THE REPO IS A CONVEYOR OF STAGES (since 2026-09-15)
+
+Work is organised by the part of the process it serves, not by when it was
+written: `stages/01_sources` through `stages/12_canon`, plus `guards/`. Each
+`STAGE.md` names the stage's inputs, outputs, invariants, code, tests, and the
+learnings it OWNS - with the exact function or test that enforces each one.
+
+**Adding or changing machinery:** find its stage, read that `STAGE.md`'s Lessons
+table (not all fifty learnings from memory), use `guards/` rather than
+re-implementing a check, and add your file to the stage's Code table.
+`tests/test_stage_contracts.py` fails the build if a code file has no stage, a
+learning has no owner, or an enforcement a table cites has stopped existing.
+**A new learning fails the build until a stage claims it.**
+
+Run all of these before trusting a change:
+
+```bash
+python tests/test_stage_contracts.py   python tests/test_guards.py
+python tests/test_video_faces.py       python tests/test_build_db.py
+python tests/test_chain_gating.py      python tests/test_safety_and_dedupe.py
+```
+
+Current debt, printed by the contracts test: 10 learnings enforced only in prose
+(5, 8, 13, 17, 20, 23, 24, 29, 30, 33) and five stages with no test file.
+
+**Migration, not finished.** The `STAGE.md` files list code where it lives today.
+
+- **Phase 2 - stages 01-04 and 09-12 into their folders.** The repo's `scripts/`
+  are REDACTED copies published from `D:\_PhotoAudit\scripts` by the machine-only
+  `publish_scripts.py`: 54 of 56 match their originals after redaction, but 34
+  executable lines carry a pseudonym, so the repo copies cannot run. Moving them
+  means making ONE runnable copy - personal values into local config, not into
+  code - and retiring the publisher. `build_inventory.py` and `migrate_library.py`
+  are newer in the repo than on the machine.
+- **Phase 3 - stages 05-08, `scripts/chains/` and `scripts/paths.py`,** only
+  after `VIDEO FACES COMPLETE`: the running chain's scheduled task and its later
+  steps load those files by path.
+
+----
+
 ## RIGHT NOW: naming faces; video faces running unattended (2026-09-15, 15:00)
 
 **One chain is running and nothing needs a human until it finishes.**
