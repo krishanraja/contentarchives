@@ -1537,3 +1537,48 @@ never executed. This one had run four times and failed in the same way once, at
 the only moment it mattered. Ask of any new guard: *have I seen this succeed?*
 If it has only ever been exercised on the failure side - or not at all - it is
 untested code sitting on the critical path, holding a veto.
+
+## 48. Verifying the data is not verifying the picture of the data
+
+The face clusters were checked and were right. Within-cluster cosine on the
+twelve biggest was 0.48-0.61 against a different-people baseline of 0.049, no
+bimodality, zero signs of a merge. The page built from them showed six or seven
+different people in a row, and Krish found that in about four seconds by looking
+at it.
+
+`people_sheet.py` read the tag store, which records *this PHOTOGRAPH contains
+c14* and structurally cannot record *which face in it is c14*. So it collected
+every face in every photograph the cluster touched and sorted by detection score.
+Measured afterwards: the candidate pool was 66-76% other people, and **11 of the
+12 crops displayed for c14 were not in c14**. Sorting by detection score made it
+worse rather than better, because the largest, sharpest face in a group photo is
+usually not the person whose cluster it is.
+
+Two separate things went wrong and only one of them is a bug.
+
+The bug: the information needed to draw the answer had been thrown away when it
+was stored. A tag is (hash, tag, value) and a face is (hash, face_index) - the
+store could never have held the mapping, so the renderer guessed, and a guess
+that looks plausible is indistinguishable from an answer. `FACE-CLUSTERS.csv`
+now holds one row per face and the renderer refuses to run without it rather
+than falling back to the store.
+
+The failure of judgement: **the artefact a human looks at is a different thing
+from the data it was built from, and needs its own check.** A verified dataset
+rendered by unverified code is an unverified result. The clustering check was
+necessary, thorough, correct - and it could not have caught this, because it
+never touched the page.
+
+**The rule.** Verify the last artefact in the chain, the one a person actually
+consumes, not the last one that was hard to compute. If a report, a contact
+sheet or a dashboard is what the decision is made from, that is what needs
+checking - and the check must be independent of the code that produced it.
+`verify_people_sheet.py` parses the finished HTML and audits it against the
+assignment file, so the page can be wrong without the checker agreeing.
+
+**The tell.** "I verified the pipeline" where the pipeline has a rendering step
+at the end nobody verified. Ask: *what is the last transformation before a human
+sees this, and did anything check the output of THAT?* Here the answer was no,
+and the cost would have been Krish naming strangers as his mother across
+thousands of photographs - an error that would then have looked deliberate, and
+propagated into every future rebuild as a human answer, outranking every model.

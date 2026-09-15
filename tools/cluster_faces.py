@@ -138,6 +138,9 @@ def main() -> int:
                          "invent one")
     ap.add_argument("--top", type=int, default=40)
     ap.add_argument("--apply", action="store_true")
+    ap.add_argument("--assign-only", action="store_true",
+                    help="write FACE-CLUSTERS.csv but do not re-tag the store, "
+                         "which is append-only and already has them")
     a = ap.parse_args()
 
     import numpy as np
@@ -180,9 +183,32 @@ def main() -> int:
     print()
     print("naming the top {} would label {:,} photographs.".format(a.top, reach))
 
-    if not a.apply:
+    if not (a.apply or a.assign_only):
         print()
         print("dry run - nothing written. Re-run with --apply.")
+        return 0
+
+    # PER-FACE assignment, written first, because the tag store cannot carry it.
+    #
+    # A tag is (hash, tag, value): it can say "this PHOTOGRAPH contains c14" and
+    # cannot say WHICH of the five faces in it is c14. people_sheet.py had to
+    # guess, and guessed by taking every face in every photo the cluster touched
+    # - so a row for one person showed six or seven different people, which is
+    # what Krish saw. The clustering was right; the thing rendered from it was
+    # not, because the information needed to render it had been thrown away.
+    assign = os.path.join(os.path.dirname(a.cache) or ".", "FACE-CLUSTERS.csv")
+    with io.open(assign, "w", encoding="utf-8", newline="") as f:
+        w = csv.writer(f)
+        w.writerow(["hash", "face_index", "cluster", "det_score", "bbox"])
+        for i, c in enumerate(labels.tolist()):
+            r = rows[i]
+            w.writerow([r["hash"], r["face_index"], "c{}".format(c),
+                        r["det_score"], r["bbox"]])
+    print()
+    print("wrote {} - one row per FACE, which is the only place the".format(assign))
+    print("face-to-person mapping exists. Anything that draws a person reads this.")
+
+    if a.assign_only:
         return 0
 
     from store import Store

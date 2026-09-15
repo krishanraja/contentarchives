@@ -44,6 +44,7 @@ import sys
 FACES = r"D:\_enrichment\faces.0.csv"
 THUMBS = r"D:\_thumbs"
 OUT = r"D:\_PhotoAudit\PEOPLE.html"
+ASSIGN = r"D:\_PhotoAudit\FACE-CLUSTERS.csv"
 
 HEAD = """<!doctype html><meta charset="utf-8"><title>Who is this?</title>
 <style>
@@ -200,31 +201,33 @@ def main() -> int:
         description=__doc__,
         formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--faces", default=FACES)
+    ap.add_argument("--assign", default=ASSIGN,
+                    help="per-face cluster assignments from cluster_faces.py")
     ap.add_argument("--thumbs", default=THUMBS)
     ap.add_argument("--out", default=OUT)
     ap.add_argument("--top", type=int, default=60)
     ap.add_argument("--per-row", type=int, default=12)
     a = ap.parse_args()
 
-    # cluster ids live in the tag store, written by cluster_faces.py --apply
-    clusters = collections.defaultdict(set)
-    tags = r"D:\_enrichment\content_tags.csv"
-    for r in csv.DictReader(io.open(tags, encoding="utf-8", errors="replace",
-                                    newline="")):
-        if r.get("tag") == "cluster":
-            clusters[r["value"]].add(r["hash"])
-    if not clusters:
-        print("no cluster tags in the store - run cluster_faces.py --apply first")
+    # PER-FACE assignments. Not the tag store.
+    #
+    # The tag store says "this photograph contains c14" and cannot say which of
+    # the faces in it is c14. Reading it and then drawing every face in every
+    # matching photograph is what put six or seven different people in a single
+    # row - the clusters were right, the picture of them was not. FACE-CLUSTERS
+    # .csv is the only place the face-to-person mapping exists, so this reads
+    # that and refuses to run without it rather than guessing again.
+    if not os.path.exists(a.assign):
+        print("no {} - run cluster_faces.py --apply first.".format(a.assign))
+        print("Do NOT fall back to the tag store: it cannot say which face is who,")
+        print("and guessing is what produced rows full of strangers.")
         return 1
-    print("clusters in the store: {:,}".format(len(clusters)))
-
-    rows = [r for r in csv.DictReader(
-                io.open(a.faces, encoding="utf-8", errors="replace", newline=""))
-            if r.get("bbox") and (r.get("face_index") or "-1").lstrip("-").isdigit()
-            and int(r["face_index"]) >= 0]
-    byhash = collections.defaultdict(list)
-    for r in rows:
-        byhash[r["hash"]].append(r)
+    clusters = collections.defaultdict(list)    # cluster -> [face rows]
+    for r in csv.DictReader(io.open(a.assign, encoding="utf-8",
+                                    errors="replace", newline="")):
+        if r.get("bbox"):
+            clusters[r["cluster"]].append(r)
+    print("clusters with faces: {:,}".format(len(clusters)))
 
     # when the photographs were taken, so a row can say "2009-2024"
     years = {}
@@ -237,19 +240,29 @@ def main() -> int:
     except Exception:                                            # noqa: BLE001
         pass
 
-    ranked = sorted(clusters.items(), key=lambda kv: -len(kv[1]))[:a.top]
+    # ranked by PHOTOGRAPHS covered, not faces found: a cluster of 900 faces from
+    # one afternoon deserves less attention than 400 across fifteen years
+    ranked = sorted(clusters.items(),
+                    key=lambda kv: -len({r["hash"] for r in kv[1]}))[:a.top]
     out = [HEAD]
     total = 0
-    for cid, hashes in ranked:
+    for cid, faces in ranked:
+        hashes = {r["hash"] for r in faces}
         total += len(hashes)
         ys = sorted(y for y in (years.get(h) for h in hashes) if y)
         span = "{}-{}".format(ys[0], ys[-1]) if ys else ""
-        # the best-detected faces, they are the most recognisable
-        cand = []
-        for h in hashes:
-            for r in byhash.get(h, []):
-                cand.append(r)
-        cand.sort(key=lambda r: -float(r["det_score"]))
+        # ONLY the faces assigned to this cluster, best-detected first, and one
+        # per photograph so a row is twelve different moments rather than twelve
+        # crops of the same instant.
+        cand = sorted(faces, key=lambda r: -float(r["det_score"]))
+        seen_img = set()
+        picked = []
+        for r in cand:
+            if r["hash"] in seen_img:
+                continue
+            seen_img.add(r["hash"])
+            picked.append(r)
+        cand = picked
         imgs = []
         for r in cand:
             if len(imgs) >= a.per_row:
