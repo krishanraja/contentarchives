@@ -79,7 +79,7 @@ def main() -> int:
     known = known_clusters(a.tags)
     print("clusters in the store: {:,}".format(len(known)))
 
-    pairs, bad = [], []
+    pairs, bad, unknown = [], [], []
     for ln in raw.splitlines():
         if not ln.strip():
             continue
@@ -90,11 +90,30 @@ def main() -> int:
         cid, name = m.group(1), m.group(2).strip()
         if name in ("-", "--", "skip"):
             continue
+
+        # A trailing " - ..." is a remark, not part of the name. Recording
+        # "Adam Goodman - some are the backs of peoples heads" as a PERSON would
+        # put that whole string on every photograph in the cluster.
+        note = ""
+        if " - " in name:
+            name, note = name.split(" - ", 1)
+            name, note = name.strip(), note.strip()
+
+        # "?" is not a name, it is the absence of one. Recording it as a person
+        # would create a human answer called "?" that outranks every model for
+        # ever and would have to be found and unpicked later. It is recorded as
+        # a question to ask instead.
+        if name in ("?", "??", "unknown", "unsure"):
+            unknown.append((cid, known[cid] if cid in known else 0, note))
+            continue
+        if not name:
+            bad.append((ln.strip(), "a remark with no name in front of it"))
+            continue
         if cid not in known:
             bad.append((ln.strip(), "no such cluster - a typo would label the "
                                     "wrong person's photographs"))
             continue
-        pairs.append((cid, name, known[cid]))
+        pairs.append((cid, name, known[cid], note))
 
     if bad:
         print()
@@ -107,13 +126,14 @@ def main() -> int:
         print("nothing recordable.")
         return 1
 
-    reach = sum(n for _, _, n in pairs)
+    reach = sum(n for _, _, n, _ in pairs)
     print()
     print("{} name(s), covering {:,} face tags:".format(len(pairs), reach))
-    for cid, name, n in pairs:
-        print("   {:<8} -> {:<24} {:>6,} faces".format(cid, name, n))
+    for cid, name, n, note in pairs:
+        print("   {:<8} -> {:<24} {:>6,} faces{}".format(
+            cid, name, n, ("   [" + note[:40] + "]") if note else ""))
 
-    byname = collections.Counter(n for _, n, _ in pairs)
+    byname = collections.Counter(n for _, n, _, _ in pairs)
     dupes = [n for n, c in byname.items() if c > 1]
     if dupes:
         print()
@@ -122,14 +142,24 @@ def main() -> int:
         print("      (the same person fragments across clusters by design; both "
               "answers stand)")
 
+    if unknown:
+        print()
+        print("{} marked as NOT YET IDENTIFIED - recorded as a question,".format(len(unknown)))
+        print("never as a person called \"?\":")
+        for cid, n, note in unknown:
+            print("   {:<8} {:>6,} faces".format(cid, n))
+
     if not a.apply:
         print()
         print("dry run - nothing written. Re-run with --apply.")
         return 0
 
     j = Journal(a.store)
-    for cid, name, _ in pairs:
-        j.record("cluster", cid, "person", name)
+    for cid, name, _, note in pairs:
+        j.record("cluster", cid, "person", name, note=note)
+    for cid, n, note in unknown:
+        # not a name: a question, recorded so the game can ask it
+        j.record("cluster", cid, "needs_identifying", "yes", note=note)
     print()
     print("recorded {} answers to {}".format(len(pairs), j.path))
     print("rebuild the index to see them on the photographs:")
