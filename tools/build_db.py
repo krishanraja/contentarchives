@@ -52,6 +52,9 @@ error:
     media         'photo' / 'video' / 'other'
     year, month   text, and '' when unknown - never NULL-only
     duration      REAL seconds, and only videos have it
+    person        EVERY name in the photo, sorted, '; '-joined: 'Bharti; Bhasker'.
+                  person = 'Bharti' misses every group photo - join photo_people
+                  (one row per hash and person) for an exact match
 
 Measured 2026-09-12: `WHERE keep='no'` returns 0 rows and reads like good news.
 The true count of files the model would not keep is 7,161. A query layer that
@@ -158,6 +161,16 @@ def schema(db: sqlite3.Connection) -> None:
         note       TEXT
     );
     CREATE INDEX answers_scope ON answers(scope, target);
+
+    -- every person in a photograph, one row each. `resolved` holds one value
+    -- per field, and a group photograph has several people in it.
+    CREATE TABLE photo_people (
+        hash    TEXT,
+        person  TEXT,
+        source  TEXT,
+        PRIMARY KEY (hash, person)
+    ) WITHOUT ROWID;
+    CREATE INDEX photo_people_person ON photo_people(person);
     """)
 
 
@@ -263,39 +276,87 @@ def apply_answers(db: sqlite3.Connection) -> int:
     person actually answered.
     """
     written = 0
-    # newest answer per key wins; ORDER BY when_ then let later rows overwrite
+    # newest answer per key wins; ORDER BY when_ then let later rows overwrite.
+    # rowid breaks ties in journal order - two answers in one second are common.
     for when_, scope, target, field, value, conf in db.execute(
             "SELECT when_, scope, target, field, value, confidence "
-            "FROM answers ORDER BY when_"):
+            "FROM answers ORDER BY when_, rowid"):
         if not field:
             continue
-        if scope == "file":
-            hashes = [(target,)]
-        elif scope == "folder":
-            hashes = db.execute(
-                "SELECT DISTINCT hash FROM files "
-                "WHERE hash IS NOT NULL AND path LIKE ? || '%'",
-                (target,)).fetchall()
-        elif scope == "origin":
-            hashes = db.execute(
-                "SELECT DISTINCT hash FROM files "
-                "WHERE hash IS NOT NULL AND origin_folder = ?",
-                (target,)).fetchall()
-        elif scope == "cluster":
-            hashes = db.execute(
-                "SELECT DISTINCT hash FROM tags "
-                "WHERE tag = 'cluster' AND value = ?", (target,)).fetchall()
-        elif scope == "all":
-            hashes = db.execute(
-                "SELECT DISTINCT hash FROM files "
-                "WHERE hash IS NOT NULL").fetchall()
-        else:
+        hashes = scope_hashes(db, scope, target)
+        if hashes is None:
             continue
         db.executemany(
             "INSERT OR REPLACE INTO resolved VALUES (?,?,?,'human',?)",
-            [(h[0], field, value, conf) for h in hashes])
+            [(h, field, value, conf) for h in hashes])
         written += len(hashes)
     return written
+
+
+def scope_hashes(db: sqlite3.Connection, scope: str, target: str):
+    """The photographs one answer covers, or None for a scope not known here."""
+    if scope == "file":
+        return [target]
+    if scope == "folder":
+        sql = ("SELECT DISTINCT hash FROM files "
+               "WHERE hash IS NOT NULL AND path LIKE ? || '%'")
+    elif scope == "origin":
+        sql = ("SELECT DISTINCT hash FROM files "
+               "WHERE hash IS NOT NULL AND origin_folder = ?")
+    elif scope == "cluster":
+        sql = "SELECT DISTINCT hash FROM tags WHERE tag = 'cluster' AND value = ?"
+    elif scope == "all":
+        return [h for (h,) in db.execute(
+            "SELECT DISTINCT hash FROM files WHERE hash IS NOT NULL")]
+    else:
+        return None
+    return [h for (h,) in db.execute(sql, (target,))]
+
+
+def resolve_people(db: sqlite3.Connection) -> int:
+    """Every named person in a photograph, not only the last one written.
+
+    `resolved` keeps one value per (hash, field), which is right for `place` and
+    wrong for `person`: a photograph of Bharti and Bhasker is a photograph of
+    both. Measured 2026-09-15, before this existed: 26,273 name-on-photo pairs,
+    16,038 kept, and 5,884 group photographs showing only one of their people -
+    1,011 of them Bharti + Bhasker, each silently losing the other.
+
+    Runs after apply_answers. photo_people gets one row per (hash, person) for
+    exact queries; v_files.person becomes every name, sorted and '; '-joined, so
+    full-text search still finds each of them.
+    """
+    db.execute("DELETE FROM photo_people")
+    # newest human answer per target wins: a renamed cluster must not keep its
+    # old name alongside the new one
+    latest = {}
+    for scope, target, value in db.execute(
+            "SELECT scope, target, value FROM answers WHERE field = 'person' "
+            "ORDER BY when_, rowid"):
+        latest[(scope, target)] = (value or "").strip()
+    rows = []
+    for (scope, target), value in latest.items():
+        if value:
+            rows.extend((h, value, "human")
+                        for h in scope_hashes(db, scope, target) or [])
+    # human rows go in first, so a derived tag naming the same person on the
+    # same photograph cannot take the provenance away from Krish
+    rows.extend(db.execute(
+        "SELECT hash, value, source FROM tags "
+        "WHERE tag = 'person' AND value IS NOT NULL AND value != ''").fetchall())
+    db.executemany("INSERT OR IGNORE INTO photo_people VALUES (?,?,?)", rows)
+
+    names, human = {}, set()
+    for h, p, src in db.execute("SELECT hash, person, source FROM photo_people"):
+        names.setdefault(h, set()).add(p)
+        if src == "human":
+            human.add(h)
+    db.execute("DELETE FROM resolved WHERE field = 'person'")
+    db.executemany(
+        "INSERT INTO resolved VALUES (?, 'person', ?, ?, 1.0)",
+        [(h, "; ".join(sorted(ps)), "human" if h in human else "cluster-merge")
+         for h, ps in names.items()])
+    return db.execute("SELECT COUNT(*) FROM photo_people").fetchone()[0]
 
 
 def build_views(db: sqlite3.Connection) -> None:
@@ -388,6 +449,7 @@ def main() -> None:
     print("answers  : {:,} read from the journal".format(
         load_answers(db, a.store)))
     print("applied  : {:,} file-fields set by a human".format(apply_answers(db)))
+    print("people   : {:,} person-on-photograph rows".format(resolve_people(db)))
     build_views(db)
     db.commit()
     db.execute("PRAGMA wal_checkpoint(TRUNCATE)")

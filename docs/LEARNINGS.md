@@ -1582,3 +1582,26 @@ sees this, and did anything check the output of THAT?* Here the answer was no,
 and the cost would have been Krish naming strangers as his mother across
 thousands of photographs - an error that would then have looked deliberate, and
 propagated into every future rebuild as a human answer, outranking every model.
+
+## 49. A field that holds one value cannot hold a group photograph
+
+`library.db` resolved every field to one winner per photograph: `PRIMARY KEY
+(hash, field)`. That is right for `place`, and for `person` it silently threw
+away everyone in a group photograph except whichever name was written last.
+
+Measured 2026-09-15, while recording Krish's second round of names: 26,273
+name-on-photograph pairs existed, 16,038 reached the database, and 5,884 group
+photographs showed only one of their people. The largest single loss was 1,011
+photographs of Bharti and Bhasker together, each carrying one parent. No error,
+no warning, and every count looked like a success, because each photograph did
+have *a* person on it.
+
+`build_db.py` now writes `photo_people` (one row per photograph and person)
+and `v_files.person` holds every name, sorted and `; `-joined. A renamed cluster
+replaces its old name rather than adding to it. `tests/test_build_db.py` section
+5 covers both.
+
+The rule: before trusting a resolved field, ask whether the real world allows
+more than one true value for it. People, objects and events do. A precedence
+system built for "which opinion wins" will quietly apply itself to "who else is
+here", where there is nothing to win.

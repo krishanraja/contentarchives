@@ -83,6 +83,8 @@ def fixture(d):
                     "0.9", "2026-01-01"])
         # h3 is in a face cluster
         w.writerow(["h3", "cluster", "c17", "faces", "1.0", "2026-01-01"])
+        # ...and a second face in the same photograph, in another cluster
+        w.writerow(["h3", "cluster", "c18", "faces", "1.0", "2026-01-01"])
     return inv, idx, store, (f1, f2, f3)
 
 
@@ -97,6 +99,7 @@ def build(d, inv, idx, store):
     B.resolve(db)
     B.load_answers(db, store)
     B.apply_answers(db)
+    B.resolve_people(db)
     B.build_views(db)
     db.commit()
     return db
@@ -174,6 +177,26 @@ def main():
         n = db.execute("SELECT COUNT(*) FROM search WHERE search MATCH ?",
                        ("Mum",)).fetchone()[0]
         check("fts finds a person a human named", n, 1)
+        db.close()
+
+        print()
+        print("5. a group photograph keeps everybody in it")
+        j.record("cluster", "c18", "person", "Dad")
+        db = build(d, inv, idx, store)
+        got = db.execute(
+            "SELECT person FROM v_files WHERE path=?", (f3,)).fetchone()[0]
+        check("two named clusters in one photo: both names show",
+              got, "Dad; Mum")
+        got = [r[0] for r in db.execute(
+            "SELECT person FROM photo_people WHERE hash='h3' ORDER BY person")]
+        check("photo_people holds a row per person", got, ["Dad", "Mum"])
+        db.close()
+        j.record("cluster", "c17", "person", "Mother")
+        db = build(d, inv, idx, store)
+        got = db.execute(
+            "SELECT person FROM v_files WHERE path=?", (f3,)).fetchone()[0]
+        check("a renamed cluster replaces its old name, not adds to it",
+              got, "Dad; Mother")
         db.close()
     finally:
         shutil.rmtree(d, ignore_errors=True)

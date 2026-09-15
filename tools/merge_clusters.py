@@ -208,10 +208,25 @@ def main() -> int:
             for h in byc[c]:
                 out.append((h, "person", person, "cluster-merge", 0.9))
                 n += 1
-    if out:
-        st.tag_many(out)
-    print("propagated {:,} derived person tags (source 'cluster-merge', which "
-          "ranks BELOW anything Krish says)".format(n))
+    # The store is append-only, and this runs again every time new names arrive.
+    # Without this, each re-run re-appends every tag the previous runs wrote.
+    have = set()
+    tags_csv = os.path.join(a.store, "content_tags.csv")
+    if os.path.exists(tags_csv):
+        for r in csv.DictReader(io.open(tags_csv, encoding="utf-8",
+                                        errors="replace", newline="")):
+            if r.get("source") == "cluster-merge" and r.get("tag") == "person":
+                have.add((r["hash"], r["value"]))
+    fresh = []
+    for t in out:
+        if (t[0], t[2]) not in have:
+            have.add((t[0], t[2]))
+            fresh.append(t)
+    if fresh:
+        st.tag_many(fresh)
+    print("propagated {:,} derived person tags, {:,} of them new (source "
+          "'cluster-merge', which ranks BELOW anything Krish says)".format(
+              n, len(fresh)))
     return 0
 
 

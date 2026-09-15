@@ -79,7 +79,7 @@ def main() -> int:
     known = known_clusters(a.tags)
     print("clusters in the store: {:,}".format(len(known)))
 
-    pairs, bad, unknown = [], [], []
+    pairs, bad, unknown, unreadable = [], [], [], []
     for ln in raw.splitlines():
         if not ln.strip():
             continue
@@ -99,19 +99,37 @@ def main() -> int:
             name, note = name.split(" - ", 1)
             name, note = name.strip(), note.strip()
 
+        if not name:
+            bad.append((ln.strip(), "a remark with no name in front of it"))
+            continue
+        # checked before the question and verdict branches too: a typo that
+        # queues a question against a cluster that does not exist is lost quietly
+        if cid not in known:
+            bad.append((ln.strip(), "no such cluster - a typo would label the "
+                                    "wrong person's photographs"))
+            continue
+
         # "?" is not a name, it is the absence of one. Recording it as a person
         # would create a human answer called "?" that outranks every model for
         # ever and would have to be found and unpicked later. It is recorded as
         # a question to ask instead.
-        if name in ("?", "??", "unknown", "unsure"):
-            unknown.append((cid, known[cid] if cid in known else 0, note))
+        #
+        # "for Bharti" is not a name either: it hands the question to someone who
+        # was there. Recorded as needs_identifying=Bharti, so the game knows whose
+        # queue it belongs in - never as a person called "for Bharti".
+        low = name.lower()
+        ask = re.match(r"^for\s+(\S.*)$", name, re.I)
+        if low in ("?", "??", "unknown", "unsure") or ask:
+            who = ask.group(1).strip() if ask else "yes"
+            who = who[:1].upper() + who[1:]
+            unknown.append((cid, known[cid], who, note))
             continue
-        if not name:
-            bad.append((ln.strip(), "a remark with no name in front of it"))
-            continue
-        if cid not in known:
-            bad.append((ln.strip(), "no such cluster - a typo would label the "
-                                    "wrong person's photographs"))
+
+        # "Unsure, blurry" is a verdict, not a deferral: nobody will be able to
+        # say who this is. Recorded as unidentifiable, so it is never asked again
+        # and never handed to the game either.
+        if low.startswith("unsure") or low in ("blurry", "unidentifiable"):
+            unreadable.append((cid, known[cid], low, note))
             continue
         pairs.append((cid, name, known[cid], note))
 
@@ -121,7 +139,7 @@ def main() -> int:
         for ln, why in bad:
             print("   {:<34} {}".format(ln[:34], why))
 
-    if not pairs:
+    if not (pairs or unknown or unreadable):
         print()
         print("nothing recordable.")
         return 1
@@ -144,10 +162,18 @@ def main() -> int:
 
     if unknown:
         print()
-        print("{} marked as NOT YET IDENTIFIED - recorded as a question,".format(len(unknown)))
-        print("never as a person called \"?\":")
-        for cid, n, note in unknown:
-            print("   {:<8} {:>6,} faces".format(cid, n))
+        print("{} NOT YET IDENTIFIED - recorded as a question to ask, never as a "
+              "person called \"?\":".format(len(unknown)))
+        for cid, n, who, note in unknown:
+            print("   {:<8} {:>6,} faces   ask: {}".format(
+                cid, n, "anyone" if who == "yes" else who))
+
+    if unreadable:
+        print()
+        print("{} UNIDENTIFIABLE - never asked again, never offered to the game:"
+              .format(len(unreadable)))
+        for cid, n, verdict, note in unreadable:
+            print("   {:<8} {:>6,} faces   {}".format(cid, n, verdict))
 
     if not a.apply:
         print()
@@ -157,11 +183,14 @@ def main() -> int:
     j = Journal(a.store)
     for cid, name, _, note in pairs:
         j.record("cluster", cid, "person", name, note=note)
-    for cid, n, note in unknown:
-        # not a name: a question, recorded so the game can ask it
-        j.record("cluster", cid, "needs_identifying", "yes", note=note)
+    for cid, n, who, note in unknown:
+        # not a name: a question, recorded so the game can ask it - and of whom
+        j.record("cluster", cid, "needs_identifying", who, note=note)
+    for cid, n, verdict, note in unreadable:
+        j.record("cluster", cid, "unidentifiable", verdict, note=note)
     print()
-    print("recorded {} answers to {}".format(len(pairs), j.path))
+    print("recorded {} names, {} questions, {} unidentifiable to {}".format(
+        len(pairs), len(unknown), len(unreadable), j.path))
     print("rebuild the index to see them on the photographs:")
     print("    python tools/build_db.py")
     return 0

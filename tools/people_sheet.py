@@ -261,7 +261,7 @@ def main() -> int:
         print("the path - proceeding would re-ask every question already answered.")
         return 1
     for r in csv.DictReader(io.open(a.answers, encoding="utf-8", newline="")):
-        if r.get("field") in ("person", "needs_identifying"):
+        if r.get("field") in ("person", "needs_identifying", "unidentifiable"):
             named.add(group_of.get(r["target"], r["target"]))
     print("already answered: {} groups".format(len(named)))
     if not a.include_named:
