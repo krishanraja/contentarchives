@@ -330,7 +330,10 @@ def main() -> int:
                 continue
             b64 = crop(p, r["bbox"])
             if b64:
-                imgs.append('<img src="data:image/jpeg;base64,{}">'.format(b64))
+                # data-face names WHICH face this crop is, so verify_people_sheet
+                # can check each crop against the assignment files independently
+                imgs.append('<img data-face="{}:{}:{}" src="data:image/jpeg;base64,{}">'
+                            .format(r["hash"], r.get("image") or "", r["face_index"], b64))
         if not imgs:
             continue
         out.append(

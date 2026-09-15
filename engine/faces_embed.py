@@ -2,6 +2,7 @@ r"""Detect and embed faces, but only where the classifier says a face exists.
 
     python faces_embed.py --thumbs D:\_thumbs --store D:\_enrichment --shard 0/6
     python faces_embed.py --frames D:\_frames --store D:\_enrichment
+    python faces_embed.py --frames D:\_frames --store D:\_enrichment --dry-run
 
 WHY THIS IS CHEAP
 
@@ -30,6 +31,16 @@ WHAT IT WRITES
   faces.csv        one row per detected face: hash, index, bbox, detector score,
                    and the 512-d embedding itself, base64 of float16, in the row
   faces.video.csv  the same, plus `image`: the frame the face was found in
+
+  face_index -1    the image was read and has no face
+  face_index -2    the image could NOT be read. Recorded, so a resumed run does
+                   not retry a broken file for ever, and counted separately, so
+                   an unreadable image is never mistaken for an empty one
+                   (learning 41). --dry-run reports how many.
+
+--dry-run prints what is outstanding NOW and exits before loading the model. The
+chain's postcondition uses it; without it, asking "is anything left?" would START
+the remaining work inside the check, unsupervised (learning 47).
 
 ONE FILE, BECAUSE TWO FILES DRIFTED APART AND CORRUPTED 11,000 IMAGES
 
@@ -71,7 +82,6 @@ from __future__ import annotations
 
 import argparse
 import base64
-import collections
 import csv
 import os
 import re
@@ -108,7 +118,10 @@ def frame_images(root: str) -> list[tuple[str, str, str]]:
     """-> [(hash, frame stem, path)] for every sampled video frame under root.
 
     Matches finished frames only: video_face_frames.py writes <x>.tmp.jpg and
-    renames, so a half-written frame never looks like one."""
+    renames, so a half-written frame never looks like one. A root that does not
+    exist raises rather than yielding nothing (learning 34)."""
+    if not os.path.isdir(root):
+        raise SystemExit("STOPPING: no frames directory at {}".format(root))
     out = []
     for sub in sorted(os.listdir(root)):
         d = os.path.join(root, sub)
@@ -121,7 +134,7 @@ def frame_images(root: str) -> list[tuple[str, str, str]]:
     return out
 
 
-def main() -> None:
+def main() -> int:
     ap = argparse.ArgumentParser(
         description=__doc__,
         formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -133,6 +146,8 @@ def main() -> None:
     ap.add_argument("--shard", default="")
     ap.add_argument("--limit", type=int, default=0)
     ap.add_argument("--det-size", type=int, default=512)
+    ap.add_argument("--dry-run", action="store_true",
+                    help="report what is outstanding now, load no model, write nothing")
     a = ap.parse_args()
     if bool(a.thumbs) == bool(a.frames):
         ap.error("pass exactly one of --thumbs or --frames")
@@ -140,10 +155,6 @@ def main() -> None:
     shard_i = shard_n = 0
     if a.shard:
         shard_i, shard_n = (int(x) for x in a.shard.split("/"))
-
-    import numpy as np
-    from PIL import Image
-    from insightface.app import FaceAnalysis
 
     # todo rows are (resume key, hash, image path)
     todo = []
@@ -155,7 +166,7 @@ def main() -> None:
             todo.append((stem, h, path))
         out_csv = os.path.join(a.store, "faces.video.csv")
         header = ["hash", "image", "face_index", "bbox", "det_score", "emb"]
-        key_col = 1
+        key_col, idx_col = 1, 2
     else:
         people = load_people(a.store)
         for h, paths in assets_for(a.thumbs).items():
@@ -166,25 +177,34 @@ def main() -> None:
             todo.append((h, h, paths[0]))
         out_csv = os.path.join(a.store, "faces.csv")
         header = ["hash", "face_index", "bbox", "det_score", "said", "emb"]
-        key_col = 0
+        key_col, idx_col = 0, 1
     todo.sort()
-    if a.limit:
-        todo = todo[:a.limit]
     if shard_n:
         out_csv = out_csv.replace(".csv", ".{}.csv".format(shard_i))
 
-    done = set()
+    done, unreadable = set(), set()
     if os.path.exists(out_csv):
         with open(out_csv, newline="", encoding="utf-8") as f:
             for r in csv.reader(f):
-                if len(r) > key_col:
+                if r and r[0] == "hash":
+                    continue                 # the header is not a finished image
+                if len(r) > idx_col:
                     done.add(r[key_col])
+                    if r[idx_col] == "-2":
+                        unreadable.add(r[key_col])
     todo = [t for t in todo if t[0] not in done]
+    if a.limit:
+        todo = todo[:a.limit]
 
-    print("shard {}/{}: {:,} images to look at, {:,} already done".format(
-        shard_i, shard_n or 1, len(todo), len(done)))
-    if not todo:
-        return
+    print("shard {}/{}: {:,} images to look at, {:,} already done, "
+          "{:,} unreadable".format(shard_i, shard_n or 1, len(todo), len(done),
+                                   len(unreadable)), flush=True)
+    if a.dry_run or not todo:
+        return 0
+
+    import numpy as np
+    from PIL import Image
+    from insightface.app import FaceAnalysis
 
     app = FaceAnalysis(name="buffalo_l", providers=["CPUExecutionProvider"])
     app.prepare(ctx_id=-1, det_size=(a.det_size, a.det_size))
@@ -196,13 +216,21 @@ def main() -> None:
         cw.writerow(header)
 
     t0 = time.time()
-    nf = 0
+    nf = nbad = 0
     for i, (key, h, path) in enumerate(todo, 1):
         try:
             img = np.array(Image.open(path).convert("RGB"))[:, :, ::-1]
             faces = app.get(img)
-        except Exception:                                        # noqa: BLE001
-            faces = []
+        except Exception as e:                                   # noqa: BLE001
+            # recorded as UNREADABLE, never as "no faces" (learning 41)
+            nbad += 1
+            if nbad <= 20:
+                print("  unreadable {}: {}".format(os.path.basename(path), e), flush=True)
+            if a.frames:
+                cw.writerow([h, key, -2, "", "0.000", ""])
+            else:
+                cw.writerow([h, -2, "", "0.000", people.get(h, 0), ""])
+            continue
         for j, fc in enumerate(faces):
             v = np.asarray(fc.embedding, dtype=np.float32)
             n = float(np.linalg.norm(v))
@@ -227,13 +255,15 @@ def main() -> None:
             cf.flush()
             el = time.time() - t0
             rate = i / max(el, 1)
-            print("  {:,}/{:,}  {:,} faces  {:.1f} img/s  ~{:.0f} min left"
-                  .format(i, len(todo), nf, rate,
-                          (len(todo) - i) / max(rate, 0.01) / 60), flush=True)
+            print("  {:,}/{:,}  {:,} faces  {:,} unreadable  {:.1f} img/s  "
+                  "~{:.0f} min left".format(i, len(todo), nf, nbad, rate,
+                                            (len(todo) - i) / max(rate, 0.01) / 60),
+                  flush=True)
     cf.close()
-    print("shard {} done: {:,} images, {:,} faces, {:.0f} min".format(
-        shard_i, len(todo), nf, (time.time() - t0) / 60))
+    print("shard {} done: {:,} images, {:,} faces, {:,} unreadable, {:.0f} min".format(
+        shard_i, len(todo), nf, nbad, (time.time() - t0) / 60))
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())

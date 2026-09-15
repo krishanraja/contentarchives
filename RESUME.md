@@ -38,6 +38,13 @@ exclusion, deletion or classification rule.**
 
 **One chain is running and nothing needs a human until it finishes.**
 
+**Audited against all 50 learnings before it ran unattended** (2026-09-15, learning
+50). Eleven gaps were fixed, `tests/test_video_faces.py` watches every guard pass
+and fail, and the chain was re-armed onto the fixed code at 15:37 - the re-arm
+reaped three orphaned frame workers that the old reaper would have missed.
+Before arming anything new, do the same walk: every numbered learning against
+every new component, written down.
+
 **What the audit above prints, and what it means** (as of 2026-09-15, 15:15):
 
 - `[PASS] running jobs belong to an armed chain ... do NOT kill` - the python and
@@ -92,18 +99,27 @@ pwsh -NoProfile -File scripts\chains\arm.ps1 -Chain chain_video_faces.ps1 -TaskN
   people and create video-only people, and those belong in round 4.
 - **Backed up off the library disk** to
   `G:\My Drive\Personal\Family\Photo library - answers backup\`: answers.csv,
-  FACE-CLUSTERS.csv, CLUSTER-MERGES.csv and faces.0.csv, copies hash-verified on
-  2026-09-15. `record_people.py --apply` refreshes answers.csv there every time.
+  FACE-CLUSTERS.csv, CLUSTER-MERGES.csv and faces.0.csv. Hashing the copies
+  through the mount only proved the LOCAL CACHE had them (learning 25); the
+  upload was confirmed separately from Drive for Desktop's own queue - the
+  `operations` table in `%LOCALAPPDATA%\Google\DriveFS\<account>\metadata_sqlite_db`
+  read 0 for both accounts at 15:25. `record_people.py --apply` refreshes
+  answers.csv there every time; re-check that queue before trusting a new copy.
 
 ### When `VIDEO FACES COMPLETE` appears
 
 1. `python tools\assign_video_faces.py --verify` and `--verify-db` - prove it.
 2. Copy `D:\_enrichment\faces.video.csv` and `D:\_PhotoAudit\FACE-CLUSTERS-VIDEO.csv`
    into the G: backup folder beside the others.
-3. **Teach `merge_clusters.py` to read video faces** (`face-emb-video.npy`, aligned
-   to `FACE-CLUSTERS-VIDEO.csv`). Today it reads photograph faces only, so a
-   video-only cluster never merges with its person. Then re-run the merge.
-4. `python tools\people_sheet.py --top 60` and give Krish round 4.
+3. **Teach `merge_clusters.py` to read video faces.** Today it reads photograph
+   faces only, so a video-only cluster never merges with its person, and a video
+   face that joined an unnamed sibling of a named group gets no name. Join
+   `FACE-CLUSTERS-VIDEO.csv` to the embeddings in `faces.video.csv` on
+   `(image, face_index)` - never a parallel file matched by position (learning
+   45). Then re-run the merge and `build_db.py`.
+4. `python tools\people_sheet.py --top 60`, then `python tools\verify_people_sheet.py`
+   MUST exit 0 before Krish sees it: it checks every crop's `data-face` against
+   the assignment files. Then give him round 4.
 
 ### Decided by Krish on 2026-09-15 (full text: `docs/ROADMAP.md`, Phase 8)
 
@@ -122,11 +138,12 @@ pwsh -NoProfile -File scripts\chains\arm.ps1 -Chain chain_video_faces.ps1 -TaskN
 3. Segment (Phase 4), reclaim (5), mirror to H: with server-side checksums (6),
    and only then purge Elements (7).
 
-### Waiting on Krish
+### Decided: the repository stays public (Krish, 2026-09-15)
 
-- **This repository is PUBLIC** and commit messages and docs from 2026-09-15 name
-  family members next to photograph counts. Whether to scrub that history is his
-  call; nothing has been rewritten.
+Commit messages and docs name family members next to photograph counts. Krish
+has seen that and said keep it public for now, no scrub. Do not reopen it, but do
+not add anything more sensitive than that: the answers journal, face data and
+anything the tripwire in `tools/publish_state.py` catches stay off GitHub.
 
 ### No Anthropic API is required, by design
 

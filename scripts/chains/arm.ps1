@@ -44,13 +44,22 @@ $repo = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 # todo list the next run will claim, so the same file is paid for twice. Seen for
 # real on 2026-09-12: a re-arm left pid 29248 classifying with a dead parent while
 # its replacement started up. Unregistering a task is not stopping the work.
+#
+# The list must name EVERY script a chain launches. On 2026-09-15 it still named
+# only the phase-3 scripts, so re-arming the video-faces chain would have left
+# three video_face_frames shards orphaned while three new ones started on the
+# same frames, writing the same temporary files.
+$workers = @('classify_live', 'faces_embed', 'refix_rotated', 'master_sheet',
+             'build_inventory', 'video_face_frames', 'assign_video_faces',
+             'merge_clusters', 'build_db', 'verify_faces')
+$workerPattern = ($workers | ForEach-Object { [regex]::Escape($_) }) -join '|'
 function Stop-ChainWorkers {
     $ours = Get-CimInstance Win32_Process -Filter "Name='python.exe'" -ErrorAction SilentlyContinue |
-            Where-Object { $_.CommandLine -match 'classify_live|faces_embed|refix_rotated|master_sheet|build_inventory' }
+            Where-Object { $_.CommandLine -match $workerPattern }
     foreach ($w in $ours) {
         $parent = Get-CimInstance Win32_Process -Filter "ProcessId=$($w.ParentProcessId)" -ErrorAction SilentlyContinue
         if (-not $parent) {
-            $what = @("classify_live","faces_embed","refix_rotated","master_sheet","build_inventory") | Where-Object { $w.CommandLine -match $_ } | Select-Object -First 1
+            $what = $workers | Where-Object { $w.CommandLine -match $_ } | Select-Object -First 1
             Write-Host ("  orphan {0} ({1}) - stopping" -f $w.ProcessId, $what)
             Stop-Process -Id $w.ProcessId -Force -ErrorAction SilentlyContinue
         }

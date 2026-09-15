@@ -1605,3 +1605,46 @@ The rule: before trusting a resolved field, ask whether the real world allows
 more than one true value for it. People, objects and events do. A precedence
 system built for "which opinion wins" will quietly apply itself to "who else is
 here", where there is nothing to win.
+
+## 50. Forty-nine written rules did not stop eleven of them being broken in one afternoon
+
+On 2026-09-15 a video-faces pipeline was designed, probed, gated and armed in
+about two hours by a session that had the rules in reach and had cited several
+of them while building it. Krish then asked for the work to be checked against
+every lesson. Reading all forty-nine, one at a time, against each new piece
+found eleven real gaps, most of them repeats of rules written in the previous
+three days:
+
+- the faces step's postcondition ran the detector with no limit, so asking "is
+  anything left?" would have started the remaining work inside the check (47)
+- the frames postcondition read shard logs rather than asking the disk (47)
+- the assigner built centroids from a cache matched BY POSITION to its
+  assignment file, checked only by count, and wrote a new position-matched
+  embedding file of its own (45)
+- the Drive backup was reported "checksum-verified" by reading it back through
+  the mount, which only ever reads the local cache (25)
+- `arm.ps1`'s orphan reaper did not know the new script names, so a re-arm would
+  have run two sets of frame workers on the same files (39)
+- `verify_faces.py` sampled the END of a file being appended to, where a
+  half-written row reads as corruption (42)
+- missing videos were skipped silently, unreadable frames were recorded as "no
+  faces", and both verifiers returned "can't tell" - which the chain accepts -
+  when nothing could be re-derived at all (41, 34, 6)
+- no guard's passing path had ever run (47, second tell)
+- the sheet verifier counted crops and could not see a stranger in a row (48)
+- the assigner loaded 1.4 million tag rows into memory (9)
+- nothing proved the video set was complete (33); it was, 12,976 of 12,976
+
+None had caused damage. Every one would have, silently, at the worst moment:
+most sat on paths that only execute ten or twenty hours into the run.
+
+**The rule.** Citing a rule while building is not applying it. Before arming
+anything long, walk the numbered list against each new component - a checklist
+pass, not a recollection - and write the result down. New components are where
+old rules break, because they are written fastest and trusted most.
+
+**The tell.** A design explanation that names the learnings it follows. That is
+evidence the author knows them, which is precisely the state in which eleven
+got broken. Knowing is not the same as having checked.
+
+`tests/test_video_faces.py` now watches each of those guards pass and fail.

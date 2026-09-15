@@ -82,6 +82,46 @@ def load(faces_csv: str, cache: str):
     return rows, E
 
 
+def check_alignment(rows, E, faces_csv: str, sample: int = 24) -> list[str]:
+    """Re-derive a sample of E from its source. -> a list of problems, empty if right.
+
+    E (face-emb.npy) and rows (FACE-CLUSTERS.csv) are matched BY POSITION: the
+    cache is faces.0.csv's embeddings in row order, and the assignment file was
+    written in that same order. Learning 45 is what position-matched files do,
+    and a row-count check cannot see it - the 2026-09-13 corruption had the
+    right count. So a sample from the start, middle and end is looked up in the
+    source by (hash, face_index) and compared. Streamed: only the sampled keys
+    are held in memory, because faces.0.csv is 180 MB.
+    """
+    import numpy as np
+    n = len(rows)
+    if n != E.shape[0]:
+        return ["{:,} rows but {:,} embeddings".format(n, E.shape[0])]
+    if n == 0:
+        return ["no rows to check"]
+    idx = sorted({0, n - 1} | {int(i * (n - 1) / max(sample - 1, 1))
+                               for i in range(sample)})
+    want = {(rows[i]["hash"], str(rows[i]["face_index"])): i for i in idx}
+    found = {}
+    with io.open(faces_csv, encoding="utf-8", errors="replace", newline="") as f:
+        for r in csv.DictReader(f):
+            k = (r.get("hash"), str(r.get("face_index")))
+            if k in want and r.get("emb"):
+                found[k] = r["emb"]
+    problems = []
+    for k, i in sorted(want.items(), key=lambda kv: kv[1]):
+        if k not in found:
+            problems.append("row {:,} ({} face {}) is not in {}".format(
+                i, k[0][:12], k[1], faces_csv))
+            continue
+        v = np.frombuffer(base64.b64decode(found[k]), dtype=np.float16).astype(np.float32)
+        cos = float(np.dot(v, E[i]))
+        if cos < 0.99:
+            problems.append("row {:,} ({} face {}): cached embedding has cosine {:.3f} "
+                            "with its source".format(i, k[0][:12], k[1], cos))
+    return problems
+
+
 def cluster(E, order, thresh: float, say=print):
     """Greedy centroid assignment. -> labels array, one cluster id per face."""
     import numpy as np

@@ -4,7 +4,8 @@ home video is not judged on five instants.
     python video_face_frames.py --out D:\_frames                  # every video
     python video_face_frames.py --out D:\_frames --shard 0/3
     python video_face_frames.py --out D:\_frames --limit 20       # a probe
-    python video_face_frames.py --out D:\_frames --verify 6       # 0 right, 1 wrong, 2 can't tell
+    python video_face_frames.py --out D:\_frames --outstanding    # what is left NOW
+    python video_face_frames.py --out D:\_frames --verify 6       # 0 right, 1 wrong, 2 nothing yet
 
 WHY NOT frames.py
 
@@ -27,20 +28,29 @@ A separate tree, not beside the thumbnails, because batch_classify.assets_for
 treats <hash>_fN.jpg in D:\_thumbs as frames to SEND TO THE MODEL, and sixty of
 them per video would multiply the next classification bill:
 
-    <out>/<hash[:2]>/<hash>_t<milliseconds>.jpg
+    <out>/<hash[:2]>/<hash>_t<milliseconds>.jpg     a frame
+    <out>/<hash[:2]>/<hash>_t<milliseconds>.failed  ffmpeg could not grab it
 
 Milliseconds, not seconds. The probe named frames by whole seconds, and a clip
 shorter than two seconds put both of its frames at _t0 - the second overwrote the
-first and the run still reported two frames made.
+first and the run still reported two frames made (learning 23).
+
+A frame ffmpeg cannot grab gets a .failed marker saying why, so a resumed run does
+not retry it for ever and --outstanding can tell "not done yet" from "cannot be
+done" - the difference between a postcondition that can pass and one that never
+will (learning 47).
 
 Hashes come from library.db, which holds one for every file. frames.py hashes
 each video itself; doing that here would re-read 136 hours of footage to learn
-something already known.
+something already known. A video library.db lists but the disk does not have is
+COUNTED and reported, and too many of them stops the run: an absent input is not
+an empty one (learnings 34, 41).
 """
 
 from __future__ import annotations
 
 import argparse
+import io
 import math
 import os
 import random
@@ -69,26 +79,46 @@ def offsets(dur: float) -> list[float]:
 
 
 def targets(out: str, h: str, dur: float) -> list[tuple[float, str]]:
+    """-> [(seconds, frame path)], every path distinct.
+
+    Two offsets can round to the same millisecond only on a clip a few
+    milliseconds long; they name the same frame, so it is sampled once rather
+    than written twice to one path."""
     sub = os.path.join(out, h[:2])
-    return [(t, os.path.join(sub, "{}_t{}.jpg".format(h, int(round(t * 1000)))))
-            for t in offsets(dur)]
+    seen, res = set(), []
+    for t in offsets(dur):
+        dst = os.path.join(sub, "{}_t{}.jpg".format(h, int(round(t * 1000))))
+        if dst not in seen:
+            seen.add(dst)
+            res.append((t, dst))
+    return res
 
 
-def videos(db_path: str) -> list[tuple[str, str, float | None]]:
-    """-> [(hash, path, duration)], one row per distinct video, first path that
-    exists on disk. A hash can sit at several paths (hardlinks, duplicates) and
-    its frames are the same whichever one is read."""
+def marker(dst: str) -> str:
+    return dst[:-4] + ".failed"
+
+
+def videos(db_path: str) -> tuple[list[tuple[str, str, float | None]], int]:
+    """-> ([(hash, path, duration)], videos with no path on disk).
+
+    One row per distinct video, first path that exists. A hash can sit at several
+    paths (hardlinks, duplicates) and its frames are the same whichever is read."""
+    if not os.path.exists(db_path):
+        raise SystemExit("STOPPING: no library.db at {}".format(db_path))
     db = sqlite3.connect("file:{}?mode=ro".format(db_path.replace("\\", "/")),
                          uri=True)
-    seen, out = set(), []
-    for h, p, d in db.execute(
+    try:
+        rows = db.execute(
             "SELECT hash, path, duration FROM files "
-            "WHERE media = 'video' AND hash IS NOT NULL ORDER BY hash, path"):
-        if h in seen or not os.path.exists(p):
-            continue
-        seen.add(h)
-        out.append((h, p, d))
-    return out
+            "WHERE media = 'video' AND hash IS NOT NULL ORDER BY hash, path").fetchall()
+    finally:
+        db.close()          # never hold the database open: build_db renames over it
+    found, known = {}, set()
+    for h, p, d in rows:
+        known.add(h)
+        if h not in found and os.path.exists(p):
+            found[h] = (h, p, d)
+    return list(found.values()), len(known) - len(found)
 
 
 def verify(a) -> int:
@@ -115,18 +145,23 @@ def verify(a) -> int:
         print("verify: no frames yet")
         return 2
     pick = random.Random(len(found)).sample(found, min(a.verify, len(found)))
-    src = {h: p for h, p, _ in videos(a.db)}
+    src = {h: p for h, p, _ in videos(a.db)[0]}
 
     bad = checked = 0
     for h, ms, fp in pick:
+        if os.path.getsize(fp) == 0:                 # never valid content (learning 6)
+            bad += 1
+            print("  {}_t{}  zero bytes".format(h[:12], ms))
+            continue
         p = src.get(h)
         if not p:
             bad += 1
-            print("  {}  frame for a hash with no video in library.db".format(h[:12]))
+            print("  {}  frame for a hash with no video on disk".format(h[:12]))
             continue
-        tmp = os.path.join(tempfile.gettempdir(), "vff-verify-{}.jpg".format(ms))
+        tmp = os.path.join(tempfile.gettempdir(),
+                           "vff-verify-{}-{}.jpg".format(h[:12], ms))
         if not grab(p, ms / 1000.0, tmp, a.size):
-            continue                          # cannot re-derive is not wrong
+            continue
         try:
             x = np.asarray(Image.open(fp).convert("L").resize((64, 64)), dtype=np.float32)
             y = np.asarray(Image.open(tmp).convert("L").resize((64, 64)), dtype=np.float32)
@@ -139,9 +174,10 @@ def verify(a) -> int:
             bad += 1
             print("  {}_t{}  mean pixel difference {:.1f}  MISMATCH".format(
                 h[:12], ms, diff))
-    if not checked and not bad:
-        print("verify: could not re-derive any of the sample")
-        return 2
+    if checked == 0 and not bad:
+        # frames exist and none could be re-derived: not "can't tell" (learning 6)
+        print("verify: could not re-grab ANY of {} sampled frames".format(len(pick)))
+        return 1
     print("verify: re-grabbed {} of {:,} frames, {} wrong".format(
         checked, len(found), bad))
     return 1 if bad else 0
@@ -158,22 +194,58 @@ def main() -> int:
     ap.add_argument("--limit", type=int, default=0)
     ap.add_argument("--verify", type=int, default=0,
                     help="re-derive this many finished frames and exit")
+    ap.add_argument("--outstanding", action="store_true",
+                    help="count what is left to do now, from disk, and exit")
+    ap.add_argument("--max-missing", type=float, default=0.02,
+                    help="stop if more than this share of videos is not on disk")
     a = ap.parse_args()
 
     if a.verify:
         return verify(a)
 
+    vids, missing = videos(a.db)
+    total = len(vids) + missing
+    print("videos in library.db: {:,}   on disk: {:,}   missing from disk: {:,}".format(
+        total, len(vids), missing), flush=True)
+    if total == 0:
+        print("STOPPING: library.db lists no videos - that is a broken query or "
+              "the wrong database, not an empty library (learning 34)")
+        return 1
+    if missing > max(20, total * a.max_missing):
+        print("STOPPING: {:,} of {:,} videos are not on disk. A drive letter moved "
+              "or the library was reorganised after library.db was built. Rebuild "
+              "it, or pass --max-missing deliberately.".format(missing, total))
+        return 1
+
+    if a.outstanding:
+        todo = present = failed = nodur = 0
+        for h, p, d in vids:
+            if not d or d <= 0:
+                d = duration_s(p)
+            if not d or d <= 0:
+                nodur += 1
+                continue
+            for _, dst in targets(a.out, h, d):
+                if os.path.exists(dst):
+                    present += 1
+                elif os.path.exists(marker(dst)):
+                    failed += 1
+                else:
+                    todo += 1
+        print("frames outstanding: {:,}  present: {:,}  failed: {:,}  "
+              "videos without duration: {:,}  videos missing from disk: {:,}".format(
+                  todo, present, failed, nodur, missing))
+        return 0
+
     si = sn = 0
     if a.shard:
         si, sn = (int(x) for x in a.shard.split("/"))
-
-    vids = videos(a.db)
     if sn:
         vids = [v for v in vids if zlib.crc32(v[0].encode()) % sn == si]
     if a.limit:
         vids = vids[:a.limit]
-    planned = sum(len(offsets(d)) for _, _, d in vids if d)
-    print("videos: {:,}{}   frames planned: {:,}".format(
+    planned = sum(len(targets(a.out, h, d)) for h, _, d in vids if d)
+    print("videos this run: {:,}{}   frames planned: {:,}".format(
         len(vids), "  shard {}/{}".format(si, sn) if sn else "", planned),
         flush=True)
 
@@ -187,7 +259,8 @@ def main() -> int:
             noduration += 1
             continue
         want = targets(a.out, h, d)
-        todo = [(t, dst) for t, dst in want if not os.path.exists(dst)]
+        todo = [(t, dst) for t, dst in want
+                if not os.path.exists(dst) and not os.path.exists(marker(dst))]
         present += len(want) - len(todo)
         if todo:
             os.makedirs(os.path.dirname(todo[0][1]), exist_ok=True)
@@ -202,6 +275,8 @@ def main() -> int:
                 failed += 1
                 if os.path.exists(tmp):
                     os.remove(tmp)
+                with io.open(marker(dst), "w", encoding="utf-8") as f:
+                    f.write("ffmpeg could not grab t={:.3f}s from {}\n".format(t, p))
         if i % 100 == 0:
             print("  {:,}/{:,} videos  made={:,} present={:,} failed={:,} "
                   "no-duration={:,}  {:.0f} min".format(

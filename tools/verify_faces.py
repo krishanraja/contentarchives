@@ -59,9 +59,23 @@ def main() -> int:
         say("verify: no {} yet".format(a.csv))
         return 2
 
+    # The producer appends while this reads, and its buffer flushes at arbitrary
+    # byte offsets, so the last line can be half a row: half an embedding, which
+    # decodes wrong and reads as corruption (learning 42). A verify that fails
+    # on that kills a healthy run. Anything after the final newline is still
+    # being written; it is left for the next check.
+    def complete_lines(f):
+        prev = None
+        for ln in f:
+            if prev is not None:
+                yield prev
+            prev = ln
+        if prev is not None and prev.endswith("\n"):
+            yield prev
+
     rows = []
     with io.open(a.csv, encoding="utf-8", errors="replace", newline="") as f:
-        for r in csv.DictReader(f):
+        for r in csv.DictReader(complete_lines(f)):
             if r.get("emb") and (r.get("face_index") or "-1").isdigit():
                 rows.append(r)
     if len(rows) < 4:
@@ -123,8 +137,13 @@ def main() -> int:
             say("  {}  idx {}  cosine {:.4f}  MISMATCH".format(h[:12], idx, cos))
 
     if checked == 0:
-        say("verify: could not re-derive any of the sample")
-        return 2
+        # NOT "can't tell". The file has rows and none of them could be
+        # re-derived - missing images, a detector that will not load. A check
+        # with no failure mode is not a check (learning 6), and the chain treats
+        # 2 as acceptable, so this has to be 1.
+        say("verify: could not re-derive ANY of {} sampled rows from a file of "
+            "{:,} - that is a failure, not a pass".format(len(picks), n))
+        return 1
     say("verify: recomputed {} of {:,} face rows, {} mismatched".format(
         checked, n, mismatch))
     return 1 if mismatch else 0

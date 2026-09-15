@@ -74,7 +74,12 @@ Invoke-Step -Name 'frames' -ExpectedUnits 32670 -CheckpointMin 15 -VerifyEvery 4
         if ($LASTEXITCODE -ne 0) { return $false }
         if ((Count-Frames) -lt 1) { Say '  the probe wrote no frames'; return $false }
         python -u "$repo\engine\video_face_frames.py" --out $frames --verify 4 *>> $log
-        return ($LASTEXITCODE -eq 0)
+        if ($LASTEXITCODE -ne 0) { return $false }
+        # Exercise the postcondition's own question now, so a check that could
+        # never parse its answer is found in minutes, not after ten hours (47).
+        $o = & python "$repo\engine\video_face_frames.py" --out $frames --outstanding 2>&1 | Out-String
+        Add-Content -Path $log -Value $o.Trim()
+        return ($o -match 'frames outstanding: [\d,]+\s+present: [\d,]+\s+failed: [\d,]+')
     } `
     -Start {
         Get-ChildItem 'D:\_PhotoAudit\video-frames-*.out' -ErrorAction SilentlyContinue | Remove-Item
@@ -92,18 +97,21 @@ Invoke-Step -Name 'frames' -ExpectedUnits 32670 -CheckpointMin 15 -VerifyEvery 4
         return ($LASTEXITCODE -ne 1)
     } `
     -Postcondition {
-        $failed = 0
-        foreach ($i in 0..($FrameShards - 1)) {
-            $o = Get-Content "D:\_PhotoAudit\video-frames-$i.out" -Raw -ErrorAction SilentlyContinue
-            if ($o -notmatch 'finished') { Say "  frame shard $i did not finish"; return $false }
-            $m = [regex]::Match($o, 'frames made ([\d,]+), already present ([\d,]+), failed ([\d,]+)')
-            if (-not $m.Success) { Say "  frame shard $i printed no summary"; return $false }
-            $failed += [int]($m.Groups[3].Value -replace ',', '')
-        }
-        $n = Count-Frames
-        Say ("  frames on disk {0:N0}, failed {1:N0}" -f $n, $failed)
-        if ($n -lt 25000) { Say '  far fewer frames than the ~32,670 planned'; return $false }
-        return ($failed -le [math]::Max(50, $n * 0.02))
+        # Ask the disk what is left NOW (learning 47), not what the shard logs
+        # announced. A frame ffmpeg could not grab carries a .failed marker, so
+        # "outstanding" can reach zero on a library with a few broken clips, and
+        # the broken ones are counted rather than hidden.
+        $o = & python "$repo\engine\video_face_frames.py" --out $frames --outstanding 2>&1 | Out-String
+        Add-Content -Path $log -Value $o.Trim()
+        $m = [regex]::Match($o, 'frames outstanding: ([\d,]+)\s+present: ([\d,]+)\s+failed: ([\d,]+)')
+        if (-not $m.Success) { Say '  could not read the outstanding count'; return $false }
+        $left    = [int]($m.Groups[1].Value -replace ',', '')
+        $present = [int]($m.Groups[2].Value -replace ',', '')
+        $failed  = [int]($m.Groups[3].Value -replace ',', '')
+        Say ("  frames present {0:N0}, outstanding {1:N0}, could not be grabbed {2:N0}" -f $present, $left, $failed)
+        if ($left -ne 0) { return $false }
+        if ($present -lt 25000) { Say '  far fewer frames than the ~32,670 planned'; return $false }
+        return ($failed -le [math]::Max(50, ($present + $failed) * 0.02))
     }
 
 # ---- 2. faces ----------------------------------------------------------------
@@ -116,7 +124,11 @@ Invoke-Step -Name 'faces' -ExpectedUnits 45000 -CheckpointMin 15 -VerifyEvery 4 
         if ($LASTEXITCODE -ne 0) { return $false }
         if ((Count-Lines $vcsv) -lt 2) { Say '  the probe wrote no rows'; return $false }
         python -u "$repo\tools\verify_faces.py" --csv $vcsv --sample 4 *>> $log
-        return ($LASTEXITCODE -ne 1)
+        if ($LASTEXITCODE -eq 1) { return $false }
+        # the postcondition's own question, exercised now (learning 47)
+        $o = & python "$repo\engine\faces_embed.py" --frames $frames --store D:\_enrichment --dry-run 2>&1 | Out-String
+        Add-Content -Path $log -Value $o.Trim()
+        return ($o -match '[\d,]+ images to look at, [\d,]+ already done, [\d,]+ unreadable')
     } `
     -Start {
         Start-Process python -PassThru -WindowStyle Hidden -ArgumentList @(
@@ -131,13 +143,19 @@ Invoke-Step -Name 'faces' -ExpectedUnits 45000 -CheckpointMin 15 -VerifyEvery 4 
         return ($LASTEXITCODE -ne 1)
     } `
     -Postcondition {
-        # not "the file has rows": ask whether any frame is still unexamined
-        $o = & python "$repo\engine\faces_embed.py" --frames $frames --store D:\_enrichment 2>&1 | Out-String
-        $m = [regex]::Match($o, '([\d,]+) images to look at')
+        # Ask whether any frame is still unexamined NOW. --dry-run is essential:
+        # without it this check would START the remaining detection inside the
+        # postcondition, unsupervised, whenever anything was left (learning 47).
+        $o = & python "$repo\engine\faces_embed.py" --frames $frames --store D:\_enrichment --dry-run 2>&1 | Out-String
+        Add-Content -Path $log -Value $o.Trim()
+        $m = [regex]::Match($o, '([\d,]+) images to look at, ([\d,]+) already done, ([\d,]+) unreadable')
         if (-not $m.Success) { Say '  could not read the outstanding count'; return $false }
         $left = [int]($m.Groups[1].Value -replace ',', '')
-        Say ("  frames not yet examined: {0:N0}" -f $left)
-        return ($left -eq 0)
+        $done = [int]($m.Groups[2].Value -replace ',', '')
+        $bad  = [int]($m.Groups[3].Value -replace ',', '')
+        Say ("  frames examined {0:N0}, not yet {1:N0}, unreadable {2:N0}" -f $done, $left, $bad)
+        if ($left -ne 0) { return $false }
+        return ($bad -le [math]::Max(20, $done * 0.005))
     }
 
 # ---- 3. assign ---------------------------------------------------------------

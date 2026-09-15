@@ -49,6 +49,7 @@ import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.join(HERE, "..", "engine"))
+sys.path.insert(0, HERE)
 
 ASSIGN = r"D:\_PhotoAudit\FACE-CLUSTERS.csv"
 CACHE = r"D:\_PhotoAudit\face-emb.npy"
@@ -69,6 +70,8 @@ def main() -> int:
         formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--assign", default=ASSIGN)
     ap.add_argument("--cache", default=CACHE)
+    ap.add_argument("--photo-faces", default=r"D:\_enrichment\faces.0.csv",
+                    help="the source face-emb.npy was decoded from, for the alignment check")
     ap.add_argument("--answers", default=ANSWERS)
     ap.add_argument("--out", default=MERGES)
     ap.add_argument("--store", default=r"D:\_enrichment")
@@ -84,6 +87,16 @@ def main() -> int:
     if len(rows) != E.shape[0]:
         print("assignment file and embedding cache disagree: {} vs {}".format(
             len(rows), E.shape[0]))
+        return 1
+    # A matching COUNT is not alignment: they are paired by position, and the
+    # 2026-09-13 corruption had the right count (learning 45). Centroids from a
+    # drifted cache would merge strangers and pass the name test while doing it.
+    from cluster_faces import check_alignment
+    problems = check_alignment(rows, E, a.photo_faces)
+    if problems:
+        print("STOPPING: face-emb.npy does not match its source:")
+        for p in problems[:10]:
+            print("   " + p)
         return 1
 
     idxs = collections.defaultdict(list)
@@ -177,7 +190,10 @@ def main() -> int:
         print("dry run - nothing written. Re-run with --apply.")
         return 0
 
-    with io.open(a.out, "w", encoding="utf-8", newline="") as f:
+    # .tmp and rename: people_sheet and assign_video_faces read this file, and a
+    # reader must see the old one or the new one, never a prefix (learning 42)
+    tmp = a.out + ".tmp"
+    with io.open(tmp, "w", encoding="utf-8", newline="") as f:
         w = csv.writer(f)
         w.writerow(["cluster", "group", "person", "source"])
         for g, members in groups.items():
@@ -186,6 +202,7 @@ def main() -> int:
             for c in members:
                 src = "human" if c in names else ("cluster-merge" if person else "")
                 w.writerow([c, g, person if src else "", src])
+    os.replace(tmp, a.out)
     print()
     print("wrote {}".format(a.out))
 

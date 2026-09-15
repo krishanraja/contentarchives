@@ -1,7 +1,9 @@
 r"""Put video faces into the clusters Krish has already named. Never renumber.
 
-    python assign_video_faces.py             # report, write nothing
+    python assign_video_faces.py              # report, write nothing
     python assign_video_faces.py --apply
+    python assign_video_faces.py --verify     # 0 right, 1 wrong, 2 nothing written yet
+    python assign_video_faces.py --verify-db  # did named video faces reach library.db?
 
 WHY NOT RE-RUN cluster_faces.py
 
@@ -17,12 +19,24 @@ That is how a frame of Krish at 3:40 into a video becomes a photograph of Krish
 without anybody being asked. Faces that match nobody are clustered among
 themselves, best-detected first, and numbered after the highest existing id.
 
+THE FROZEN CENTROIDS ARE CHECKED BEFORE THEY ARE USED
+
+They are built from face-emb.npy, which is matched to FACE-CLUSTERS.csv BY
+POSITION. That is the exact shape of learning 45, and a row-count check cannot
+see a drift, so a sample is re-derived from faces.0.csv first and the run refuses
+if any of it disagrees. Wrong centroids would put the wrong names on videos.
+
 WHAT IT WRITES (only with --apply)
 
-  FACE-CLUSTERS-VIDEO.csv  one row per video face, with the frame it came from
-  face-emb-video.npy       the embeddings in the same order, for merge_clusters
+  FACE-CLUSTERS-VIDEO.csv  one row per video face, with the frame it came from,
+                           written to .tmp and renamed (learning 42)
   cluster tags             (hash, cluster, cN, faces-video), for every cluster
                            with at least two faces across photographs and video
+
+No embedding file is written beside it. The embeddings already live in
+faces.video.csv, in the row that describes each face, and anything that needs
+them joins on (image, face_index) - a second copy matched by position is the
+thing learning 45 says not to build.
 
 It refuses to tag a second time. New cluster ids depend on the whole set of
 video faces, so tagging again after more frames arrived would write different
@@ -44,49 +58,59 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 sys.path.insert(0, os.path.join(HERE, "..", "engine"))
 
-from cluster_faces import DIM, cluster                           # noqa: E402
+from cluster_faces import DIM, check_alignment, cluster          # noqa: E402
 
 ASSIGN = r"D:\_PhotoAudit\FACE-CLUSTERS.csv"
 CACHE = r"D:\_PhotoAudit\face-emb.npy"
+PHOTO_FACES = r"D:\_enrichment\faces.0.csv"
 FACES = r"D:\_enrichment\faces.video.csv"
 OUT = r"D:\_PhotoAudit\FACE-CLUSTERS-VIDEO.csv"
-OUT_EMB = r"D:\_PhotoAudit\face-emb-video.npy"
 MERGES = r"D:\_PhotoAudit\CLUSTER-MERGES.csv"
 STORE = r"D:\_enrichment"
+DB = r"D:\_PhotoAudit\library.db"
+
+
+def iter_csv(p: str):
+    """Streamed. content_tags.csv is 1.4 million rows on a machine that kills
+    jobs under memory pressure (learning 9)."""
+    with io.open(p, encoding="utf-8", errors="replace", newline="") as f:
+        yield from csv.DictReader(f)
 
 
 def read_csv(p: str) -> list[dict]:
-    with io.open(p, encoding="utf-8", errors="replace", newline="") as f:
-        return list(csv.DictReader(f))
+    return list(iter_csv(p))
 
 
 def face_rows(p: str) -> list[dict]:
-    return [r for r in read_csv(p)
+    return [r for r in iter_csv(p)
             if r.get("emb") and (r.get("face_index") or "-1").lstrip("-").isdigit()
             and int(r["face_index"]) >= 0]
 
 
-def verify(a, C, k: int) -> int:
-    """Re-derive a sample of written assignments. 0 right, 1 wrong, 2 can't tell.
-
-    Two things are checked, because either alone passes a broken run: that each
-    stored embedding is still the one faces.video.csv holds for that frame and
-    face (the position-drift that corrupted 11,000 photographs on 2026-09-13),
-    and that recomputing the match against the frozen clusters gives the cluster
-    that was written."""
+def decode(emb: str):
     import numpy as np
-    if not (os.path.exists(a.out) and os.path.exists(a.out_emb)):
+    return np.frombuffer(base64.b64decode(emb), dtype=np.float16).astype(np.float32)
+
+
+def verify(a, C, k: int) -> int:
+    """Re-derive a sample of the written assignment. 0 right, 1 wrong, 2 not yet.
+
+    Recomputes each sampled face's match against the frozen clusters from its
+    own embedding in faces.video.csv, and checks the file covers every face
+    detected - a file missing half the faces is well-formed and wrong
+    (learning 33)."""
+    import numpy as np
+    if not os.path.exists(a.out):
         print("verify: no assignment written yet")
         return 2
     rows = read_csv(a.out)
-    V = np.load(a.out_emb)
-    if len(rows) != V.shape[0]:
-        print("verify: {:,} rows but {:,} embeddings - misaligned".format(
-            len(rows), V.shape[0]))
+    src = {(r["image"], r["face_index"]): r["emb"] for r in face_rows(a.faces)}
+    if len(rows) != len(src):
+        print("verify: {:,} assignments for {:,} detected faces".format(len(rows), len(src)))
         return 1
     if not rows:
-        return 2
-    src = {(r["image"], r["face_index"]): r["emb"] for r in face_rows(a.faces)}
+        print("verify: an assignment file with no rows")
+        return 1
     bad = checked = 0
     for i in range(0, len(rows), max(1, len(rows) // a.sample)):
         r = rows[i]
@@ -95,20 +119,17 @@ def verify(a, C, k: int) -> int:
             bad += 1
             print("  {} face {}  not in {}".format(r["image"][:20], r["face_index"], a.faces))
             continue
-        v = np.frombuffer(base64.b64decode(emb), dtype=np.float16).astype(np.float32)
-        if float(np.dot(v, V[i])) < 0.99:
-            bad += 1
-            print("  row {}  stored embedding belongs to a different face".format(i))
-            continue
-        sims = C @ V[i]
+        v = decode(emb)
+        sims = C @ v
         j = int(sims.argmax())
         cid = int(r["cluster"][1:])
-        ok = (cid == j) if float(sims[j]) >= a.threshold else (cid >= k)
+        joined = float(sims[j]) >= a.threshold
+        ok = (cid == j) if joined else (cid >= k)
         checked += 1
         if not ok:
             bad += 1
             print("  row {}  written c{}, re-derived {}".format(
-                i, cid, "c{}".format(j) if float(sims[j]) >= a.threshold else "a new cluster"))
+                i, cid, "c{}".format(j) if joined else "a new cluster"))
     print("verify: re-derived {} of {:,} assignments, {} wrong".format(
         checked, len(rows), bad))
     return 1 if bad else 0
@@ -123,28 +144,33 @@ def verify_db(a) -> int:
     if not os.path.exists(a.out):
         print("verify-db: no assignment written yet")
         return 2
+    if not os.path.exists(a.db):
+        print("verify-db: no database at {}".format(a.db))
+        return 1
     named = {}
-    for r in read_csv(os.path.join(a.store, "answers.csv")):
+    for r in iter_csv(os.path.join(a.store, "answers.csv")):
         if r.get("scope") == "cluster":
             if r.get("field") == "person":
                 named[r["target"]] = r["value"]
             elif r["target"] in named:
                 del named[r["target"]]       # a later non-name answer supersedes
-    rows = [r for r in read_csv(a.out) if r["cluster"] in named]
+    rows = [r for r in iter_csv(a.out) if r["cluster"] in named]
     if not rows:
         print("verify-db: no video face is in a directly named cluster")
-        return 2
-    db = sqlite3.connect("file:{}?mode=ro".format(
-        os.path.join(os.path.dirname(a.out), "library.db").replace("\\", "/")), uri=True)
-    bad = checked = 0
-    for r in rows[::max(1, len(rows) // a.sample)]:
-        hit = db.execute("SELECT 1 FROM photo_people WHERE hash = ? AND person = ?",
-                         (r["hash"], named[r["cluster"]])).fetchone()
-        checked += 1
-        if not hit:
-            bad += 1
-            print("  {}  {} not on the video in library.db".format(
-                r["hash"][:12], named[r["cluster"]]))
+        return 1
+    db = sqlite3.connect("file:{}?mode=ro".format(a.db.replace("\\", "/")), uri=True)
+    try:
+        bad = checked = 0
+        for r in rows[::max(1, len(rows) // a.sample)]:
+            hit = db.execute("SELECT 1 FROM photo_people WHERE hash = ? AND person = ?",
+                             (r["hash"], named[r["cluster"]])).fetchone()
+            checked += 1
+            if not hit:
+                bad += 1
+                print("  {}  {} not on the video in library.db".format(
+                    r["hash"][:12], named[r["cluster"]]))
+    finally:
+        db.close()
     print("verify-db: {} named video faces checked, {} missing".format(checked, bad))
     return 1 if bad else 0
 
@@ -155,11 +181,12 @@ def main() -> int:
         formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--assign", default=ASSIGN)
     ap.add_argument("--cache", default=CACHE)
+    ap.add_argument("--photo-faces", default=PHOTO_FACES)
     ap.add_argument("--faces", default=FACES)
     ap.add_argument("--out", default=OUT)
-    ap.add_argument("--out-emb", default=OUT_EMB)
     ap.add_argument("--merges", default=MERGES)
     ap.add_argument("--store", default=STORE)
+    ap.add_argument("--db", default=DB)
     ap.add_argument("--threshold", type=float, default=0.55)
     ap.add_argument("--min-score", type=float, default=0.60)
     ap.add_argument("--apply", action="store_true")
@@ -175,26 +202,33 @@ def main() -> int:
 
     import numpy as np
 
-    for p in (a.assign, a.cache, a.faces):
+    for p in (a.assign, a.cache, a.photo_faces, a.faces):
         if not os.path.exists(p):
             print("STOPPING: {} does not exist".format(p))
             return 1
 
     photo = read_csv(a.assign)
     E = np.load(a.cache)
-    if len(photo) != E.shape[0]:
-        print("STOPPING: {} rows in {} but {} embeddings in {} - they must "
-              "describe the same faces in the same order".format(
-                  len(photo), a.assign, E.shape[0], a.cache))
+    problems = check_alignment(photo, E, a.photo_faces)
+    if problems:
+        print("STOPPING: the frozen clusters' embeddings do not match their source "
+              "(learning 45). Centroids built from them would put the wrong names "
+              "on videos:")
+        for p in problems[:10]:
+            print("   " + p)
         return 1
+    print("frozen embeddings re-derived from {} - aligned".format(
+        os.path.basename(a.photo_faces)))
 
     ids = np.array([int(r["cluster"][1:]) for r in photo], dtype=np.int64)
     k = int(ids.max()) + 1
     S = np.zeros((k, DIM), dtype=np.float32)
     np.add.at(S, ids, E)
+    del E
     photo_count = np.bincount(ids, minlength=k)
     nrm = np.linalg.norm(S, axis=1, keepdims=True)
     C = S / np.where(nrm > 0, nrm, 1.0)          # empty ids stay zero: never match
+    del S
     print("frozen clusters: {:,} (ids c0-c{}), from {:,} photograph faces".format(
         int((photo_count > 0).sum()), k - 1, len(photo)))
 
@@ -207,7 +241,7 @@ def main() -> int:
         return 1
     V = np.empty((len(vids), DIM), dtype=np.float32)
     for i, r in enumerate(vids):
-        V[i] = np.frombuffer(base64.b64decode(r["emb"]), dtype=np.float16)
+        V[i] = decode(r["emb"])
     print("video faces: {:,} in {:,} frames of {:,} videos".format(
         len(vids), len({r["image"] for r in vids}), len({r["hash"] for r in vids})))
 
@@ -235,6 +269,7 @@ def main() -> int:
                  list(rest[np.argsort(-score[rest])]))
         sub, new_k = cluster(V[miss], order, a.threshold, say=lambda m: None)
         label[miss] = sub.astype(np.int64) + k
+    del V
 
     total = collections.Counter(label.tolist())
     for c, n in enumerate(photo_count.tolist()):
@@ -243,11 +278,11 @@ def main() -> int:
 
     # what it buys, in the terms that matter: named people found in video
     named = {}
-    for r in read_csv(os.path.join(a.store, "answers.csv")):
+    for r in iter_csv(os.path.join(a.store, "answers.csv")):
         if r.get("scope") == "cluster" and r.get("field") == "person":
             named[r["target"]] = r["value"]
     if os.path.exists(a.merges):
-        for r in read_csv(a.merges):
+        for r in iter_csv(a.merges):
             if r.get("person") and r["cluster"] not in named:
                 named[r["cluster"]] = r["person"]
     by_video = collections.defaultdict(set)
@@ -274,11 +309,12 @@ def main() -> int:
     tags_csv = os.path.join(a.store, "content_tags.csv")
     have = set()
     already = 0
-    for r in read_csv(tags_csv):
-        if r.get("tag") == "cluster":
-            have.add((r["hash"], r["value"]))
-            if r.get("source") == "faces-video":
-                already += 1
+    if os.path.exists(tags_csv):
+        for r in iter_csv(tags_csv):
+            if r.get("tag") == "cluster":
+                have.add((r["hash"], r["value"]))
+                if r.get("source") == "faces-video":
+                    already += 1
     if already:
         print()
         print("REFUSING: the store already holds {:,} faces-video cluster tags.".format(
@@ -287,7 +323,8 @@ def main() -> int:
         print("run would tag the same people under different ids, permanently.")
         return 1
 
-    with io.open(a.out, "w", encoding="utf-8", newline="") as f:
+    tmp = a.out + ".tmp"
+    with io.open(tmp, "w", encoding="utf-8", newline="") as f:
         w = csv.writer(f)
         w.writerow(["hash", "image", "face_index", "cluster", "det_score", "bbox",
                     "how"])
@@ -295,9 +332,9 @@ def main() -> int:
             w.writerow([r["hash"], r["image"], r["face_index"],
                         "c{}".format(label[i]), r["det_score"], r["bbox"],
                         "joined" if label[i] < k else "new"])
-    np.save(a.out_emb, V)
+    os.replace(tmp, a.out)
     print()
-    print("wrote {} and {}".format(a.out, a.out_emb))
+    print("wrote {}".format(a.out))
 
     best = {}
     for i, r in enumerate(vids):
