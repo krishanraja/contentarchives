@@ -36,6 +36,7 @@ import csv
 import io
 import os
 import re
+import shutil
 import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -44,6 +45,9 @@ sys.path.insert(0, os.path.join(HERE, "..", "engine"))
 from answers import Journal                                      # noqa: E402
 
 TAGS = r"D:\_enrichment\content_tags.csv"
+# A second copy of the journal, off the library disk. It is the only data in the
+# project compute cannot reproduce, and until 2026-09-15 it lived on one drive.
+BACKUP = r"G:\My Drive\Personal\Family\Photo library - answers backup"
 LINE = re.compile(r"^\s*(c\d+)\s*[=:\t ]\s*(.+?)\s*$")
 
 
@@ -191,6 +195,13 @@ def main() -> int:
     print()
     print("recorded {} names, {} questions, {} unidentifiable to {}".format(
         len(pairs), len(unknown), len(unreadable), j.path))
+    try:
+        os.makedirs(BACKUP, exist_ok=True)
+        shutil.copyfile(j.path, os.path.join(BACKUP, "answers.csv"))
+        print("backed up the journal to {}".format(BACKUP))
+    except OSError as e:
+        # loud, not fatal: the answer IS recorded, it just has one copy
+        print("WARNING: journal NOT backed up to {}: {}".format(BACKUP, e))
     print("rebuild the index to see them on the photographs:")
     print("    python tools/build_db.py")
     return 0

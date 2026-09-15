@@ -2,9 +2,9 @@
 
 **You have been asked to resume the media consolidation.**
 
-> **Machine state first.** A drive migration is part-done and the drive letters
-> moved on 2026-09-11. Read [RIGHT NOW](#right-now-finish-the-drive-migration-handover-point-2026-09-11)
-> before running any command in this file, including the ones directly below.
+> **Machine state first.** Read **RIGHT NOW** below before running any command in
+> this file, including the ones directly below. It is the handover point, and it
+> says what is running unattended at this moment.
 
 ```bash
 cd C:\Users\krish\dev\contentarchives
@@ -34,37 +34,95 @@ exclusion, deletion or classification rule.**
 
 ----
 
-## RIGHT NOW: faces running unattended, self-verifying (2026-09-13, 16:00)
+## RIGHT NOW: naming faces; video faces running unattended (2026-09-15, 15:00)
 
-**Nothing needs a human.** The chain is a scheduled task that restarts itself,
-resumes from where it died, and checks its own output is CORRECT every hour.
+**One chain is running and nothing needs a human until it finishes.**
 
 ```powershell
-pwsh -NoProfile -File scripts\chains\arm.ps1 -Status
-Get-Content D:\_PhotoAudit\phase3.log -Tail 5
+pwsh -NoProfile -File scripts\chains\arm.ps1 -Status -TaskName contentarchives-video-faces
+Get-Content D:\_PhotoAudit\video-faces.log -Tail 8
 ```
 
 Healthy looks like `state : Running`, a `CHECKPOINT` line every 15 minutes and a
-`verify OK` line every hour. Its last line will be `PHASE 3B COMPLETE`.
+`verify OK` line about hourly. Four steps, each resumable:
+
+| step | what | expected |
+|---|---|---|
+| frames | `engine/video_face_frames.py`, 3 shards, one frame per 30 s into `D:\_frames` | ~32,670 frames, ~7 h (80/min measured at 14:56) |
+| faces | `engine/faces_embed.py --frames`, ONE process, into `D:\_enrichment\faces.video.csv` | ~18 h at 0.5 img/s |
+| assign | `tools/assign_video_faces.py --apply`, joins the FROZEN clusters | minutes |
+| rebuild | `tools/build_db.py` | ~8 min |
+
+The last line will be `VIDEO FACES COMPLETE`.
+
+- **If it halted**, `D:\_PhotoAudit\VIDEO-FACES-HALTED.txt` says why. Fix the
+  cause, delete that file, re-arm.
+- **After a reboot the task is gone** (by design). Re-arm; frames and faces resume
+  where they were, and assign skips itself if its tags are already in the store:
+
+```powershell
+pwsh -NoProfile -File scripts\chains\arm.ps1 -Chain chain_video_faces.ps1 -TaskName contentarchives-video-faces
+```
+
+### Where the naming is
+
+- **Three rounds of `PEOPLE.html` answered on 2026-09-15.** 169 answers in the
+  journal `D:\_enrichment\answers.csv`. After the rebuild: 20,724 photographs and
+  videos carry a named person, 106 people, 8,363 group photographs with 2+ names.
+- **The loop:** `tools/people_sheet.py --top 60` writes `D:\_PhotoAudit\PEOPLE.html`
+  -> Krish pastes answers -> `tools/record_people.py --file answers.txt` (dry run,
+  then `--apply`) -> `tools/merge_clusters.py --threshold 0.68 --apply` ->
+  `tools/build_db.py`.
+- **Answer conventions Krish uses:** `c123 = Name`. `c123 = for <who>` is a
+  question queued for the game, recorded as `needs_identifying = <who>`.
+  `c123 = unsure, blurry` is recorded as `unidentifiable` and never asked again.
+  `c123 = ?` is `needs_identifying = yes`. A trailing ` - remark` is a note.
+- **Round 4 was previewed and deliberately NOT shown** (60 rows, 2,261
+  photographs). Wait for `VIDEO FACES COMPLETE`: video frames add faces to known
+  people and create video-only people, and those belong in round 4.
+- **Backed up off the library disk** to
+  `G:\My Drive\Personal\Family\Photo library - answers backup\`: answers.csv,
+  FACE-CLUSTERS.csv, CLUSTER-MERGES.csv and faces.0.csv, copies hash-verified on
+  2026-09-15. `record_people.py --apply` refreshes answers.csv there every time.
+
+### When `VIDEO FACES COMPLETE` appears
+
+1. `python tools\assign_video_faces.py --verify` and `--verify-db` - prove it.
+2. Copy `D:\_enrichment\faces.video.csv` and `D:\_PhotoAudit\FACE-CLUSTERS-VIDEO.csv`
+   into the G: backup folder beside the others.
+3. **Teach `merge_clusters.py` to read video faces** (`face-emb-video.npy`, aligned
+   to `FACE-CLUSTERS-VIDEO.csv`). Today it reads photograph faces only, so a
+   video-only cluster never merges with its person. Then re-run the merge.
+4. `python tools\people_sheet.py --top 60` and give Krish round 4.
+
+### Decided by Krish on 2026-09-15 (full text: `docs/ROADMAP.md`, Phase 8)
+
+- **The game is a hosted page on a subdomain of krishraja.com** (Vercel project
+  `krish-raja`), access-controlled. Not built yet.
+- **Bharti enriches the Communal side only.** Her queue is every cluster whose
+  newest answer is `needs_identifying = Bharti` (9 clusters, 449 Communal
+  photographs); she is shown the Communal ones.
+- **Communal will grow**: old photo libraries and digitised VHS are still to come.
+- **Every video gets faces**, which is the chain running now.
+
+### Next, in order
+
+1. Finish naming: round 4 after video faces.
+2. Build the game (roadmap Phase 8), starting with Bharti's queue.
+3. Segment (Phase 4), reclaim (5), mirror to H: with server-side checksums (6),
+   and only then purge Elements (7).
+
+### Waiting on Krish
+
+- **This repository is PUBLIC** and commit messages and docs from 2026-09-15 name
+  family members next to photograph counts. Whether to scrub that history is his
+  call; nothing has been rewritten.
 
 ### No Anthropic API is required, by design
 
-Krish turned Anthropic access off on 2026-09-13 and nothing here needs it.
-Classification is FINISHED and used Google Gemini in any case
-(`generativelanguage.googleapis.com`, `GOOGLE_API_KEY`). Everything still to run
-is local: `faces_embed` is insightface on local thumbnails, the verifiers are
-local, `master_sheet` and `build_db` are local. The only Anthropic code in the
-repo is `engine/bakeoff.py`, `engine/batch_classify.py` and `engine/classify.py`,
-none of which the chain invokes.
-
-### Done and verified
-
-- **Classification COMPLETE** - 79,769 files, 0 failures, about $27.
-- **Location** - 33,841 files geocoded offline; `place` 52%, `country` 41%.
-- **Video metadata** - Duration 0.0% -> 99.9% after the ffprobe fix.
-- **`library.db`** - SQLite + FTS5, 85.1% field completeness.
-- **Face data is PROVEN correct** - 15 embeddings recomputed from thumbnails
-  across the whole file, all cosine 1.0000, including the newest row.
+Krish turned Anthropic access off on 2026-09-13 and nothing the chains run needs
+it. Classification used Google Gemini; faces, verifiers, `build_db` and the video
+pipeline are all local.
 
 ### The rule that now governs every long step
 
@@ -82,44 +140,23 @@ outside `Invoke-Step`, or declares a step without a `-Verify`, or calls
 `Invoke-Step` without loading it. Run the four test files before trusting a
 change.
 
-### When `PHASE 3B COMPLETE` appears
+### Still true from earlier
 
-```powershell
-python tools\verify_faces.py --sample 20     # prove it before building on it
-python tools\build_db.py                     # rebuild the index with faces
-```
-
-Then, in order, and only the first is autonomous:
-
-1. **Re-run the receipt sweep** now the library is fully classified. **Do not
-   widen the pattern** - the next matches are a PAN card, an HMRC letter, a bank
-   statement, a Form 1042-S. Those are identity records for
-   `Archive\Personal\01-Identity\`, not a deletion sweep.
-2. **Cluster faces, then Krish names the top ~50.** The highest-leverage hour in
-   the project: one answer labels hundreds of files. Record it through
-   `engine/answers.py`, never by editing the store or the database.
-3. **Segment** the 9,833 `Pending-Segmentation` (Krish approved Personal as the
-   default), 5,844 `_Review`, 2,876 `NoDate`, and flatten the 227 files still
-   carrying raw Windows profile paths up to 16 deep.
-4. **Mirror to H:**, then purge Elements - in that order, never the reverse.
-
-### Open questions Krish has NOT answered
-
-- **Face coverage: ANSWERED, and the shortcut is sound.** Detection only opens
-  images the classifier said contain a person, leaving 23,646 photographs
-  unexamined. A random 300 of them were opened on 2026-09-13
-  (`tools/sample_missed_faces.py`): **2.3% had any face, 0.7% a confident one,
-  and both confident hits were a statue of Lord Shiva and a restaurant mural.**
-  The classifier was right and the detector was wrong. Extrapolated the entire
-  gap is ~157 images, almost all statues, murals and photos-of-photos. **Do not
-  spend eleven hours on this.**
-- **Descriptive richness.** The median `subject` is FOUR WORDS - "rocky coastal
-  cliff". It is enough to find things, not to read them. A richer pass costs
-  about $27 and 12 hours and is not scheduled.
+- **Re-run the receipt sweep** now the library is fully classified. **Do not
+  widen the pattern** - the next matches are a PAN card, an HMRC letter, a bank
+  statement, a Form 1042-S. Those are identity records for
+  `Archive\Personal\01-Identity\`, not a deletion sweep.
+- **Photograph face coverage is sound.** Detection only opens photographs the
+  classifier said contain a person; a random 300 of the rest had 0.7% confident
+  faces, all statues and murals (2026-09-13). Videos are the exception, which is
+  why the video chain looks at every frame.
 - **`_Review`** has no agreed rule. A rule got this wrong once at 13,446 files.
 
 ### Do not
 
+- **Re-run `cluster_faces.py --apply`.** It renumbers every cluster, and every
+  answer in the journal points at a cluster id - each would silently land on
+  somebody else. New faces go through `assign_video_faces.py`, which freezes them.
 - **Write a human answer anywhere but `engine/answers.py`.** Everything else is
   derived and can be rebuilt for money or time. A person's judgement cannot.
 - **Delete from Elements.** It is the only second copy until the H: mirror
