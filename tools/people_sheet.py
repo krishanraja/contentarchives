@@ -45,6 +45,13 @@ FACES = r"D:\_enrichment\faces.0.csv"
 THUMBS = r"D:\_thumbs"
 OUT = r"D:\_PhotoAudit\PEOPLE.html"
 ASSIGN = r"D:\_PhotoAudit\FACE-CLUSTERS.csv"
+MERGES = r"D:\_PhotoAudit\CLUSTER-MERGES.csv"
+# os.path.join, not a literal with a backslash in it. This line was generated
+# as "D:\_enrichment\answers.csv", the backslash-a became a BEL character,
+# the file was never found, and the "have we already asked this?" check matched
+# nothing while reporting "skipping 0 already answered" - which reads like good
+# news. A path that cannot be found must not silently mean "nothing there".
+ANSWERS = os.path.join(r"D:\_enrichment", "answers.csv")
 
 HEAD = """<!doctype html><meta charset="utf-8"><title>Who is this?</title>
 <style>
@@ -201,6 +208,11 @@ def main() -> int:
         description=__doc__,
         formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--faces", default=FACES)
+    ap.add_argument("--merges", default=MERGES,
+                    help="group clusters that are the same person")
+    ap.add_argument("--answers", default=ANSWERS)
+    ap.add_argument("--include-named", action="store_true",
+                    help="show people already named (default: skip them)")
     ap.add_argument("--assign", default=ASSIGN,
                     help="per-face cluster assignments from cluster_faces.py")
     ap.add_argument("--thumbs", default=THUMBS)
@@ -222,12 +234,41 @@ def main() -> int:
         print("Do NOT fall back to the tag store: it cannot say which face is who,")
         print("and guessing is what produced rows full of strangers.")
         return 1
-    clusters = collections.defaultdict(list)    # cluster -> [face rows]
+    # Clusters are grouped by CLUSTER-MERGES.csv, so one person who fragmented
+    # into eleven clusters is one row rather than eleven. Krish named eleven
+    # separate "Krish" rows last time; that is the thing being fixed.
+    group_of = {}
+    if os.path.exists(a.merges):
+        for r in csv.DictReader(io.open(a.merges, encoding="utf-8", newline="")):
+            group_of[r["cluster"]] = r["group"]
+
+    clusters = collections.defaultdict(list)    # group -> [face rows]
     for r in csv.DictReader(io.open(a.assign, encoding="utf-8",
                                     errors="replace", newline="")):
         if r.get("bbox"):
-            clusters[r["cluster"]].append(r)
-    print("clusters with faces: {:,}".format(len(clusters)))
+            clusters[group_of.get(r["cluster"], r["cluster"])].append(r)
+    print("face groups: {:,}".format(len(clusters)))
+
+    # Already answered? Do not ask again. A name recorded by a human covers the
+    # whole group, and re-showing it wastes the only scarce thing here.
+    named = set()
+    if not os.path.exists(a.answers):
+        # NOT a silent zero. A missing answers file and an empty one look
+        # identical to `if os.path.exists(...)`, and the difference is whether
+        # Krish gets asked to name fifty people he has already named.
+        print("STOPPING: no answers file at {}".format(a.answers))
+        print("If nothing has been named yet, pass --include-named. Otherwise fix")
+        print("the path - proceeding would re-ask every question already answered.")
+        return 1
+    for r in csv.DictReader(io.open(a.answers, encoding="utf-8", newline="")):
+        if r.get("field") in ("person", "needs_identifying"):
+            named.add(group_of.get(r["target"], r["target"]))
+    print("already answered: {} groups".format(len(named)))
+    if not a.include_named:
+        before = len(clusters)
+        clusters = {g: v for g, v in clusters.items() if g not in named}
+        print("skipping {:,} already answered; {:,} left to name".format(
+            before - len(clusters), len(clusters)))
 
     # when the photographs were taken, so a row can say "2009-2024"
     years = {}
