@@ -173,6 +173,12 @@ def schema(db: sqlite3.Connection) -> None:
         PRIMARY KEY (hash, person)
     ) WITHOUT ROWID;
     CREATE INDEX photo_people_person ON photo_people(person);
+    -- ...and on hash, because every question about GROUP photographs groups by
+    -- it: "how many photographs have two or more named people" scanned all
+    -- 42,693 rows and took over two minutes without this. chain_rounds.ps1's
+    -- -Verify joins photo_people.hash to tags.hash at every checkpoint, so the
+    -- supervision itself pays for a missing index here.
+    CREATE INDEX photo_people_hash ON photo_people(hash);
     """)
 
 

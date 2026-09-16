@@ -266,6 +266,27 @@ def main():
         print()
         print("6. the swap survives a lock, and never reports lost work")
         promote_checks(d)
+
+        print()
+        print("7. photo_people is indexed on BOTH the columns it is questioned by")
+        # person: "which photographs is Bharti in". hash: "which photographs have
+        # two or more named people" - that one groups by hash, scanned all 42,693
+        # rows without an index, and took over two minutes. chain_rounds.ps1's
+        # -Verify joins photo_people.hash to tags.hash at every checkpoint, so
+        # the supervision itself pays for a missing index here.
+        db = build(d, inv, idx, store)
+        idxs = {r[0] for r in db.execute(
+            "SELECT name FROM sqlite_master WHERE type='index' "
+            "AND tbl_name='photo_people'")}
+        check("indexed on person", "photo_people_person" in idxs, True)
+        check("indexed on hash", "photo_people_hash" in idxs, True)
+        # And prove the group-photograph question uses one, rather than scanning.
+        plan = " ".join(str(c) for r in db.execute(
+            "EXPLAIN QUERY PLAN SELECT hash FROM photo_people "
+            "GROUP BY hash HAVING COUNT(DISTINCT person) > 1") for c in r)
+        check("the group-shot query uses an index, not a full scan",
+              "photo_people_hash" in plan, True)
+        db.close()
     finally:
         shutil.rmtree(d, ignore_errors=True)
 

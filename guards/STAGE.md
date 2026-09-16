@@ -40,6 +40,7 @@ unattended. Not a stage on the belt: the rails the belt runs on.
 - `tests/test_chain_gating.py`
 - `tests/test_steps.ps1`
 - `tests/test_rearm_when.ps1`
+- `tests/test_arm_parse.ps1`
 
 ## Lessons
 | # | what the guards do about it | enforced by |

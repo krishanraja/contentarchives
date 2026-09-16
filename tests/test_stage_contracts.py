@@ -192,6 +192,13 @@ def main():
         elif len(owners[f]) > 1:
             problems.append("{} is claimed by {} stages: {}".format(f, len(owners[f]), owners[f]))
     for dp, dns, fns in os.walk(os.path.join(ROOT, "tests")):
+        # tests/fixtures/ holds INPUTS to tests, not tests. unparseable_chain.ps1
+        # exists to be refused by arm.ps1's parse guard and deliberately does not
+        # parse, so listing it in a stage's Tests section would assert it is a
+        # test that runs. Excluded by that one directory name and nothing else:
+        # a widening exclusion is how a check stops covering its subject
+        # (learnings 54, 55).
+        dns[:] = [x for x in dns if x not in ("fixtures", "__pycache__")]
         for fn in fns:
             if fn.endswith((".py", ".ps1")):
                 rel = os.path.relpath(os.path.join(dp, fn), ROOT).replace("\\", "/")

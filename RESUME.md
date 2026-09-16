@@ -48,13 +48,18 @@ re-implementing a check, and add your file to the stage's Code table.
 learning has no owner, or an enforcement a table cites has stopped existing.
 **A new learning fails the build until a stage claims it.**
 
-Run all of these before trusting a change:
+Run the whole suite before trusting a change - twelve Python files and three
+under PowerShell. The PowerShell three are easy to forget and cover the
+supervisor itself, re-arming, and the guard that refuses a chain which cannot
+parse:
 
-```bash
-python tests/test_stage_contracts.py   python tests/test_guards.py
-python tests/test_video_faces.py       python tests/test_build_db.py
-python tests/test_chain_gating.py      python tests/test_safety_and_dedupe.py
+```powershell
+Get-ChildItem tests\test_*.py  | ForEach-Object { python -u $_.FullName }
+Get-ChildItem tests\test_*.ps1 | ForEach-Object { pwsh -NoProfile -File $_.FullName }
 ```
+
+`tests\test_steps.ps1` supervises real processes and sleeps through their
+checkpoints, so the full run takes a couple of minutes rather than seconds.
 
 Current debt, printed by the contracts test: 7 learnings enforced only in prose
 (8, 13, 17, 20, 24, 29, 30). All 110 code files are owned by a stage, and 46 of
@@ -87,38 +92,57 @@ the 53 learnings are enforced by a named function or test.
 
 ----
 
-## RIGHT NOW: round 11 is with Krish; nothing is running (2026-09-16, 12:25)
+## RIGHT NOW: round 12 is with Krish; nothing is running (2026-09-16, 12:50)
 
 **Nothing is running unattended. The next move is Krish's.**
 
-Round 11 of `PEOPLE.html` was published to `D:\_PhotoAudit\PEOPLE.html` and sent
-to him at 12:25 on 2026-09-16: 60 rows, 720 crops, `verify_people_sheet.py` exit
-0, and `check_repeats.py` proving **0 repeats** against all **426** rows shown in
-rounds 1-10. **Every sheet is crop-verified and repeat-checked before he sees
+Round 12 of `PEOPLE.html` was published to `D:\_PhotoAudit\PEOPLE.html` and sent
+to him at 12:50 on 2026-09-16: 60 rows, 715 crops, `verify_people_sheet.py` exit
+0, and `check_repeats.py` proving **0 repeats** against all **486** rows shown in
+rounds 1-11. **Every sheet is crop-verified and repeat-checked before he sees
 it** - he asked for that after batches he had refused came back a second time.
-Rounds 1-10 are recorded: **602 answers** in `D:\_enrichment\answers.csv`.
+Rounds 1-11 are recorded: **662 answers** in `D:\_enrichment\answers.csv`.
 
-**The chain now calls the REPO copy of the guard**, `stages/07_people/check_repeats.py`.
+**The repeat guard lives in the repo now**, `stages/07_people/check_repeats.py`.
 It lived in a session scratch directory and matched `PEOPLE-round[1-6].html` -
 written when round 7 was next, never widened - so rounds 7-9 were invisible to it
 and its baseline sat frozen at 186 for three runs while each sheet was called
-clean. Widened to `round\d+`, the real baseline is 426, and rounds 7-11 all
+clean. Widened to `round\d+`, the real baseline is 486, and rounds 7-12 all
 re-check genuinely clean: nothing Krish refused ever came back. The verdicts were
 right; the test behind them was narrower than the claim (learning 55).
 
-When his answers arrive, run them as one chain, and stop on any non-zero exit:
+**When his answers arrive there is ONE command.** Save the paste as
+`names-r<N>.txt` beside the sheets, then:
 
 ```powershell
-python -u stages\07_people\record_people.py --file <answers.txt> --sheet <the sheet he was shown> --apply
-python -u stages\06_faces\merge_clusters.py --threshold 0.68 --apply
-python -u stages\08_index\build_db.py            # ~15 min, tmp+rename
-python -u stages\07_people\people_sheet.py --top 60 --out <next sheet>
-python -u stages\07_people\verify_people_sheet.py --page <next sheet>   # MUST exit 0
-python -u <scratch>\check_repeats.py <scratch> <next sheet>             # MUST say CLEAN
+pwsh -NoProfile -File stages\07_people\chain_rounds.ps1 -Answered 11 -Next 12
 ```
 
-`--sheet` is not optional: it is what records a row he was shown and left blank as
-*declined*, so it is never offered again. Without it, refused clusters return.
+It records (dry run first), merges at 0.68, rebuilds under `Invoke-Step`
+supervision, builds the next sheet, and runs both gates - refusing to go on at
+any step rather than carrying on. It writes `D:\_PhotoAudit\rounds.log` and, on
+failure, `D:\_PhotoAudit\ROUNDS-HALTED.txt` saying why; delete that file once the
+cause is fixed. Preflight refuses a missing answers file, a missing sheet, or a
+next-sheet path that already exists.
+
+**Do not reassemble the steps by hand.** They were hand-run wrappers in a session
+temp directory - pipe9, pipe10, pipe11 - and three copies are how
+`check_repeats.py` came to carry a stale `[1-6]` pattern for three rounds while
+calling every sheet clean. There is one runner now, in the repo, and the old
+wrappers are deleted.
+
+`--sheet` inside it is not optional: it is what records a row he was shown and
+left blank as *declined*, so it is never offered again. Without it, refused
+clusters return.
+
+**Two flaws in that chain's own supervision were found by reading its log after
+round 11, and both are fixed** (learning 54, instances 5 and 6): `-Progress`
+counted committed rows in `library.db.tmp` and therefore read zero throughout,
+which would have killed a correct rebuild on a false stall - it measures bytes on
+disk now; and `-Verify`'s "cannot tell yet" branch was the one that fired at the
+end, because the tmp file had been renamed away, so the verify that gates the
+step passed on nothing. It now reads whichever database exists, and treats a live
+index with no person rows as WRONG.
 
 **VIDEO FACES ARE COMPLETE** - 41,931 video faces are joined to the frozen
 clusters. The chain described below is finished; its commands are kept because the
@@ -170,23 +194,31 @@ pwsh -NoProfile -File guards\arm.ps1 -Chain chain_video_faces.ps1 -TaskName cont
 
 ### Where the naming is
 
-- **Eleven rounds offered, ten answered** (2026-09-15 and 16). 602 answers in the
-  journal `D:\_enrichment\answers.csv`. After the last rebuild: 82,193 files
-  indexed, **23,997** photographs and videos carrying a named person, **212**
-  people, **42,276** person-on-photograph rows, **10,647** group shots with two or
-  more named people. Krish tops the list at 9,188, then Bharti 5,063.
-- **The profile holds 193 personal terms**, seeded from these answers and
+- **Twelve rounds offered, eleven answered** (2026-09-15 and 16). 662 answers in
+  the journal `D:\_enrichment\answers.csv`. After the last rebuild: 82,193 files
+  indexed, **24,070** photographs and videos carrying a named person, **222**
+  people, **42,693** person-on-photograph rows, **10,744** group shots with two or
+  more named people. Krish 9,199, Bharti 5,077, Bhasker 2,648, Anya 1,886.
+- **The profile holds 205 personal terms**, seeded from these answers and
   extended after each round - every term measured against the library before it
   is added (learning 54). `D:\_PhotoAudit\profile.yaml`, never committed,
   backed up beside itself as `profile.yaml.bak-*`.
+- **A kept term must appear IN a path to protect it.** `mick evans` in the
+  profile does nothing for a photograph named `mick at the pub`, and `david
+  storey` does nothing for `tore`. Three real people were reported "already
+  covered" and were not; all three are in the file now. When adding a name, call
+  `is_personal()` on a real path rather than comparing the name against the term
+  list by eye (learning 54, instances 4 and 5).
 - **A photograph can carry many people** - `photo_people` holds one row per
   person per file (learning 49). The earlier `resolved` table had a `(hash, field)`
   primary key and silently kept only one name per photograph.
-- **The loop:** `stages/07_people/people_sheet.py --top 60` writes the sheet ->
-  Krish pastes answers -> `stages/07_people/record_people.py --file answers.txt
-  --sheet <the sheet he saw>` (dry run, then `--apply`) ->
-  `stages/06_faces/merge_clusters.py --threshold 0.68 --apply` ->
-  `stages/08_index/build_db.py` -> verify and repeat-check the next sheet.
+- **The loop is one command:** `stages/07_people/chain_rounds.ps1 -Answered N
+  -Next M`. It runs record (dry run, then `--apply --sheet`), merge at 0.68, the
+  rebuild under `Invoke-Step`, the next sheet, and both gates, halting rather
+  than continuing at any failure. The individual scripts are still there and
+  still runnable for debugging - `people_sheet.py`, `record_people.py`,
+  `merge_clusters.py`, `build_db.py`, `verify_people_sheet.py`,
+  `check_repeats.py` - but the chain is what should be run.
 - **Answer conventions Krish uses:** `c123 = Name`. `c123 = for <who>` is a
   question queued for the game, recorded as `needs_identifying = <who>`.
   `c123 = unsure, blurry` is recorded as `unidentifiable` and never asked again.
