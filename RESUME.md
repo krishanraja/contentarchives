@@ -68,9 +68,13 @@ Current debt, printed by the contracts test: 10 learnings enforced only in prose
   means making ONE runnable copy - personal values into local config, not into
   code - and retiring the publisher. `build_inventory.py` and `migrate_library.py`
   are newer in the repo than on the machine.
-- **Phase 3 - stages 05-08, `scripts/chains/` and `scripts/paths.py`,** only
-  after `VIDEO FACES COMPLETE`: the running chain's scheduled task and its later
-  steps load those files by path.
+- **Phase 3 - DONE 2026-09-16**, once `VIDEO FACES COMPLETE` meant nothing was
+  running. 39 files moved with `git mv`: stages 05 enrich, 06 faces, 07 people
+  and 08 index into their folders, and `paths.py`, `steps.ps1`, `arm.ps1` and
+  `rearm_when.ps1` into `guards/`. Each chain script now lives with the stage it
+  drives. `engine/` and `scripts/chains/` are empty. Imports go through
+  `stagepath.py` - two lines, no relative depth, and `stagepath.script("x.py")`
+  for anything launched as a subprocess.
 
 ----
 
@@ -96,7 +100,7 @@ every new component, written down.
 - Every other check passed. Anything else failing is new: report it first.
 
 ```powershell
-pwsh -NoProfile -File scripts\chains\arm.ps1 -Status -TaskName contentarchives-video-faces
+pwsh -NoProfile -File guards\arm.ps1 -Status -TaskName contentarchives-video-faces
 Get-Content D:\_PhotoAudit\video-faces.log -Tail 8
 ```
 
@@ -105,10 +109,10 @@ Healthy looks like `state : Running`, a `CHECKPOINT` line every 15 minutes and a
 
 | step | what | expected |
 |---|---|---|
-| frames | `engine/video_face_frames.py`, 3 shards, one frame per 30 s into `D:\_frames` | ~32,670 frames, ~7 h (80/min measured at 14:56) |
-| faces | `engine/faces_embed.py --frames`, ONE process, into `D:\_enrichment\faces.video.csv` | ~18 h at 0.5 img/s |
-| assign | `tools/assign_video_faces.py --apply`, joins the FROZEN clusters | minutes |
-| rebuild | `tools/build_db.py` | ~8 min |
+| frames | `stages/06_faces/video_face_frames.py`, 3 shards, one frame per 30 s into `D:\_frames` | ~32,670 frames, ~7 h (80/min measured at 14:56) |
+| faces | `stages/06_faces/faces_embed.py --frames`, ONE process, into `D:\_enrichment\faces.video.csv` | ~18 h at 0.5 img/s |
+| assign | `stages/06_faces/assign_video_faces.py --apply`, joins the FROZEN clusters | minutes |
+| rebuild | `stages/08_index/build_db.py` | ~8 min |
 
 The last line will be `VIDEO FACES COMPLETE`.
 
@@ -118,7 +122,7 @@ The last line will be `VIDEO FACES COMPLETE`.
   where they were, and assign skips itself if its tags are already in the store:
 
 ```powershell
-pwsh -NoProfile -File scripts\chains\arm.ps1 -Chain chain_video_faces.ps1 -TaskName contentarchives-video-faces
+pwsh -NoProfile -File guards\arm.ps1 -Chain chain_video_faces.ps1 -TaskName contentarchives-video-faces
 ```
 
 ### Where the naming is
@@ -126,10 +130,10 @@ pwsh -NoProfile -File scripts\chains\arm.ps1 -Chain chain_video_faces.ps1 -TaskN
 - **Three rounds of `PEOPLE.html` answered on 2026-09-15.** 169 answers in the
   journal `D:\_enrichment\answers.csv`. After the rebuild: 20,724 photographs and
   videos carry a named person, 106 people, 8,363 group photographs with 2+ names.
-- **The loop:** `tools/people_sheet.py --top 60` writes `D:\_PhotoAudit\PEOPLE.html`
-  -> Krish pastes answers -> `tools/record_people.py --file answers.txt` (dry run,
-  then `--apply`) -> `tools/merge_clusters.py --threshold 0.68 --apply` ->
-  `tools/build_db.py`.
+- **The loop:** `stages/07_people/people_sheet.py --top 60` writes `D:\_PhotoAudit\PEOPLE.html`
+  -> Krish pastes answers -> `stages/07_people/record_people.py --file answers.txt` (dry run,
+  then `--apply`) -> `stages/06_faces/merge_clusters.py --threshold 0.68 --apply` ->
+  `stages/08_index/build_db.py`.
 - **Answer conventions Krish uses:** `c123 = Name`. `c123 = for <who>` is a
   question queued for the game, recorded as `needs_identifying = <who>`.
   `c123 = unsure, blurry` is recorded as `unidentifiable` and never asked again.
@@ -148,7 +152,7 @@ pwsh -NoProfile -File scripts\chains\arm.ps1 -Chain chain_video_faces.ps1 -TaskN
 
 ### When `VIDEO FACES COMPLETE` appears
 
-1. `python tools\assign_video_faces.py --verify` and `--verify-db` - prove it.
+1. `python stages\06_faces\assign_video_faces.py --verify` and `--verify-db` - prove it.
 2. Copy `D:\_enrichment\faces.video.csv` and `D:\_PhotoAudit\FACE-CLUSTERS-VIDEO.csv`
    into the G: backup folder beside the others.
 3. **Teach `merge_clusters.py` to read video faces.** Today it reads photograph
@@ -157,7 +161,7 @@ pwsh -NoProfile -File scripts\chains\arm.ps1 -Chain chain_video_faces.ps1 -TaskN
    `FACE-CLUSTERS-VIDEO.csv` to the embeddings in `faces.video.csv` on
    `(image, face_index)` - never a parallel file matched by position (learning
    45). Then re-run the merge and `build_db.py`.
-4. `python tools\people_sheet.py --top 60`, then `python tools\verify_people_sheet.py`
+4. `python stages\07_people\people_sheet.py --top 60`, then `python stages\07_people\verify_people_sheet.py`
    MUST exit 0 before Krish sees it: it checks every crop's `data-face` against
    the assignment files. Then give him round 4.
 
@@ -193,7 +197,7 @@ pipeline are all local.
 
 ### The rule that now governs every long step
 
-`Invoke-Step` in `scripts/chains/steps.ps1` makes five things mandatory:
+`Invoke-Step` in `guards/steps.ps1` makes five things mandatory:
 `-Preflight`, `-Start`, `-Progress`, `-Postcondition` and **`-Verify`**.
 
 `-Verify` must RE-DERIVE a sample of the output from its source and compare. It
@@ -224,7 +228,7 @@ change.
 - **Re-run `cluster_faces.py --apply`.** It renumbers every cluster, and every
   answer in the journal points at a cluster id - each would silently land on
   somebody else. New faces go through `assign_video_faces.py`, which freezes them.
-- **Write a human answer anywhere but `engine/answers.py`.** Everything else is
+- **Write a human answer anywhere but `stages/07_people/answers.py`.** Everything else is
   derived and can be rebuilt for money or time. A person's judgement cannot.
 - **Delete from Elements.** It is the only second copy until the H: mirror
   exists. D: (Boogles) has 3.7 TB free - there is no space pressure to relieve.
@@ -341,7 +345,7 @@ Set-Partition -DiskNumber <lacie>    -PartitionNumber <n> -NewDriveLetter D
 ```
 
 This is the entire repointing. No code changes: every path in the kit is either `D:` or
-derived from `scripts/paths.py`.
+derived from `guards/paths.py`.
 
 ### Step 4 — prove the swap, before anything writes
 
@@ -378,7 +382,7 @@ game, the image recognition, and all other work done to figure out as much info 
 the content as possible."* So there is one sheet, it is generated, and it has a score.
 
 ```powershell
-python C:\Users\krish\dev\contentarchives\tools\master_sheet.py
+python C:\Users\krish\dev\contentarchives\stages\08_index\master_sheet.py
 ```
 
 One row per file in the library, 73,198 of them, written to `D:\_PhotoAudit\MASTER.csv`
@@ -431,7 +435,7 @@ and three of them from zero.
 ### Step 6 — the classification pass
 
 Approved by Krish: **Gemini 3.1 Flash-Lite**, ~$20.70 for 91,394 calls. Chosen on a
-reference no model wrote (`engine/consensus.py`); see "Where things stand". Do not
+reference no model wrote (`stages/05_enrich/consensus.py`); see "Where things stand". Do not
 substitute a cheaper model without re-reading learning 35.
 
 ### Still open, and explicitly not done
@@ -637,7 +641,7 @@ rather than the literal 116,500 that used to be multiplied into every headline c
 `bakeoff.py` scores agreement against the labels already in the store. Those labels
 are Haiku's, so Haiku was being asked how often it agrees with itself, and every other
 model was being scored on how far it diverges from one particular model's opinion.
-`scripts/consensus.py` rebuilds the reference per file from the majority of the OTHER
+`stages/05_enrich/consensus.py` rebuilds the reference per file from the majority of the OTHER
 models, excluding whichever model is being scored. A label two independent models
 agree on is not truth, but it is evidence that does not come from the model on trial.
 

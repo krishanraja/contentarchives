@@ -18,8 +18,8 @@ every opinion kept and human answers always winning.
 ## Code
 | file | role |
 |---|---|
-| `tools/build_db.py` | build library.db from every source of truth |
-| `tools/master_sheet.py` | one row per file, everything known about it |
+| `stages/08_index/build_db.py` | build library.db from every source of truth |
+| `stages/08_index/master_sheet.py` | one row per file, everything known about it |
 
 ## Tests
 - `tests/test_build_db.py`
@@ -27,5 +27,5 @@ every opinion kept and human answers always winning.
 ## Lessons
 | # | what this stage does about it | enforced by |
 |---|---|---|
-| 42 | the database is replaced atomically | `code:tools/build_db.py:os.replace` |
+| 42 | the database is replaced atomically | `code:stages/08_index/build_db.py:os.replace` |
 | 49 | a group photograph keeps every person in it | `test:tests/test_build_db.py:a group photograph keeps everybody in it` |

@@ -46,11 +46,11 @@ Two jobs, in this order:
    migration, and it feeds eight columns of `MASTER.csv`.
    `python scripts/build_inventory.py --video` — the `--video` flag is slow and is what
    fills `Duration`, `Width` and `Height` for 10,792 videos.
-2. **Classify.** `python engine/classify_live.py --thumbs D:\_thumbs --store
+2. **Classify.** `python stages/05_enrich/classify_live.py --thumbs D:\_thumbs --store
    D:\_enrichment --apply`. Gemini 3.1 Flash-Lite, twelve threads, resumable, with
    `--max-usd` stopping on measured spend.
 
-**Done when:** `python tools/master_sheet.py` reports `kind`, `people`, `subject`,
+**Done when:** `python stages/08_index/master_sheet.py` reports `kind`, `people`, `subject`,
 `keep`, `sensitivity`, `setting` and `era` near 100%. Expect overall coverage to go
 from **59.2% to roughly 88%**. What remains after this is what no model can supply:
 *who* the people are, *which* event a photo belongs to, and dates for undated files.
@@ -181,7 +181,7 @@ What it needs to become a daily habit:
    local disk, so this is a real design decision and it is **open** — a local server on
    the LAN, or a hosted page with a subset of thumbnails uploaded. ~97,000 thumbnails at
    ~50 KB is ~4.8 GB, which is too much to publish wholesale; a working set is not.
-3. **Write-back through `engine/answers.py`**, the append-only journal — *not* into
+3. **Write-back through `stages/07_people/answers.py`**, the append-only journal — *not* into
    the store or the database. `source: human` already outranks every model in
    `master_sheet.py`'s `SOURCE_RANK`, and now the journal guarantees a rebuild can
    never destroy an answer, because `build_db.py` only ever reads it. Corrections
@@ -235,7 +235,7 @@ Three layers, in this order, because each is worthless without the one before it
 
 | layer | what it is | status |
 |---|---|---|
-| a. **Structured** | `library.db` — SQLite + FTS5, one row per file, every opinion kept and the winning one resolved | `tools/build_db.py`, built |
+| a. **Structured** | `library.db` — SQLite + FTS5, one row per file, every opinion kept and the winning one resolved | `stages/08_index/build_db.py`, built |
 | b. **Natural language → SQL** | a model writes the query against a small fixed schema. Reliable *because* the schema is small | not started |
 | c. **Semantic** | embed the `subject` sentence already generated for 97,484 files; match "that beach day with the red umbrella" on meaning | not started |
 

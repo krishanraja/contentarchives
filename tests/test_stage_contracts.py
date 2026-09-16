@@ -34,7 +34,11 @@ import sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 REQUIRED = ["Inputs", "Outputs", "Invariants", "Code", "Tests", "Lessons"]
-CODE_DIRS = ["contentarchives", "engine", "tools", "scripts", "guards"]
+# stages/ was missing from this list when the conveyor's first stages moved, and
+# 34 files silently became unowned without the test objecting: the ownership
+# check can only see the trees it is told about. Anything holding .py or .ps1
+# belongs here, and an empty tree costs nothing.
+CODE_DIRS = ["contentarchives", "engine", "tools", "scripts", "guards", "stages"]
 REF = re.compile(r"`(test|guard|code):([^`:]+?)(?::([^`]+))?`")
 
 

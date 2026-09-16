@@ -12,12 +12,13 @@ a new stage being written in a hurry.
     guards.alignment  check_alignment                     learning 45
     guards.verify     verdict, OK / WRONG / CANNOT_TELL   learnings 6, 46
 
-Import with the repo root on sys.path:
+A stage script imports stagepath first, which puts the repo root and every stage
+on sys.path; then:
 
-    sys.path.insert(0, <repo root>)
     from guards.files import atomic_writer, require_dir
 
-Also guards, but not Python: scripts/chains/steps.ps1 (Invoke-Step: preflight,
-progress, verify, postcondition) and scripts/chains/arm.ps1 (detach, restart,
-reap orphans). They move here when the running video chain has finished.
+Also guards, but not Python: guards/steps.ps1 (Invoke-Step: preflight, progress,
+verify, postcondition), guards/arm.ps1 (detach, restart, reap orphans),
+guards/rearm_when.ps1 and guards/paths.py (every library path in one place).
+Each chain script lives with the stage it drives.
 """

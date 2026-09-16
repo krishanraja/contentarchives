@@ -45,18 +45,18 @@ These take every path by argument and carry no knowledge of this library:
 
 | module | what it does | scale proven |
 |---|---|---|
-| `engine/thumbnail.py` | content-hash-keyed 512px thumbnails, EXIF orientation honoured | 79,020 assets |
-| `engine/frames.py` | video keyframes into the same cache | |
-| `engine/store.py` | append-only, fsynced tag store keyed on content hash | 446k+ rows |
-| `engine/classify_live.py` | vision classification, sharded, resumable, spend-capped | 79,017 files, $27 |
-| `engine/faces_embed.py` | face detection + 512-d embeddings, only where a face was reported | 51,797 images |
-| `engine/geocode.py` | offline reverse geocoding, no API, no expiry | 170,987 places |
-| `engine/answers.py` | append-only journal of human judgements | the irreplaceable one |
-| `tools/master_sheet.py` | joins every source into one row per file | 82,635 rows |
-| `tools/build_db.py` | SQLite + FTS5, derived rebuilt, asserted preserved | |
+| `stages/05_enrich/thumbnail.py` | content-hash-keyed 512px thumbnails, EXIF orientation honoured | 79,020 assets |
+| `stages/05_enrich/frames.py` | video keyframes into the same cache | |
+| `stages/05_enrich/store.py` | append-only, fsynced tag store keyed on content hash | 446k+ rows |
+| `stages/05_enrich/classify_live.py` | vision classification, sharded, resumable, spend-capped | 79,017 files, $27 |
+| `stages/06_faces/faces_embed.py` | face detection + 512-d embeddings, only where a face was reported | 51,797 images |
+| `stages/05_enrich/geocode.py` | offline reverse geocoding, no API, no expiry | 170,987 places |
+| `stages/07_people/answers.py` | append-only journal of human judgements | the irreplaceable one |
+| `stages/08_index/master_sheet.py` | joins every source into one row per file | 82,635 rows |
+| `stages/08_index/build_db.py` | SQLite + FTS5, derived rebuilt, asserted preserved | |
 
-**Not portable, and not pretending to be:** `engine/bakeoff.py` and
-`engine/consensus.py` hardcode this machine's paths. They are one-off analyses
+**Not portable, and not pretending to be:** `stages/05_enrich/bakeoff.py` and
+`stages/05_enrich/consensus.py` hardcode this machine's paths. They are one-off analyses
 that chose the model and measured its error rate. They earned their keep and
 they are not library code.
 

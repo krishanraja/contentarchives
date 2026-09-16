@@ -38,7 +38,15 @@ import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
-CHAINS = os.path.join(ROOT, "scripts", "chains")
+
+# Chains live with the stage they drive, and the runner and launchers live in
+# guards/. Before the conveyor they all sat in scripts/chains; a single directory
+# constant would now scan nothing and pass, which is the failure mode this whole
+# file exists to prevent (learning 44).
+CHAIN_DIRS = [os.path.join(ROOT, "guards")] + [
+    os.path.join(ROOT, "stages", d)
+    for d in sorted(os.listdir(os.path.join(ROOT, "stages")))
+    if os.path.isdir(os.path.join(ROOT, "stages", d))]
 
 # Launches that are legitimately outside a step, each with a reason. Anything
 # added here should be arguable out loud.
@@ -144,14 +152,21 @@ def main():
     self_test()
     failures = []
     checked = 0
-    if not os.path.isdir(CHAINS):
-        print("no chains directory at " + CHAINS)
+    live = [d for d in CHAIN_DIRS if os.path.isdir(d)]
+    if not live:
+        print("no chain directories found among:\n  " + "\n  ".join(CHAIN_DIRS))
         sys.exit(1)
 
-    for fn in sorted(os.listdir(CHAINS)):
-        if not fn.endswith(".ps1"):
-            continue
-        path = os.path.join(CHAINS, fn)
+    found = [(fn, os.path.join(d, fn)) for d in live
+             for fn in sorted(os.listdir(d)) if fn.endswith(".ps1")]
+    if not found:
+        # An empty scan passing is the failure this file exists to prevent: the
+        # chains moved into their stages on 2026-09-16 and a stale directory
+        # constant would have reported "all gated" while scanning nothing.
+        print("no .ps1 found in any of:\n  " + "\n  ".join(live))
+        sys.exit(1)
+
+    for fn, path in found:
         text = io.open(path, encoding="utf-8", errors="replace").read().split("\n")
         if fn in ALLOW:
             print("  {:<28} allowed: {}".format(fn, ALLOW[fn]))
@@ -217,7 +232,7 @@ def main():
             for line_no, src in hits:
                 print("  {}:{}  {}".format(fn, line_no, src))
         print()
-        print("Wrap it in Invoke-Step (scripts/chains/steps.ps1), which forces a")
+        print("Wrap it in Invoke-Step (guards/steps.ps1), which forces a")
         print("preflight, a progress signal and a postcondition - or add it to")
         print("ALLOW in this file with a reason that survives being read aloud.")
         sys.exit(1)

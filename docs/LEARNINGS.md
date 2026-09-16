@@ -1193,10 +1193,10 @@ survives everything except the one event it was chosen to survive.
 something that is not the session. On Windows that is the Task Scheduler:
 
 ```powershell
-pwsh -NoProfile -File scripts\chains\arm.ps1 -Chain <chain>.ps1
+pwsh -NoProfile -File guards\arm.ps1 -Chain <chain>.ps1
 ```
 
-`scripts/chains/arm.ps1` registers the chain as a scheduled task, so its parent
+`guards/arm.ps1` registers the chain as a scheduled task, so its parent
 is `svchost.exe` and it survives the session ending, the terminal closing and
 logging out. Verify it rather than trusting it — walk the parents and check that
 none of them is the agent:

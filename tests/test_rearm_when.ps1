@@ -32,7 +32,7 @@ function Check($name, $got, $want) {
 $sandbox = Join-Path ([IO.Path]::GetTempPath()) ("rearm-" + [guid]::NewGuid().ToString('N'))
 New-Item -ItemType Directory -Path $sandbox | Out-Null
 try {
-    Copy-Item "$PSScriptRoot\..\scripts\chains\rearm_when.ps1" $sandbox
+    Copy-Item "$PSScriptRoot\..\guards\rearm_when.ps1" $sandbox
     # a stub in place of the real launcher, so nothing real is re-armed
     @'
 param([string]$Chain, [string]$ChainArgs, [switch]$Status, [switch]$Stop)

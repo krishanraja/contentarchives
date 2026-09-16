@@ -26,8 +26,8 @@ import tempfile
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
-sys.path.insert(0, os.path.join(ROOT, "engine"))
-sys.path.insert(0, os.path.join(ROOT, "tools"))
+sys.path.insert(0, ROOT)
+import stagepath  # noqa: E402,F401  - every stage on sys.path, wherever it lives
 
 import build_db as B                                  # noqa: E402
 from answers import Journal                           # noqa: E402

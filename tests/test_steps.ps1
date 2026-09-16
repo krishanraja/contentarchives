@@ -18,7 +18,7 @@
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
-. "$PSScriptRoot\..\scripts\chains\steps.ps1"
+. "$PSScriptRoot\..\guards\steps.ps1"
 
 $script:FAILURES = @()
 $script:HALT = $null

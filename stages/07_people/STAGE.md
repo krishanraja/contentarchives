@@ -24,11 +24,11 @@ nothing can ever overwrite it.
 ## Code
 | file | role |
 |---|---|
-| `engine/answers.py` | the append-only journal |
-| `engine/swipe/server.py` | the swipe game prototype |
-| `tools/people_sheet.py` | a page of faces to name, one row per person |
-| `tools/verify_people_sheet.py` | every crop belongs to the row it is shown in |
-| `tools/record_people.py` | record pasted answers into the journal, and back it up |
+| `stages/07_people/answers.py` | the append-only journal |
+| `stages/07_people/swipe/server.py` | the swipe game prototype |
+| `stages/07_people/people_sheet.py` | a page of faces to name, one row per person |
+| `stages/07_people/verify_people_sheet.py` | every crop belongs to the row it is shown in |
+| `stages/07_people/record_people.py` | record pasted answers into the journal, and back it up |
 
 ## Tests
 - `tests/test_build_db.py`
@@ -36,4 +36,4 @@ nothing can ever overwrite it.
 ## Lessons
 | # | what this stage does about it | enforced by |
 |---|---|---|
-| 48 | the page a human looks at is verified, not only the data behind it | `code:tools/verify_people_sheet.py:data-face` |
+| 48 | the page a human looks at is verified, not only the data behind it | `code:stages/07_people/verify_people_sheet.py:data-face` |

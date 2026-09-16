@@ -35,8 +35,8 @@ import tempfile
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
-sys.path.insert(0, os.path.join(ROOT, "engine"))
-sys.path.insert(0, os.path.join(ROOT, "tools"))
+sys.path.insert(0, ROOT)
+import stagepath  # noqa: E402,F401  - every stage on sys.path, wherever it lives
 
 import numpy as np                                     # noqa: E402
 
@@ -114,7 +114,7 @@ def test_outstanding(d):
     os.makedirs(os.path.dirname(a_targets[0][1]))
     io.open(a_targets[0][1], "wb").write(b"jpg")                   # present
     io.open(V.marker(a_targets[1][1]), "w").write("could not grab")  # failed
-    code, out = run("engine/video_face_frames.py", "--out", frames, "--db", dbp,
+    code, out = run("stages/06_faces/video_face_frames.py", "--out", frames, "--db", dbp,
                     "--outstanding")
     m = re.search(r"frames outstanding: (\d+)\s+present: (\d+)\s+failed: (\d+)", out)
     check("--outstanding exits 0", code, 0)
@@ -127,7 +127,7 @@ def test_outstanding(d):
                     10.0, "video"))
     db.commit()
     db.close()
-    code, out = run("engine/video_face_frames.py", "--out", frames, "--db", dbp,
+    code, out = run("stages/06_faces/video_face_frames.py", "--out", frames, "--db", dbp,
                     "--outstanding")
     check("25 of 28 videos missing from disk STOPS the run", code, 1)
     check("and says why", "not on disk" in out, True)
@@ -137,7 +137,7 @@ def test_outstanding(d):
     e.execute("CREATE TABLE files (path TEXT, hash TEXT, duration REAL, media TEXT)")
     e.commit()
     e.close()
-    code, out = run("engine/video_face_frames.py", "--out", frames, "--db", empty)
+    code, out = run("stages/06_faces/video_face_frames.py", "--out", frames, "--db", empty)
     check("a library.db with no videos STOPS rather than finishing", code, 1)
 
 
@@ -189,7 +189,7 @@ def test_assign(d):
     print("3. frozen cluster ids")
     p = assign_fixture(d)
     before = io.open(p["FACE-CLUSTERS.csv"], "rb").read()
-    code, out = run("tools/assign_video_faces.py", *assign_args(p, "--apply"))
+    code, out = run("stages/06_faces/assign_video_faces.py", *assign_args(p, "--apply"))
     check("--apply exits 0", code, 0)
     if code:
         print(out[-600:])
@@ -211,30 +211,30 @@ def test_assign(d):
           sorted(tags), sorted({("a", "c0"), ("b", "c1"),
                                 ("c", got["c"]["cluster"]), ("d", got["c"]["cluster"])}))
     check("no tag for a cluster of one", any(h == "e" for h, _ in tags), False)
-    code, out = run("tools/assign_video_faces.py", *assign_args(p, "--apply"))
+    code, out = run("stages/06_faces/assign_video_faces.py", *assign_args(p, "--apply"))
     check("a second --apply is REFUSED", (code, "REFUSING" in out), (1, True))
 
     print()
     print("5. verifiers, passing and failing")
-    code, out = run("tools/assign_video_faces.py", *assign_args(p, "--verify"))
+    code, out = run("stages/06_faces/assign_video_faces.py", *assign_args(p, "--verify"))
     check("--verify passes on the real assignment", code, 0)
     rows = list(csv.DictReader(io.open(p["OUT.csv"], encoding="utf-8")))
     good = io.open(p["OUT.csv"], encoding="utf-8").read()
     rows[0]["cluster"] = "c1" if rows[0]["cluster"] == "c0" else "c0"
     write_csv(p["OUT.csv"], list(rows[0].keys()), [list(r.values()) for r in rows])
-    code, out = run("tools/assign_video_faces.py", *assign_args(p, "--verify"))
+    code, out = run("stages/06_faces/assign_video_faces.py", *assign_args(p, "--verify"))
     check("--verify FAILS when one face is in the wrong cluster", code, 1)
     io.open(p["OUT.csv"], "w", encoding="utf-8", newline="").write(good)
 
     db = sqlite3.connect(p["lib.db"])
     db.execute("CREATE TABLE photo_people (hash TEXT, person TEXT, source TEXT)")
     db.commit()
-    code, out = run("tools/assign_video_faces.py", *assign_args(p, "--verify-db"))
+    code, out = run("stages/06_faces/assign_video_faces.py", *assign_args(p, "--verify-db"))
     check("--verify-db FAILS when Mum is not on her video", code, 1)
     db.execute("INSERT INTO photo_people VALUES (?,?,?)", (H("a"), "Mum", "human"))
     db.commit()
     db.close()
-    code, out = run("tools/assign_video_faces.py", *assign_args(p, "--verify-db"))
+    code, out = run("stages/06_faces/assign_video_faces.py", *assign_args(p, "--verify-db"))
     check("--verify-db passes once she is", code, 0)
     return p
 
@@ -245,7 +245,7 @@ def test_alignment(d):
     p = assign_fixture(d)
     E = np.load(p["face-emb.npy"])
     np.save(p["face-emb.npy"], np.roll(E, 1, axis=0))     # drift by one row
-    code, out = run("tools/assign_video_faces.py", *assign_args(p))
+    code, out = run("stages/06_faces/assign_video_faces.py", *assign_args(p))
     check("a cache drifted by one row is refused", (code, "STOPPING" in out), (1, True))
 
 
@@ -263,12 +263,12 @@ def test_dry_run(d):
     write_csv(os.path.join(store, "faces.video.csv"),
               ["hash", "image", "face_index", "bbox", "det_score", "emb"],
               [[H("a"), H("a") + "_t100", -2, "", "0.000", ""]])
-    code, out = run("engine/faces_embed.py", "--frames", frames, "--store", store, "--dry-run")
+    code, out = run("stages/06_faces/faces_embed.py", "--frames", frames, "--store", store, "--dry-run")
     m = re.search(r"([\d,]+) images to look at, ([\d,]+) already done, ([\d,]+) unreadable", out)
     check("--dry-run exits 0 without loading a model", code, 0)
     check("counts 2 to look at, 1 done, 1 unreadable; ignores .tmp and .failed",
           m.groups() if m else out[-300:], ("2", "1", "1"))
-    code, out = run("engine/faces_embed.py", "--frames", os.path.join(d, "nope"),
+    code, out = run("stages/06_faces/faces_embed.py", "--frames", os.path.join(d, "nope"),
                     "--store", store, "--dry-run")
     check("a frames directory that does not exist STOPS (learning 34)", code != 0, True)
 

@@ -38,7 +38,7 @@ file, so read it first.
 On 2026-09-08 the library was restructured to a single root, `D:\ContentLibrary`, with
 `Media\{Personal,Communal,NoDate,Pending-Segmentation}` holding the chronology and
 `Archive\`, `ContentProduction\`, `_Review\` and `_Catalog\` beside it rather than
-inside it (`d5470d7`). 81,306 files moved by directory rename; `scripts/paths.py` became
+inside it (`d5470d7`). 81,306 files moved by directory rename; `guards/paths.py` became
 the single source of truth after `D:\PhotoLibrary` was found hardcoded 85 times across
 40 scripts; and 18,552 files (3,022 screenshots, 2,084 web-asset PNGs, 13,446 received
 WhatsApp files) were evicted from the chronology into `_Review`, not deleted. The same
@@ -57,7 +57,7 @@ rebuilt to 68,042 rows after a doubled root was found and fixed (`77d614e`).
 
 The "Library layout" tables below, and the layout diagram in
 [ARCHITECTURE.md](ARCHITECTURE.md), describe the tree before this restructure;
-`scripts/paths.py` carries the current one and is the one to read.
+`guards/paths.py` carries the current one and is the one to read.
 
 ---
 

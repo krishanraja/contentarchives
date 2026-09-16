@@ -24,14 +24,14 @@ people, and keep the cluster ids Krish's answers point at stable for ever.
 ## Code
 | file | role |
 |---|---|
-| `engine/faces_embed.py` | detect and embed faces in thumbnails or video frames |
-| `engine/video_face_frames.py` | one frame per 30 s from every video, verified from source |
-| `tools/cluster_faces.py` | the original clustering; never re-applied |
-| `tools/merge_clusters.py` | merge clusters that are one person, tested against names |
-| `tools/assign_video_faces.py` | put video faces into the frozen clusters |
-| `tools/verify_faces.py` | re-derive embeddings from their images |
-| `tools/sample_missed_faces.py` | how many faces the classifier filter throws away |
-| `scripts/chains/chain_video_faces.ps1` | frames, faces, assign, rebuild, every step gated |
+| `stages/06_faces/faces_embed.py` | detect and embed faces in thumbnails or video frames |
+| `stages/06_faces/video_face_frames.py` | one frame per 30 s from every video, verified from source |
+| `stages/06_faces/cluster_faces.py` | the original clustering; never re-applied |
+| `stages/06_faces/merge_clusters.py` | merge clusters that are one person, tested against names |
+| `stages/06_faces/assign_video_faces.py` | put video faces into the frozen clusters |
+| `stages/06_faces/verify_faces.py` | re-derive embeddings from their images |
+| `stages/06_faces/sample_missed_faces.py` | how many faces the classifier filter throws away |
+| `stages/06_faces/chain_video_faces.ps1` | frames, faces, assign, rebuild, every step gated |
 
 ## Tests
 - `tests/test_video_faces.py`
@@ -39,9 +39,9 @@ people, and keep the cluster ids Krish's answers point at stable for ever.
 ## Lessons
 | # | what this stage does about it | enforced by |
 |---|---|---|
-| 23 | frame names are unique even for a clip milliseconds long | `code:engine/video_face_frames.py:def targets`, `test:tests/test_video_faces.py:distinct paths for a` |
-| 33 | every video in the library is in the frame set, missing ones counted | `code:engine/video_face_frames.py:missing from disk`, `test:tests/test_video_faces.py:25 of 28 videos missing from disk STOPS the run` |
-| 41 | an unreadable frame is recorded as -2, not "no faces" | `code:engine/faces_embed.py:face_index -2`, `test:tests/test_video_faces.py:counts 2 to look at, 1 done, 1 unreadable` |
-| 45 | frozen centroids are re-derived before assigning to them | `code:tools/assign_video_faces.py:check_alignment`, `test:tests/test_video_faces.py:a cache drifted by one row is refused` |
-| 47 | completion is asked of the disk and the store, with --dry-run | `test:tests/test_video_faces.py:--dry-run exits 0 without loading a model`, `code:scripts/chains/chain_video_faces.ps1:--outstanding` |
-| 51 | a frame that will not decode is marked and counted, so the pass doubles as a decode census of every video | `code:engine/video_face_frames.py:def marker`, `test:tests/test_video_faces.py:--outstanding counts outstanding/present/failed` |
+| 23 | frame names are unique even for a clip milliseconds long | `code:stages/06_faces/video_face_frames.py:def targets`, `test:tests/test_video_faces.py:distinct paths for a` |
+| 33 | every video in the library is in the frame set, missing ones counted | `code:stages/06_faces/video_face_frames.py:missing from disk`, `test:tests/test_video_faces.py:25 of 28 videos missing from disk STOPS the run` |
+| 41 | an unreadable frame is recorded as -2, not "no faces" | `code:stages/06_faces/faces_embed.py:face_index -2`, `test:tests/test_video_faces.py:counts 2 to look at, 1 done, 1 unreadable` |
+| 45 | frozen centroids are re-derived before assigning to them | `code:stages/06_faces/assign_video_faces.py:check_alignment`, `test:tests/test_video_faces.py:a cache drifted by one row is refused` |
+| 47 | completion is asked of the disk and the store, with --dry-run | `test:tests/test_video_faces.py:--dry-run exits 0 without loading a model`, `code:stages/06_faces/chain_video_faces.ps1:--outstanding` |
+| 51 | a frame that will not decode is marked and counted, so the pass doubles as a decode census of every video | `code:stages/06_faces/video_face_frames.py:def marker`, `test:tests/test_video_faces.py:--outstanding counts outstanding/present/failed` |
