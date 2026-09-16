@@ -1797,6 +1797,33 @@ widest term every run, because a threshold is not a substitute for reading what
 it measured. Sheer breadth is not evidence: Krish appears in 9,088 photographs
 because it is his library.
 
+**FOUR TIMES IN ONE AFTERNOON, the same shape: a check measuring something other
+than its subject, and passing.** This is the learning, not the four slips.
+
+1. The 2% threshold above, derived from the restored terms and never checked
+   against the terms already in the profile.
+2. `check_repeats.py` matching `PEOPLE-round[1-6].html`, so the three most
+   recent rounds were invisible and its baseline sat frozen at 186 while it
+   reported each new sheet clean (learning 55).
+3. `tests/test_imports.py`, written to catch the phase-3 breakage, whose first
+   version skipped every module without a `main` - which is exactly the set of
+   libraries phase 3 broke - and reported a clean sweep. Its second version
+   returned "library" for 87 of 104 modules, including `build_db.py`, because
+   the guard test ran after the work test; section 3 then asserted the
+   guarded-import property about a single file, and passed.
+4. The coverage test used to decide which of Krish's newly named people needed
+   adding to the profile. It asked whether the NEW term sits inside a kept one -
+   `"tore" in "david storey"` - and skipped it as covered. `is_personal` asks
+   the reverse: whether a KEPT term appears in the PATH, and a path saying
+   `tore` contains no `david storey`. Direction inverted, so Tore and Mish were
+   reported protected and were not. Caught only by asserting `is_personal` on a
+   real path afterwards.
+
+**The rule.** After writing a check, run it against a case whose answer you
+already know, and read the number it prints. Every one of these four passed; not
+one was caught by its own verdict. "All checks passed" is a claim about the
+check, never about the subject.
+
 ## 55. The last line of a long job is where its work is most at risk
 
 A 19-minute index rebuild did everything correctly - 82,193 files, 1,452,244

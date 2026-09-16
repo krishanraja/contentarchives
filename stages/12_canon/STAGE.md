@@ -28,7 +28,8 @@ what the last session claimed, and keep the machine itself in a known state.
 | `tools/machine-hygiene/guard-profile-root.test.mjs` | tests for the profile-root guard |
 
 ## Tests
-- none in tests/: `tools/machine-hygiene/guard-profile-root.test.mjs` runs under Node (debt: the Python side has none)
+- `tests/test_imports.py`
+- also `tools/machine-hygiene/guard-profile-root.test.mjs`, which runs under Node
 
 ## Lessons
 | # | what this stage does about it | enforced by |
