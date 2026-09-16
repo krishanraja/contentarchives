@@ -249,6 +249,28 @@ knowing what a column is called.
 
 ---
 
+## Decided by Krish, 2026-09-16: how the conveyor holds personal detail and one-offs
+
+- **Machine paths and tool locations live in `guards/paths.py`** - the library
+  root, scratch directories, ffprobe, source and watch lists. One definition,
+  imported; a rename is one edit. This is what the published `scripts/` copies
+  could not do, because redaction rewrote those values into pseudonyms and the
+  repo copy stopped being runnable.
+- **Personal terms live in a profile file kept OUTSIDE the repo** and loaded by
+  `guards/`: family names, trip and place names, pet names - everything whose
+  presence in a path means "this matters". `profiles/example.yaml` is the shape;
+  the real one never enters a public repository. So there is ONE runnable copy of
+  every script, and `publish_scripts.py` retires.
+- **One-off investigations are kept as edge-case playbooks, not as core
+  machinery.** Krish: "one off investigations need to be stored not as part of
+  core machinery but how to deal with common edge cases." So a script written to
+  answer one question once - why is the ingest calling everything new, what would
+  a size threshold have discarded, which parts of an export hold new files - is
+  recorded in its stage's `STAGE.md` under **Edge cases**: the question, the
+  finding, and where the script sits. It stays runnable and findable when the
+  same edge case recurs, and nobody has to maintain it as though it were part of
+  the belt.
+
 ## Open decisions
 
 | decision | why it is open |

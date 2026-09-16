@@ -114,6 +114,24 @@ def main() -> int:
             name, note = name.split(" - ", 1)
             name, note = name.strip(), note.strip()
 
+        # A PASTE CAN CARRY PROSE. On 2026-09-16 a line arrived as
+        #
+        #     c4576 = Krish. Agree with your recommendation on no2, and i think
+        #     one off investigations need to be stored not as part of core...
+        #
+        # because a person answering fifty rows also has something to say. The
+        # name is "Krish"; the rest is a message. Recorded whole it would have
+        # stamped that sentence across every photograph in the cluster as a
+        # HUMAN answer, outranking every model for ever and needing to be hunted
+        # down afterwards. So a name ends at its first sentence break.
+        m2 = re.match(r"^([^.?!]{1,40}?)\s*[.?!]\s+(\S.*)$", name)
+        if m2:
+            name, said = m2.group(1).strip(), m2.group(2).strip()
+            note = (note + " | " if note else "") + said
+        if len(name) > 60:
+            bad.append((ln.strip()[:60], "that is a sentence, not a name"))
+            continue
+
         if not name:
             bad.append((ln.strip(), "a remark with no name in front of it"))
             continue

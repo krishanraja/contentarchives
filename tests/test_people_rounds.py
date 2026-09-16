@@ -113,7 +113,27 @@ def main():
         check("so c2 and c3 would be shown again", "c3" in rows2, False)
 
         print()
-        print("4. a missing sheet STOPS rather than silently recording nothing")
+        print("4. a paste that carries prose (2026-09-16)")
+        store3, _ = fixture(os.path.join(d, "prose"))
+        tags3 = os.path.join(store3, "content_tags.csv")
+        code, out = run("--from-text",
+                        "c1 = Krish. Agree with your recommendation on no2, and i think "
+                        "one off investigations need to be stored\nc2 = Mum",
+                        "--store", store3, "--tags", tags3, "--apply")
+        rows3 = {r["target"]: (r["field"], r["value"], r["note"]) for r in answers_of(store3)}
+        check("the name ends at the sentence break", rows3.get("c1", ("", "", ""))[:2],
+              ("person", "Krish"))
+        check("and the rest is kept as a note",
+              rows3.get("c1", ("", "", ""))[2].startswith("Agree with your recommendation"), True)
+        check("a plain name beside it is untouched", rows3.get("c2", ("", ""))[:2],
+              ("person", "Mum"))
+        code, out = run("--from-text",
+                        "c1 = " + "x" * 80,
+                        "--store", os.path.join(d, "long"), "--tags", tags3)
+        check("a name that is 80 characters is REFUSED", "not a name" in out, True)
+
+        print()
+        print("5. a missing sheet STOPS rather than silently recording nothing")
         code, out = run("--from-text", "c1 = Mum", "--store", os.path.join(d, "c"),
                         "--tags", tags, "--sheet", os.path.join(d, "no-sheet.html"),
                         "--apply")
