@@ -59,6 +59,15 @@ class Profile:
         self.likely_disposable = list(safety.get("likely_disposable") or [])
         self.confirm_deletions = bool(safety.get("confirm_deletions", True))
 
+        # Routing vocabulary: the employer, project and product names that mean
+        # "this is produced work, not a memory". route_h.py used to carry these
+        # literally, which is why the publisher refused to publish it at all -
+        # its own routing list read as an identity leak. The generic half of the
+        # pattern (qa-, screenshot, node_modules, logo) stays in the code.
+        routing = self._d.get("routing") or {}
+        self.production_terms = [str(t).lower() for t in (routing.get("production_terms") or [])]
+        self.chronology_terms = [str(t).lower() for t in (routing.get("chronology_terms") or [])]
+
     def is_personal(self, text: str) -> bool:
         """True if this path or name carries a term that means "this matters".
 

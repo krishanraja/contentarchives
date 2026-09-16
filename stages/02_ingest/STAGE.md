@@ -30,6 +30,7 @@ where the volume allows, resumable across kills.
 | `scripts/diagnose_new.py` | ask why an ingest calls everything new |
 | `scripts/lib_size_index.py` | size index of the whole library, from disk every time |
 | `scripts/check_tiny.py` | what a size threshold would have discarded |
+| `stages/02_ingest/route_h.py` | decide chronology / production / archive for a source file; identifying vocabulary comes from the profile |
 | `scripts/validate_router.py` | test routing rules against known folders |
 | `scripts/verify_h_batch.py` | prove a pulled batch landed, by count and hash |
 | `scripts/verify_dupes.py` | re-verify a duplicate claim by whole-file hash |
@@ -37,6 +38,7 @@ where the volume allows, resumable across kills.
 
 ## Tests
 - `tests/test_safety_and_dedupe.py`
+- `tests/test_route_h.py`
 
 ## Lessons
 | # | what this stage does about it | enforced by |
