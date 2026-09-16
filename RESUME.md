@@ -110,46 +110,58 @@ the 53 learnings are enforced by a named function or test.
 
 ----
 
-## RIGHT NOW: round 17 is with Krish; nothing is running (2026-09-17, 18:39)
+## RIGHT NOW: round 18 is with Krish; nothing is running (2026-09-17, 21:10)
 
 **Nothing is running unattended. The next move is Krish's.**
 
-Round 17 of `PEOPLE.html` was published to `D:\_PhotoAudit\PEOPLE.html` and sent
-to him at 18:39 on 2026-09-17: 60 rows, 596 crops, `verify_people_sheet.py` exit
-0, and `check_repeats.py` proving **0 repeats** against all **786** rows shown in
-rounds 1-16. **Every sheet is crop-verified and repeat-checked before he sees
+Round 18 of `PEOPLE.html` was published to `D:\_PhotoAudit\PEOPLE.html` and sent
+to him at 21:10 on 2026-09-17: 60 rows, 536 crops, `verify_people_sheet.py` exit
+0, and `check_repeats.py` proving **0 repeats** against all **846** rows shown in
+rounds 1-17. **Every sheet is crop-verified and repeat-checked before he sees
 it** - he asked for that after batches he had refused came back a second time.
-Rounds 1-16 are recorded in `D:\_enrichment\answers.csv`.
+Rounds 1-17 are recorded in `D:\_enrichment\answers.csv`.
 
-### WAITING ON KRISH: three clusters are called "Kiran" (2026-09-17)
+Round 18 needed no `record` step - there were no new answers to apply, only the
+four Kiran corrections below - so the sheet and its two gates were run directly
+rather than through `chain_rounds.ps1`.
 
-**Round 18 is deliberately held until he answers this.** Do not build a new
-sheet: it would ask fresh questions on top of a label he has said is wrong.
+### RESOLVED: the two Kirans, and why guessing would have been wrong (2026-09-17)
 
-He said: *"I have labelled two different people Kiran, one of them should be
-Kiran Nathwani."* The journal says there are three, and his new answer makes a
-fourth cluster:
+Krish: *"I have labelled two different people Kiran, one of them should be Kiran
+Nathwani."* The journal held three `Kiran` clusters, and his round 17 answer
+added a fourth. He was shown all four side by side and answered:
 
-| cluster | photographs | span | named |
+| cluster | photographs | span | is |
 |---|---|---|---|
-| `c306` | 157 | 2012-2026 | round 3 |
-| `c1160` | 11 | 2017-2024 | round 15 |
-| `c1165` | 10 | 2018-2023 | round 15 |
-| `c4122` | 10 | 2019 | round 17, as `Kiran Nathwani` |
+| `c306` | 157 | 2012-2026 | **Kiran Nathwani** |
+| `c1160` | 11 | 2017-2024 | **Kiran Patel** |
+| `c1165` | 10 | 2018-2023 | **Kiran Nathwani** |
+| `c4122` | 10 | 2019 | **Kiran Nathwani** |
 
-**None of them share a merge group**, so the clustering treats all four as
-separate people, and the index currently reads `Kiran` 178 photographs against
-`Kiran Nathwani` 10 - that 178 being the combined reach of the three. Nothing in
-the data says which two he meant or which becomes Nathwani, and `c306` alone
-spans fourteen years: relabelling the wrong one renames a real person across 157
-photographs. **Do not infer it from counts or dates.**
+Verified on the index after rebuilding: **Kiran Nathwani 177 photographs, Kiran
+Patel 11**, and plain `Kiran` gone. 177 rather than 178 because a photograph
+holding two of those clusters counts once.
 
-`D:\_PhotoAudit\KIRAN.html` was built and sent to him - four rows, 43 crops,
-`verify_people_sheet.py` exit 0 - using the `--clusters` option added for this,
-which takes explicit ids and bypasses both the ranking and the already-answered
-filter. When he answers, append a NEW row to the journal: it is append-only and
-a later human answer outranks an earlier one, so nothing is edited or
-overwritten. Then rebuild and resume the rounds.
+**MY INFERENCE WOULD HAVE BEEN WRONG.** I expected the large fourteen-year
+cluster to stay plain "Kiran" and one of the two small round-15 clusters to
+become Nathwani. It is the other way round: the 157-photograph cluster is
+Nathwani, and the small `c1160` is the different person. Resolving this by
+reasoning about counts and dates would have renamed a real person across 157
+photographs. Asking cost one page - `--clusters` in `people_sheet.py` takes
+explicit ids and bypasses both the ranking and the already-answered filter, so
+any future "which of these is which" question is one command.
+
+Recorded as four NEW journal rows: it is append-only and a later human answer
+outranks an earlier one, so nothing was edited. Both full names are now profile
+terms in their own right, because they had been covered only by the short term
+`kiran` - cover that vanishes silently the day that term is removed.
+
+**One caveat about the merge's own reassurance.** It printed "no group mixes two
+differently-named people", but all four clusters stayed UNMERGED - each is still
+its own group - so that check held because nothing merged, not because it
+arbitrated anything. Three separate clusters now legitimately share the name
+Kiran Nathwani, which `record_people.py` states is expected. A check that did
+not engage is not evidence that it did.
 
 ### NO COMMUNAL FACES IN KRISH'S SHEETS (decided 2026-09-17)
 
@@ -309,18 +321,20 @@ pwsh -NoProfile -File guards\arm.ps1 -Chain chain_video_faces.ps1 -TaskName cont
 
 ### Where the naming is
 
-- **Seventeen rounds offered, seventeen answered** (2026-09-15 to 17). 1,022
-  answers in the journal `D:\_enrichment\answers.csv`. After the last rebuild:
-  82,193 files indexed, **260** named people, **24,546** photographs and videos
-  carrying a name, **44,405** person-on-photograph rows. Krish 9,358,
-  Bharti 5,098, Bhasker 2,672, Anya 1,916, Lily 1,747, Lauren 1,704.
+- **Eighteen rounds offered, seventeen answered** (2026-09-15 to 17). 1,026
+  answers in the journal `D:\_enrichment\answers.csv` - 258 distinct people
+  named. After the last rebuild: 82,193 files indexed, **260** people on
+  photographs, **24,546** photographs and videos carrying a name, **44,405**
+  person-on-photograph rows. Krish 9,358, Bharti 5,098, Bhasker 2,672,
+  Anya 1,916, Lily 1,747, Lauren 1,704.
 - **The photographs each round unlocks is FALLING, and that is expected**: 1,058
   at round 9, then 833, 764, 720, 666. `people_sheet.py --top 60` takes the
   largest unnamed clusters first, so what remains is progressively smaller
   groups. Krish was asked on 2026-09-17 whether to switch to a different cut -
   a size floor, or the clusters that would unlock the most Communal photographs
   for Bharti - and has not answered yet. Do not change the cut without him.
-- **The profile holds 266 personal terms.** Run
+- **The profile holds 268 personal terms**, and `profile_coverage.py` reports
+  **0 of 258 named people unprotected**. Run
   `python stages/07_people/profile_coverage.py` after every round: it reads the
   journal, reports every named person the profile misses, measures each against
   the library, and `--apply` adds the ones that are not catch-alls - then asserts
