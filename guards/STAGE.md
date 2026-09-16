@@ -35,6 +35,7 @@ unattended. Not a stage on the belt: the rails the belt runs on.
 - `tests/test_guards.py`
 - `tests/test_stagepath.py`
 - `tests/test_profile.py`
+- `tests/test_paths.py`
 - `tests/test_stage_contracts.py`
 - `tests/test_chain_gating.py`
 - `tests/test_steps.ps1`

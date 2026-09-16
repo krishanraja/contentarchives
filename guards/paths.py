@@ -52,6 +52,74 @@ AUDIT = r"D:\_PhotoAudit"
 SCRIPTS = os.path.join(AUDIT, "scripts")
 TMPDIR = r"D:\_takeout_tmp"
 
+REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+# Scratch trees this project creates and is allowed to empty, once each has been
+# PROVEN to hold nothing unique. None of them may sit inside ROOT: clearing a
+# scratch dir nested in the library would delete library content.
+SCRATCH_DIRS = [
+    TMPDIR,
+    r"D:\_h_stage",
+    r"D:\_h_speedtest",
+    r"D:\_stage",
+    r"D:\_tmp",
+]
+
+# Where new material arrives. Five scripts each kept their own copy of this list
+# with a hardcoded username in it; one definition means a new source is one edit.
+SOURCES = [
+    os.path.join(os.path.expanduser("~"), "Downloads"),
+    r"D:\\",
+    r"D:\Takeout",
+    r"C:\GoogleTakeout",
+]
+WATCH_DIRS = list(SOURCES)
+
+# Folders that are this project's own bookkeeping, never ingested as media.
+SKIP_FOLDERS = {"_audit-trail", "in", "out"}
+
+
+def _resolve(binary: str, required: bool = True) -> str | None:
+    """Find an external tool. Raise when it is missing; never return "".
+
+    Learning 41: FFPROBE was hardcoded to one machine's username, probe_video()
+    returned an empty dict when the binary was absent, and a 33-minute pass wrote
+    no duration for any of 12,988 videos while reporting success. A missing
+    dependency must be loud, and a falsy return value is not loud.
+
+    Order: an explicit override, then PATH, then a glob under the CURRENT user's
+    WinGet packages - never another machine's profile.
+    """
+    import glob
+    import shutil
+
+    env = os.environ.get(binary.upper().replace("-", "_") + "_PATH")
+    if env and os.path.exists(env):
+        return env
+    found = shutil.which(binary)
+    if found:
+        return found
+    pattern = os.path.join(os.path.expanduser("~"), "AppData", "Local", "Microsoft",
+                           "WinGet", "Packages", "*", "**", binary + ".exe")
+    for hit in glob.glob(pattern, recursive=True):
+        return hit
+    if required:
+        raise SystemExit(
+            "STOPPING: {0} was not found.\n"
+            "  Looked at ${1}_PATH, then PATH, then this user's WinGet packages.\n"
+            "  Install it or set the variable - a missing tool that returns an\n"
+            "  empty result writes an empty column and calls it success "
+            "(learning 41).".format(binary, binary.upper()))
+    return None
+
+
+def ffprobe(required: bool = True) -> str | None:
+    return _resolve("ffprobe", required)
+
+
+def ffmpeg(required: bool = True) -> str | None:
+    return _resolve("ffmpeg", required)
+
 # Every root the dedup index must cover. Anything holding library content and
 # missing from this list is invisible to deduplication - the bug that cost
 # 21,649 duplicate files. _Review is included deliberately: a file judged
