@@ -36,8 +36,8 @@ and non-memories moved to `_Review` - moved, never deleted.
 | # | what this stage does about it | enforced by |
 |---|---|---|
 | 2 | folder names are a hint for review, never a decision | `code:tools/audit_split.py:Stress-test` |
-| 20 | filename term boundaries are "not a letter", not \b | prose-only |
+| 20 | filename term boundaries are "not a letter", not \b | `code:guards/profile.py:def is_personal`, `test:tests/test_profile.py:a term inside an underscored filename matches` |
 | 21 | a resolution is evidence only by aspect ratio | `code:scripts/classify_screenshots.py:aspect` |
 | 29 | a self-declaring filename outranks a recognised pattern | prose-only |
-| 30 | \b treats underscore as a letter in filename patterns | prose-only |
+| 30 | \b treats underscore as a letter in filename patterns | `code:guards/profile.py:def is_personal`, `test:tests/test_profile.py:a term inside an underscored filename matches` |
 | 54 | a term is dropped for being too broad only after counting what it matches | `test:tests/test_profile.py:def test_no_term_is_too_broad` |

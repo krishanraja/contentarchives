@@ -53,4 +53,4 @@ hours to pulling it.
 | 15 | measure a hung mount's I/O before calling it slow | `code:scripts/h_capacity.py:learning 15` |
 | 24 | a skip needs the same proof as a delete when the source is going away | prose-only |
 | 26 | export parts judged by their central directory | `code:scripts/zip_fingerprint.py:central`, `code:scripts/verify_takeout_complete.py:member` |
-| 33 | enumerate the source independently of the plan | prose-only |
+| 33 | enumerate the source independently of the plan | prose-only HERE; enforced in 06 faces by `code:stages/06_faces/video_face_frames.py:missing from disk` |

@@ -67,4 +67,4 @@ recurs, and nobody maintains it as part of the belt.
 | 27 | the index is rebuilt from the whole library, not replayed | `code:scripts/lib_size_index.py:os.walk` |
 | 31 | a cleanup that reclaims space must not suppress its errors | `code:scripts/ingest_from_h.py:rmtree with ignore_errors=True hides its` |
 | 36 | name plus size is never a duplicate verdict | `test:tests/test_safety_and_dedupe.py:def test_same_name_same_size_different_content_is_not_a_duplicate` |
-| 51 | ingest hashes but never decodes, so 70 undecodable videos entered the library and were found 18 months later by 06 faces - decoding one frame at ingest is not built | prose-only |
+| 51 | ingest hashes but never decodes, so 70 undecodable videos entered the library and were found 18 months later by 06 faces - decoding one frame at ingest is not built | prose-only HERE; the census that found them is in 06 faces, `code:stages/06_faces/video_face_frames.py:def marker` |

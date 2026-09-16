@@ -27,6 +27,6 @@ destination's own evidence, never by reading back what was just written.
 ## Lessons
 | # | what this stage does about it | enforced by |
 |---|---|---|
-| 5 | a cloud mount's placeholders and free space are not what they look like | prose-only |
+| 5 | a cloud mount's placeholders and free space are not what they look like | prose-only HERE; enforced in 02 ingest by `code:scripts/ingest_from_h.py:learning 5` |
 | 17 | capacity comes from the account, not the mount | prose-only |
 | 25 | receipt is proven by the Drive client's operations queue | `code:scripts/move_audio_to_h.py:operations` |
