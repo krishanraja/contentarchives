@@ -36,6 +36,12 @@ import shutil
 import sys
 import time
 
+import os as _os, sys as _sys
+_d = _os.path.dirname(_os.path.abspath(__file__))
+while _d != _os.path.dirname(_d) and not _os.path.exists(_os.path.join(_d, 'stagepath.py')):
+    _d = _os.path.dirname(_d)
+_sys.path.insert(0, _d)
+import stagepath  # noqa: E402,F401  - every stage on sys.path, wherever this file lives
 sys.path.insert(0, r"D:\_PhotoAudit\scripts")
 import paths as P                                                # noqa: E402
 
