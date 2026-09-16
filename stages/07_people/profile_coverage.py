@@ -128,6 +128,9 @@ def main() -> int:
     ap.add_argument("--db", default=os.path.join(P.AUDIT, "library.db"))
     ap.add_argument("--apply", action="store_true",
                     help="add the safe terms (default: report only)")
+    ap.add_argument("--term", action="append", default=[], metavar="TERM",
+                    help="add this term IN ITS OWN RIGHT even though a shorter "
+                         "term already covers it (repeatable). Needs --apply.")
     a = ap.parse_args()
 
     if not os.path.isfile(a.journal):
@@ -144,9 +147,39 @@ def main() -> int:
 
     unprotected = sorted(n for n in people if not prof.is_personal(PROBE.format(n)))
     print("NOT protected by the profile: {}".format(len(unprotected)))
-    if not unprotected:
+
+    # A NAME COVERED ONLY BY A SHORTER TERM READS AS PROTECTED, AND IS NOT.
+    #
+    # "Rishi Blainey", "Rishi Unadkat" and "Rishi Chande" all satisfy
+    # is_personal() because the term `rishi` is a substring of each. So the check
+    # above finds nothing to do and this script used to return at that point,
+    # with no way to add them at all. The same was true of the two Kirans, who
+    # were "covered only by the short term `kiran` - cover that vanishes silently
+    # the day that term is removed". Three real people's protection resting on one
+    # unrelated term is a gap, not a decision.
+    #
+    # It goes through the same measurement and the same post-write assertion as
+    # --apply. The alternative was a sixth throwaway script, which is the fault
+    # this file's docstring exists to name.
+    explicit = sorted({t.strip().lower() for t in a.term if t.strip()})
+    already = [t for t in explicit if t in prof.personal_terms]
+    explicit = [t for t in explicit if t not in prof.personal_terms]
+    if already:
+        print("asked for, already a term in its own right: {}".format(
+            ", ".join(already)))
+    if explicit:
+        print("asked for IN THEIR OWN RIGHT: {}".format(", ".join(explicit)))
+        for t in explicit:
+            covered = prof.is_personal(PROBE.format(t))
+            print("   {:<22} {}".format(
+                t, "currently covered only by a shorter term"
+                if covered else "currently UNPROTECTED"))
+
+    if not unprotected and not explicit:
         print()
         print("every named person is protected.")
+        if already:
+            print("nothing to add: every --term asked for is already a term.")
         return 0
 
     paths = library_paths(a.db)
@@ -155,13 +188,14 @@ def main() -> int:
     print()
     print("{:<22} {:>9} {:>8}  {}".format("term", "paths", "%", "verdict"))
     safe, refused = [], []
-    for n in unprotected:
+    for n in unprotected + explicit:
         hits = sum(1 for p in paths if n in p)
         pct = hits / max(total, 1)
         ok = pct < CATCH_ALL
         (safe if ok else refused).append(n)
-        print("{:<22} {:>9,} {:>7.2f}%  {}".format(
-            n, hits, pct * 100, "add" if ok else "CATCH-ALL - refused"))
+        print("{:<22} {:>9,} {:>7.2f}%  {}{}".format(
+            n, hits, pct * 100, "add" if ok else "CATCH-ALL - refused",
+            "   (in its own right)" if n in explicit else ""))
     print()
 
     if not a.apply:
