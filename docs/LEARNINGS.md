@@ -1819,10 +1819,48 @@ than its subject, and passing.** This is the learning, not the four slips.
    reported protected and were not. Caught only by asserting `is_personal` on a
    real path afterwards.
 
+5. The SAME inversion from the other direction, an hour later. `mick evans` was
+   already in the profile, so `mick` read as "already protected" and was skipped
+   again - but a kept term has to appear IN the path, and a path saying `mick`
+   contains no `mick evans`. A longer kept name never covers a shorter one.
+   "Already covered" is only sound when the kept term is a SUBSTRING of the
+   thing being tested, which is the opposite of what the shortcut assumed both
+   times.
+
 **The rule.** After writing a check, run it against a case whose answer you
-already know, and read the number it prints. Every one of these four passed; not
+already know, and read the number it prints. Every one of these five passed; not
 one was caught by its own verdict. "All checks passed" is a claim about the
 check, never about the subject.
+
+**And the specific form to distrust**: a shortcut that decides two things are
+"the same" by comparing them in whichever direction came to hand. Ask which way
+the real code compares them, and copy that - or better, call the real code.
+`is_personal()` was available the whole time, and asserting it on a real path is
+what eventually caught all three of tore, mish and mick.
+
+6. **The escape hatch.** `chain_rounds.ps1`'s `-Verify` re-derived a journal
+   answer from `library.db.tmp`, with a `PENDING` branch for "the build has not
+   written photo_people yet", which is a reasonable thing to allow mid-run. But
+   `Invoke-Step` always runs `-Verify` once more AFTER the process exits, and by
+   then `build_db` has renamed the tmp file to `library.db` - so the connect
+   failed, the block returned PENDING, and the ONE verify that gates the whole
+   step passed on "nothing to check yet". The log counted it exactly: 1 OK, 4
+   PENDING, 0 WRONG, final PENDING. The step was supervised in appearance and
+   unsupervised in fact.
+
+   The same run also proved `-Progress` inert: `still at 0` on four of five
+   checkpoints and two of four stall strikes accrued, because it counted
+   committed rows while `build_db` inserts inside one long transaction. A probe
+   had shown that a `mode=ro` reader sees only committed rows - I ran it, wrote
+   down the result, and then built the progress signal that the result rules
+   out. On a slower machine the supervisor would have killed a correct
+   thirteen-minute rebuild on a false stall: a progress signal that cannot move
+   is worse than none, because something ACTS on it.
+
+   **The rule for escape hatches.** A branch that means "cannot tell yet" must
+   be reachable only in the state that makes it true, and must be impossible in
+   the state where the answer matters. Enumerate when each branch fires before
+   trusting the check, and count them in the log afterwards.
 
 ## 55. The last line of a long job is where its work is most at risk
 
