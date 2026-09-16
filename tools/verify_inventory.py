@@ -26,6 +26,18 @@ import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 
+import os as _os, sys as _sys                                    # noqa: E402
+_d = _os.path.dirname(_os.path.abspath(__file__))
+while _d != _os.path.dirname(_d) and not _os.path.exists(_os.path.join(_d, 'stagepath.py')):
+    _d = _os.path.dirname(_d)
+_sys.path.insert(0, _d)
+import stagepath  # noqa: E402,F401  - resolves a script wherever the conveyor put it
+
+# Without this, stagepath.script() below is a NameError. It did not show up in a
+# compile check or an import check, because the call sits inside a function body
+# that neither one executes - the same half-finished edit made in runner.py an
+# hour earlier. "It imported fine" is not "it works" (learning 54).
+
 
 def main() -> int:
     ap = argparse.ArgumentParser(
@@ -40,7 +52,7 @@ def main() -> int:
         return 2
 
     spec = importlib.util.spec_from_file_location(
-        "bi", os.path.join(HERE, "..", "scripts", "build_inventory.py"))
+        "bi", stagepath.script("build_inventory.py"))
     bi = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(bi)
     if not bi.FFPROBE or not os.path.exists(bi.FFPROBE):

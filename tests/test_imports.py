@@ -278,8 +278,17 @@ def main():
     # The bootstrap probe is excluded by TARGET, not by base: every module
     # carries `os.path.join(_d, 'stagepath.py')` while walking up to find the
     # repo root, and that file is deliberately NOT its neighbour.
+    # MULTI-SEGMENT joins too. The first version required the .py string to be
+    # the argument directly after the base, so it walked straight past
+    #     os.path.join(HERE, "..", "scripts", "build_inventory.py")
+    # in tools/verify_inventory.py - which the 04 inventory move had just
+    # broken. The sweep reported "no launch points at a script that has moved"
+    # while holding a dead launch, which is this file's own recurring fault:
+    # a pattern narrower than the thing it claims to cover (learning 54).
     launched = re.compile(
-        r'os\.path\.join\(\s*([A-Za-z_][\w.]*)\s*,\s*["\']([^"\']+\.py)["\']')
+        r'os\.path\.join\(\s*([A-Za-z_][\w.]*)\s*,'          # the base
+        r'(?:\s*["\'][^"\']*["\']\s*,)*'                      # any middle segments
+        r'\s*["\']([^"\']+\.py)["\']')                        # the script
     dangling = []
     for rel, full in modules():
         src = io.open(full, encoding="utf-8", errors="replace").read()
@@ -313,6 +322,28 @@ def main():
                 dangling.append("{}:{} launches {} which exists NOWHERE".format(
                     rel, line, target))
     check("no launch points at a script that has moved", dangling, [])
+
+    print()
+    print("5b. a module calling stagepath.script() actually imports stagepath")
+    # Invisible to everything else. tools/verify_inventory.py was changed to use
+    # stagepath.script() without importing stagepath, and BOTH a py_compile and a
+    # full import reported it clean - because the call lives in a function body
+    # that neither executes. It would have raised NameError at the moment
+    # somebody verified an inventory. The same half-finished edit happened in
+    # runner.py an hour before, so this is a check and not a resolution to be
+    # more careful.
+    unimported = []
+    for rel, full in modules():
+        src = io.open(full, encoding="utf-8", errors="replace").read()
+        if not re.search(r"\bstagepath\.\w+\(", src):
+            continue
+        if re.search(r"^\s*import stagepath\b", src, re.M):
+            continue
+        if re.search(r"^\s*from\s+stagepath\s+import\b", src, re.M):
+            continue
+        line = src[:re.search(r"\bstagepath\.\w+\(", src).start()].count("\n") + 1
+        unimported.append("{}:{} calls stagepath.* but never imports it".format(rel, line))
+    check("every stagepath.* caller imports stagepath", unimported, [])
 
     print()
     print("6. nothing puts the MACHINE's script directory on sys.path")
