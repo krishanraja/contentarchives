@@ -40,6 +40,7 @@ on.
 from __future__ import annotations
 
 import argparse
+import base64
 import collections
 import csv
 import io
@@ -72,6 +73,10 @@ def main() -> int:
     ap.add_argument("--cache", default=CACHE)
     ap.add_argument("--photo-faces", default=r"D:\_enrichment\faces.0.csv",
                     help="the source face-emb.npy was decoded from, for the alignment check")
+    ap.add_argument("--video-assign", default=r"D:\_PhotoAudit\FACE-CLUSTERS-VIDEO.csv",
+                    help="video faces from assign_video_faces.py; skipped if absent")
+    ap.add_argument("--video-faces", default=r"D:\_enrichment\faces.video.csv",
+                    help="their embeddings, joined on (image, face_index)")
     ap.add_argument("--answers", default=ANSWERS)
     ap.add_argument("--out", default=MERGES)
     ap.add_argument("--store", default=r"D:\_enrichment")
@@ -99,15 +104,53 @@ def main() -> int:
             print("   " + p)
         return 1
 
-    idxs = collections.defaultdict(list)
+    DIM = E.shape[1]
+    sums = collections.defaultdict(lambda: np.zeros(DIM, dtype=np.float32))
+    count = collections.Counter()
+    byc = collections.defaultdict(set)          # cluster -> the files it appears in
     for i, r in enumerate(rows):
-        idxs[r["cluster"]].append(i)
-    clusters = [c for c, v in idxs.items() if len(v) >= a.min_faces]
-    print("clusters with {}+ faces: {:,}".format(a.min_faces, len(clusters)))
+        sums[r["cluster"]] += E[i]
+        count[r["cluster"]] += 1
+        byc[r["cluster"]].add(r["hash"])
+    nphoto = len(rows)
 
-    C = np.zeros((len(clusters), E.shape[1]), dtype=np.float32)
+    # VIDEO FACES, joined on (image, face_index) and NOT by position: each
+    # embedding stays in the row that describes it, so there is no second file
+    # to drift out of step (learning 45). Without them a person who appears only
+    # on video never merges with their photograph cluster, and a name never
+    # reaches a video face sitting in an unnamed sibling cluster.
+    nvideo = 0
+    if os.path.exists(a.video_assign) and os.path.exists(a.video_faces):
+        cluster_of = {}
+        for r in csv.DictReader(io.open(a.video_assign, encoding="utf-8",
+                                        errors="replace", newline="")):
+            cluster_of[(r["image"], r["face_index"])] = r["cluster"]
+            byc[r["cluster"]].add(r["hash"])
+        for r in csv.DictReader(io.open(a.video_faces, encoding="utf-8",
+                                        errors="replace", newline="")):
+            c = cluster_of.get((r.get("image"), r.get("face_index")))
+            if not c or not r.get("emb"):
+                continue
+            sums[c] += np.frombuffer(base64.b64decode(r["emb"]),
+                                     dtype=np.float16).astype(np.float32)
+            count[c] += 1
+            nvideo += 1
+        if nvideo != len(cluster_of):
+            print("STOPPING: {:,} video assignments but {:,} of their embeddings "
+                  "were found - a join that silently drops faces would merge on "
+                  "partial centroids".format(len(cluster_of), nvideo))
+            return 1
+        print("video faces joined in: {:,}".format(nvideo))
+    else:
+        print("no video faces yet - photographs only")
+
+    clusters = [c for c, n in count.items() if n >= a.min_faces]
+    print("clusters with {}+ faces: {:,}   (from {:,} photograph and {:,} video "
+          "faces)".format(a.min_faces, len(clusters), nphoto, nvideo))
+
+    C = np.zeros((len(clusters), DIM), dtype=np.float32)
     for n, c in enumerate(clusters):
-        v = E[idxs[c]].mean(axis=0)
+        v = sums[c] / max(count[c], 1)
         C[n] = v / max(float(np.linalg.norm(v)), 1e-9)
 
     names = {}
@@ -130,7 +173,7 @@ def main() -> int:
     # GROUP's running centroid, which every existing member is already close to.
     # Chaining cannot happen: the thing being compared against moves toward the
     # members, so a drifting candidate stops matching.
-    sizes_by_c = {c: len(idxs[c]) for c in clusters}
+    sizes_by_c = {c: count[c] for c in clusters}
     biggest = sorted(range(len(clusters)), key=lambda n: -sizes_by_c[clusters[n]])
     gcent = np.zeros_like(C)
     gsum = np.zeros_like(C)
@@ -210,9 +253,6 @@ def main() -> int:
     from store import Store
     st = Store(a.store)
     out = []
-    byc = collections.defaultdict(set)
-    for r in rows:
-        byc[r["cluster"]].add(r["hash"])
     n = 0
     for g, members in groups.items():
         named = {names[c] for c in members if c in names}
