@@ -51,7 +51,7 @@ import re
 import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)),
-                                "..", "engine"))
+                                "..", "stages", "05_enrich"))
 sys.path.insert(0, r"D:\_PhotoAudit\scripts")
 from batch_classify import assets_for                            # noqa: E402
 

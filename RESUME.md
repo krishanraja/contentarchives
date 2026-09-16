@@ -78,7 +78,10 @@ the 53 learnings are enforced by a named function or test.
   running. 39 files moved with `git mv`: stages 05 enrich, 06 faces, 07 people
   and 08 index into their folders, and `paths.py`, `steps.ps1`, `arm.ps1` and
   `rearm_when.ps1` into `guards/`. Each chain script now lives with the stage it
-  drives. `engine/` and `scripts/chains/` are empty. Imports go through
+  drives. `engine/` and `scripts/chains/` are **gone** - both were left empty by
+  the move and removed on 2026-09-16; `engine/README.md`, which described the
+  enrichment design in a directory that held no code, moved to
+  `stages/05_enrich/README.md` with its usage paths corrected. Imports go through
   `stagepath.py` - two lines, no relative depth, and `stagepath.script("x.py")`
   for anything launched as a subprocess.
 

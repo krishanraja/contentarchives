@@ -43,7 +43,7 @@ OPTIONAL = ["Edge cases"]
 # 34 files silently became unowned without the test objecting: the ownership
 # check can only see the trees it is told about. Anything holding .py or .ps1
 # belongs here, and an empty tree costs nothing.
-CODE_DIRS = ["contentarchives", "engine", "tools", "scripts", "guards", "stages"]
+CODE_DIRS = ["contentarchives", "tools", "scripts", "guards", "stages"]
 REF = re.compile(r"`(test|guard|code):([^`:]+?)(?::([^`]+))?`")
 
 

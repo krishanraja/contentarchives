@@ -166,7 +166,7 @@ human who was there can supply:
 | date for `NoDate` files | only Krish, from recognising the occasion |
 | correcting a wrong `kind` or `keep` | Krish, in seconds, one swipe |
 
-There is a prototype already: `engine/swipe/index.html` and `server.py`, and `store.py`
+There is a prototype already: `stages/07_people/swipe/index.html` and `server.py`, and `stages/05_enrich/store.py`
 already carries `people`, `observations` and a merge-suggestion table with the rule that
 naming is recorded as a new row rather than an edit, so the history of what someone was
 called stays visible.

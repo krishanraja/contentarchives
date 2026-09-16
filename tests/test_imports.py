@@ -27,11 +27,11 @@ WHAT IT PINS, AND WHY IN THREE PARTS
      that property is worth asserting rather than assuming: the import must
      succeed AND leave the filesystem alone.
 
-  3. UNGUARDED SCRIPTS are a NAMED, SHRINKING list. Eighteen modules still run
+  3. UNGUARDED SCRIPTS are a NAMED, SHRINKING list. Sixteen modules still run
      work at module level. They are listed below by name, and a module that
      joins them fails this test. That makes it a ratchet: the list can only get
-     shorter. Two of the eighteen matter more than the rest and are called out -
-     a LIBRARY that works at import is the phase-3 failure waiting to recur.
+     shorter - each is a candidate for the treatment h_capacity.py and
+     verify_h_batch.py got, the body indented into main().
 """
 
 from __future__ import annotations
@@ -47,7 +47,7 @@ ROOT = os.path.dirname(HERE)
 sys.path.insert(0, ROOT)
 import stagepath  # noqa: E402,F401  - the same bootstrap every module uses
 
-CODE_DIRS = ["scripts", "stages", "guards", "tools", "contentarchives", "engine"]
+CODE_DIRS = ["scripts", "stages", "guards", "tools", "contentarchives"]
 
 # Modules that still do work at module level, by name. A module joining this set
 # fails the test; removing one from the set is the fix, not adding to it.

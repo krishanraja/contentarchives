@@ -183,7 +183,7 @@ Honest list, in order.
    small fixed schema is a thin layer on top, and semantic search over the
    `subject` text already generated for 97,484 files is another.
 4. **The enrichment loop as a UI**, scheduled on leverage, writing to the
-   journal. A swipe prototype exists in `engine/swipe/`.
+   journal. A swipe prototype exists in `stages/07_people/swipe/`.
 5. **Packaging.** It is a set of scripts sharing conventions, not a library with
    an installable surface.
 

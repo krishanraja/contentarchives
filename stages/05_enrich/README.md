@@ -1,4 +1,9 @@
-# Enrichment engine
+# Enrichment engine (stage 05)
+
+> Moved here from `engine/` on 2026-09-16. The design below is unchanged and
+> current; only the paths were wrong, because they named a directory that no
+> longer held any code. The swipe server lives in stage 07 people, with the
+> rest of the asking-a-human machinery.
 
 Point it at any tree of photographs and video. It works out what each file is,
 who is in it, and what it shows - and asks a human only the questions a machine
@@ -92,12 +97,12 @@ rule that keeps the per-file map off a public repo applies here with more force.
 ## Usage
 
 ```bash
-python thumbnail.py --source "D:\ContentLibrary" --out "D:\_thumbs"
+python stages/05_enrich/thumbnail.py --source "D:\ContentLibrary" --out "D:\_thumbs"
 
 set ANTHROPIC_API_KEY=...
-python classify.py --thumbs "D:\_thumbs" --store "D:\_enrichment" --limit 200
+python stages/05_enrich/classify.py --thumbs "D:\_thumbs" --store "D:\_enrichment" --limit 200
 
-python swipe/server.py --store "D:\_enrichment" --thumbs "D:\_thumbs"
+python stages/07_people/swipe/server.py --store "D:\_enrichment" --thumbs "D:\_thumbs"
 ```
 
 `--limit` runs a costed tranche. Everything is resumable: the store records what

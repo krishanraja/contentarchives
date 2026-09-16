@@ -33,7 +33,7 @@ where the work is paused, what to do next, and which decisions are already settl
 | [`docs/HANDOVER.md`](docs/HANDOVER.md) | what is done, what is open |
 | [`docs/ROADMAP.md`](docs/ROADMAP.md) | the phased plan from here to two mirrored libraries, segmentation done, Elements purged, the game running |
 | [`docs/PRODUCT.md`](docs/PRODUCT.md) | what would survive as a product: the reusable core, and what stays a one-off analysis |
-| [`engine/README.md`](engine/README.md) | the enrichment engine: metadata, a cheap vision model, then a human |
+| [`stages/05_enrich/README.md`](stages/05_enrich/README.md) | the enrichment engine: metadata, a cheap vision model, then a human |
 | [`docs/rescues/`](docs/rescues/) | per-source rescue histories — what came off each disk, and what it cost |
 | [`docs/MACHINE-HYGIENE.md`](docs/MACHINE-HYGIENE.md) | bring a Windows machine to the agreed clean state, and keep it there |
 | [`docs/MIRROR.md`](docs/MIRROR.md) | how `D:` and `H:` end up holding the same library, in what order, and where the human checks it |

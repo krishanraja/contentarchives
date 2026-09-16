@@ -7,7 +7,7 @@ WHY
 
 Before the conveyor, each script reached its neighbours with its own path hack:
 
-    sys.path.insert(0, os.path.join(HERE, "..", "engine"))
+    sys.path.insert(0, os.path.join(HERE, "..", "stages", "05_enrich"))
 
 which encodes the depth of the file that wrote it. Moving that file one directory
 deeper silently resolves to a directory that does not exist, and the import fails
@@ -44,7 +44,7 @@ if os.path.isdir(_STAGES):
     _DIRS += [os.path.join("stages", d) for d in sorted(os.listdir(_STAGES))
               if os.path.isdir(os.path.join(_STAGES, d))]
 # still-unmoved trees, dropped from this list as each stage moves
-_DIRS += ["engine", "tools", "scripts"]
+_DIRS += ["tools", "scripts"]
 
 
 def _add(rel: str) -> str | None:
