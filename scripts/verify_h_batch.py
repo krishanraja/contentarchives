@@ -25,7 +25,7 @@ import paths as P                                                # noqa: E402
 
 JOURNAL = r"D:\_PhotoAudit\INGEST-h-from-machine-b.csv"
 H_SRC = r"H:\My Drive\_photo-consolidation\from-machine-b"
-STAGE = r"D:\_h_stage"
+STAGE = P.H_STAGE
 SAMPLE = 25
 
 fails: list[str] = []

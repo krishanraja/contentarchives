@@ -66,7 +66,7 @@ H_ROOT = r"H:\My Drive\_photo-consolidation"
 # bytes once instead of twice. Derive it, so moving the library to a bigger disk
 # is the one edit in paths.py it is supposed to be.
 LIB_VOL = os.path.splitdrive(P.ROOT)[0] + os.sep
-STAGE = os.path.join(LIB_VOL, "_h_stage")
+STAGE = P.H_STAGE
 # Where a file that defeated the batch copier is pulled by hand. It is
 # journalled with this root rather than the stage, so the resume set has to
 # recognise both - otherwise the next run helpfully re-fetches the one file

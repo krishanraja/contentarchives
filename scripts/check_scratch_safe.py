@@ -20,9 +20,7 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import paths as P                                                # noqa: E402
 
-SCRATCH = [r"D:\_h_speedtest", r"D:\_machine-b_stage",
-           r"D:\_PhotoAudit\_pilot", r"D:\_PhotoAudit\_pilotfast",
-           r"D:\_PhotoAudit\_pilotlow"]
+SCRATCH = list(P.SCRATCH_DIRS)
 IDX = r"D:\_PhotoAudit\lib-size-index.csv"
 
 

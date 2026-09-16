@@ -1,5 +1,5 @@
 {
-  "generated": "2026-09-16T11:11:30",
+  "generated": "2026-09-16T11:14:13",
   "library": {
     "dated_files": 67820,
     "dated_bytes": 833819240053,
@@ -60,7 +60,7 @@
   "compression": {
     "verdicts": {},
     "bytes_freed": 0,
-    "candidates_planned": 322
+    "candidates_planned": 0
   },
   "losses": {
     "unrecoverable_files": 22410,
@@ -68,9 +68,9 @@
     "detail": "PERSONAL-losses.csv"
   },
   "disks_free_gb": {
-    "C": 136.5,
+    "C": 136.4,
     "D": 3726.3,
     "G": 89.7,
-    "H": 129.7
+    "H": 129.6
   }
 }

@@ -57,9 +57,13 @@ REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 # Scratch trees this project creates and is allowed to empty, once each has been
 # PROVEN to hold nothing unique. None of them may sit inside ROOT: clearing a
 # scratch dir nested in the library would delete library content.
+# Where a cloud pull is staged before it enters the library, named because two
+# scripts each hardcoded it and one of them verifies batches against it.
+H_STAGE = r"D:\_h_stage"
+
 SCRATCH_DIRS = [
     TMPDIR,
-    r"D:\_h_stage",
+    H_STAGE,
     r"D:\_h_speedtest",
     r"D:\_stage",
     r"D:\_tmp",
