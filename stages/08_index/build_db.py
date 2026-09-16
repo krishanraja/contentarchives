@@ -66,6 +66,7 @@ rather than left to infer them.
 from __future__ import annotations
 
 import argparse
+import collections
 import csv
 import io
 import os
@@ -380,15 +381,30 @@ def resolve_people(db: sqlite3.Connection) -> int:
     tag_rows = db.execute(
         "SELECT hash, value, source FROM tags "
         "WHERE tag = 'person' AND value IS NOT NULL AND value != ''").fetchall()
-    dropped = sum(1 for _, v, _ in tag_rows if (v or "").strip() in superseded)
-    rows.extend((h, v, s) for h, v, s in tag_rows
-                if (v or "").strip() not in superseded)
+    dropped = collections.Counter()
+    for h, v, s in tag_rows:
+        name = (v or "").strip()
+        if name in superseded:
+            dropped[name] += 1
+        else:
+            rows.append((h, v, s))
     db.executemany("INSERT OR IGNORE INTO photo_people VALUES (?,?,?)", rows)
+
+    # PER NAME, because one count beside a list of names is read as all of them.
+    # The first version printed "4 name(s) superseded ... 135 stale tag row(s):
+    # Anita (Mak), Kiran, Rishi, Rishi (baby)" and I read it as evidence that
+    # `Kiran` had been in the tag layer - it never was, and I had told Krish so
+    # correctly an hour earlier, then talked myself out of it on the strength of
+    # my own log line. Most of those names dropped NOTHING; two dropped
+    # everything. A message that invites the wrong reading is a defect.
     if superseded:
-        print("   {} name(s) superseded by a later answer, {} stale tag row(s) "
-              "not re-imported: {}".format(
-                  len(superseded), dropped,
-                  ", ".join(sorted(superseded)[:6])))
+        print("   {} name(s) no longer asserted by any cluster; stale tag rows "
+              "not re-imported:".format(len(superseded)))
+        for name in sorted(superseded):
+            n = dropped.get(name, 0)
+            print("      {:<26} {}".format(
+                repr(name), "{} tag row(s)".format(n) if n else
+                "none - never in the tag layer"))
 
     names, human = {}, set()
     for h, p, src in db.execute("SELECT hash, person, source FROM photo_people"):

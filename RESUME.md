@@ -112,29 +112,134 @@ memory instead of from the run.
 
 ----
 
-## RIGHT NOW: the Rishi question is with Krish; round 19 is HELD (2026-09-17, 21:25)
+## RIGHT NOW: round 19 is with Krish; two guards were fixed getting it out (2026-09-17, 22:20)
 
-**Do not build round 19.** Krish: *"I think we need to redo the Rishi's the same
-way we redid the Kiran's."* Ten clusters carry a Rishi label, he has the
-disambiguation page, and a new sheet would ask fresh questions on top of labels
-he has said are wrong. Same hold as the Kiran question a round earlier.
+**Round 19 is sent** - `D:\_PhotoAudit\PEOPLE.html`, 60 rows, 371 crops, both
+gates passed. It is the first sheet built to Krish's two new decisions:
 
-`D:\_PhotoAudit\RISHI.html` was built with
-`people_sheet.py --clusters c11525,c1303,c13897,c17449,c2811,c290,c29781,c36,c480,c993`
-and gated - 9 rows, 105 crops, `verify_people_sheet.py` exit 0 - then sent.
-`stages/07_people/name_clusters.py --like Rishi` reprints the whole picture and
-the exact command, so nothing here needs reconstructing:
+- **the first 25 rows are the priority queue**: the clusters behind the 29
+  photographs that lost their only name when the stale-label fix landed
+  (`D:\_PhotoAudit\PRIORITY-CLUSTERS.csv`). He chose "drop it and queue those".
+  They hold 1-4 faces each, so a floor of 8 would have binned every one - the
+  sheet passes them explicitly with `--clusters` and applies by hand every
+  filter that flag bypasses (answered, majority-Communal).
+- **the other 35 come from the ranked pool at the 8+ floor**. He was asked where
+  the floor should sit, shown the measured distribution, and chose **8+
+  photographs**: 292 clusters, ~5 rounds, and then the rounds are DONE.
 
-| label | clusters | photographs | span |
-|---|---|---|---|
-| `Rishi` | `c36` + `c290` (ONE merge group) | 654 | 2008-2026 |
-| `Rishi (baby)` | `c1303`, `c2811`, `c13897`, `c29781`, `c11525` | 174, 28, 18, 13, 12 | all 2025-2026 |
-| `Rishi Chande` | `c993`, `c480` | 18, 13 | 2021-2025 and 2017-2019, NO overlap |
-| `Rishi Unadkat` | `c17449` | 9 | 2024-2026 |
+`--min-photos` is that floor, and when nothing clears it `people_sheet.py` says
+**THE NAMING ROUNDS ARE DONE** and writes no sheet, because an empty page and a
+finished job look identical to whoever opens it (learning 44).
 
-**Do not infer which is which.** On the Kiran question the counts and dates
-pointed the wrong way round. Record his answer as NEW journal rows, rebuild,
-then resume the rounds.
+### THE REPEAT GUARD WAS BLESSING AN EMPTY BASELINE
+
+`check_repeats.py` matched `PEOPLE-round\d+\.html` in `D:\_PhotoAudit`. **There
+are no such files** - every round has overwritten one `PEOPLE.html`. So for
+round 19 it read **0 earlier sheets**, compared 60 rows against an empty set, and
+printed "CLEAN - every row is new". I nearly sent the sheet on that.
+
+Two fixes, because the pattern was only half the problem:
+
+- the baseline now comes from **the journal**, which holds every row ever
+  offered - named, `declined`, or `needs_identifying` - and cannot be lost by a
+  file being overwritten. Real baseline: **993 merge groups**. Round 19 against
+  it: **0 repeats, no row twice**.
+- an empty baseline now **refuses** with exit 2 and says CANNOT TELL, instead of
+  reporting clean. Second time this file has reported clean while measuring
+  nothing; the first was the `[1-6]` pattern that froze at 186 rows.
+
+Its test passed throughout, because it fabricates `PEOPLE-round1.html` fixtures
+and so tested the matcher against a world that no longer exists.
+`tests/test_people_rounds.py` now watches the empty-baseline refusal and the
+journal baseline, including that **a declined row is a repeat** - a refusal is an
+answer.
+
+### FOUR THINGS I GOT WRONG TODAY, AND WHAT EACH ONE COST
+
+Kept because each was caught by measuring, and the next session should expect the
+same rate rather than trust a confident line in this file.
+
+| claim I made | truth | how it was caught |
+|---|---|---|
+| "250 photographs lost a name I cannot account for" | **29**, as captured. I compared `count(distinct hash)` to a FILES coverage line - two different units | re-derived both measures side by side |
+| "`Kiran` was in the tag layer after all" | it never was. My own log line printed 4 names beside 1 row count, and I believed it over the evidence | `tags` holds no `Kiran` row at all |
+| "the largest unnamed cluster covers 9 photographs" | **10**, and the pool is 57,793 clusters - I measured a pool already truncated by `--top 3` | ran the full distribution |
+| "the sheet is gated, both checks pass" | gate 2 had read nothing. Also invoked both gates on remembered flags (`--sheet`) that neither accepts | read their argument lists |
+
+The log line is fixed to print **per name**, so "superseded" can no longer be
+read as "dropped something".
+
+----
+
+## The Rishis, and the defect that came out of them (2026-09-17, 21:50)
+
+### RESOLVED: the three Rishis
+
+Krish: *"I think we need to redo the Rishi's the same way we redid the Kiran's."*
+He was shown all ten clusters on one page (`D:\_PhotoAudit\RISHI.html`, 9 rows,
+105 crops, `verify_people_sheet.py` exit 0) and answered. Recorded, rebuilt, and
+re-derived from the index:
+
+| person | clusters | photographs on the index |
+|---|---|---|
+| **Rishi Unadkat** | `c290` + `c36` (ONE merge group), `c17449` | 573 |
+| **Rishi Blainey** | `c1303`, `c2811`, `c13897`, `c29781`, `c11525` | 207 |
+| **Rishi Chande** | `c993`, `c480` | 31 |
+
+**MY INFERENCE WOULD HAVE BEEN WRONG AGAIN.** I expected the 654-photograph,
+eighteen-year cluster to stay plain "Rishi" and the 9-photograph `c17449` to be
+the outlier. The big one IS Rishi Unadkat. That is twice in two rounds that the
+counts and dates pointed the wrong way; `name_clusters.py` refuses to decide for
+exactly this reason.
+
+`c36` is the tenth cluster and he did not type it: it shares merge group `c290`,
+so the row he judged pooled both clusters' faces (287 + 280 tags). **Asked, not
+assumed** - and recorded with its provenance in the note, so the journal shows
+where that one came from.
+
+### FIXED: a stale `tags` person layer that no answer could supersede
+
+The index still shows a person called plain **`Rishi` on 97 photographs** and
+**`Rishi (baby)` on 38**, though NO cluster asserts either name any more.
+
+`resolve_people()` in `stages/08_index/build_db.py` takes the latest journal
+answer per cluster (correct - that is why no cluster says bare `Rishi`), then at
+line 352 appends **every `tags` row with `tag='person'`**. That layer was written
+per photograph by an earlier enrichment pass, with no cluster behind it, so a
+name Krish has since corrected survives there for ever: `INSERT OR IGNORE` only
+dedupes identical `(hash, person)` pairs and nothing removes a stale name. The 97
+photographs' faces trace to `c3735`, `c50767`, `c166` - not Rishi clusters at all.
+
+Measured library-wide, the blast radius is tiny and exact:
+
+| | | measure |
+|---|---|---|
+| names the journal has replaced | **4** | `Anita (Mak)`, `Kiran`, `Rishi`, `Rishi (baby)` |
+| of those, names present in `tags` | **2** | only `Rishi` (97 rows) and `Rishi (baby)` (38) |
+| stale tag rows not re-imported | **135** | 97 + 38 |
+| photographs that lost their only name | **29** | hashes, captured before AND reconstructed after |
+| photographs with no human-sourced name | 2,107 | hashes - they keep their tag names |
+
+**Krish chose "drop it and queue those"**, told the cost. `tags` is untouched:
+only the derived table changes, so a rebuild reverses it. The 25 unanswered merge
+groups behind those 29 photographs are the first 25 rows of round 19, because
+after the rebuild those photographs are indistinguishable from any other unnamed
+one - so they were captured first, in `D:\_PhotoAudit\PRIORITY-CLUSTERS.csv`.
+
+`test_build_db.py` section 8 is **proven to engage**: HEAD's `resolve_people` and
+the new one run side by side on the same fixture give `['Dad','Mother','Mum']`
+and `['Dad','Mother']`, while `Nanna` - an uncontradicted tag name that is a
+photograph's only name - survives in both. Section 5 passed either way, which is
+why it was not enough.
+
+### I OVERSTATED THE KIRAN VERIFICATION, and it needs saying
+
+A round earlier I reported "plain `Kiran` gone" as proof the rename had taken.
+`Kiran` does read 0 - but only because that name never existed in the tag layer.
+The check tested nothing about supersession and would have passed either way.
+True as a fact, worthless as evidence, and presented as evidence. It is the same
+trap already recorded below about the merge's own reassurance: **a check that did
+not engage is not evidence that it did** (learning 54).
 
 **Nothing is running unattended. The next move is Krish's.**
 
@@ -145,12 +250,22 @@ behind. The live index was already swapped at 21:23:09 while the process still
 ran; that is `report()` running after `promote()`, not a half-finished write, and
 it was confirmed rather than assumed. Totals now:
 
-| | |
-|---|---|
-| human answers in the journal | **1,086** |
-| people named | **263** |
-| photographs/videos with a name | **24,649** |
-| person rows | **44,653** |
+**Every figure here names the measure it came from.** On 2026-09-16 I compared
+`count(distinct hash)` in `photo_people` against the `person` line of the
+coverage report, which counts FILES, and invented a 250-photograph loss out of
+two different units. A number in this file without its measure is how that
+happens.
+
+| | | measure |
+|---|---|---|
+| human answers in the journal | **1,096** | rows in `answers.csv` |
+| people named | **262** | `count(distinct person)` in `photo_people` |
+| files with a person | **24,870** | `v_files.person` not null - the coverage line |
+| photographs with a person | **24,620** | `count(distinct hash)` in `photo_people` |
+| person rows | **44,525** | `count(*)` in `photo_people` |
+
+The two photograph counts differ because one hash can be several files. Neither
+is wrong; quoting one as the other is.
 
 **Every sheet is crop-verified and repeat-checked before he sees it** - he asked
 for that after batches he had refused came back a second time. Round 18 was 60

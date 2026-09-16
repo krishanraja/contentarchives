@@ -101,28 +101,41 @@ def test_repeat_guard(d):
     import check_repeats as C
 
     os.makedirs(d, exist_ok=True)
+    # HERMETIC OR MEANINGLESS. repeats() defaults to the real journal and the
+    # real CLUSTER-MERGES.csv, so without these every check below is answered by
+    # whatever is on this machine: c31 merges into a real group, c77 is a real
+    # journal target, and a cluster id that gets remapped never appears in `dup`
+    # under the name the test used. Pass both, always.
+    nojournal = os.path.join(d, "no-such-journal.csv")
+    nomerges = os.path.join(d, "merges-empty.csv")
+    with io.open(nomerges, "w", encoding="utf-8", newline="") as f:
+        csv.writer(f).writerow(["cluster", "group"])
+    HERMETIC = {"journal": nojournal, "merges": nomerges}
+
     sheet_of(os.path.join(d, "PEOPLE-round1.html"), ["c1", "c2"])
     sheet_of(os.path.join(d, "PEOPLE-round7.html"), ["c7", "c8"])
     # Fixtures that live beside real sheets must not join the baseline.
     sheet_of(os.path.join(d, "PEOPLE-tampered.html"), ["c99"])
 
     clean = sheet_of(os.path.join(d, "PEOPLE-round8.html"), ["c20", "c21"])
-    dup, rows, seen, sources = C.repeats(d, clean)
+    dup, rows, seen, sources = C.repeats(d, clean, **HERMETIC)
     check("a sheet of new rows is clean", dup, [])
     check("it read both earlier rounds", sorted(sources),
           ["PEOPLE-round1.html", "PEOPLE-round7.html"])
     check("the fixture is not in the baseline", "c99" in seen, False)
-    check("main() exits 0 on a clean sheet", C.main([d, clean]), 0)
+    check("main() exits 0 on a clean sheet",
+          C.main([d, clean, "--journal", nojournal, "--merges", nomerges]), 0)
 
     # A row from round 1 coming back: the original defect.
     again = sheet_of(os.path.join(d, "PEOPLE-round9.html"), ["c1", "c30"])
-    dup, rows, seen, sources = C.repeats(d, again)
+    dup, rows, seen, sources = C.repeats(d, again, **HERMETIC)
     check("a repeat from round 1 is CAUGHT", dup, ["c1"])
-    check("main() exits 1 on a repeat", C.main([d, again]), 1)
+    check("main() exits 1 on a repeat",
+          C.main([d, again, "--journal", nojournal, "--merges", nomerges]), 1)
 
     # THE REGRESSION: a row from round 7, which the old [1-6] pattern missed.
     seven = sheet_of(os.path.join(d, "PEOPLE-round10.html"), ["c7", "c31"])
-    dup, rows, seen, sources = C.repeats(d, seven)
+    dup, rows, seen, sources = C.repeats(d, seven, **HERMETIC)
     check("a repeat from round SEVEN is caught (the [1-6] scar)", dup, ["c7"])
 
     # A merged cluster: same person, new id, still a repeat.
@@ -133,13 +146,44 @@ def test_repeat_guard(d):
         w.writerow(["c1", "g1"])
         w.writerow(["c500", "g1"])
     merged = sheet_of(os.path.join(d, "PEOPLE-round11.html"), ["c500"])
-    dup, rows, seen, sources = C.repeats(d, merged, merges=merges)
+    dup, rows, seen, sources = C.repeats(d, merged, merges=merges,
+                                         journal=nojournal)
     check("the same person under a new cluster id is still a repeat", dup, ["g1"])
 
     # The sheet under test never counts as its own history.
     solo = sheet_of(os.path.join(d, "PEOPLE-round12.html"), ["c77"])
-    dup, rows, seen, sources = C.repeats(d, solo)
+    dup, rows, seen, sources = C.repeats(d, solo, **HERMETIC)
     check("a sheet is not its own baseline", "c77" in seen, False)
+
+    # THE FAILURE THAT ACTUALLY HAPPENED, 2026-09-16: no sheet on disk matched
+    # the pattern, because every round overwrote one PEOPLE.html. It read 0
+    # earlier sheets and printed "CLEAN - every row is new" for round 19. The
+    # checks above all pass with fabricated PEOPLE-round<N>.html fixtures, so
+    # they tested the matcher against a world that no longer exists.
+    empty = os.path.join(d, "empty")
+    os.makedirs(empty, exist_ok=True)
+    lone = sheet_of(os.path.join(empty, "PEOPLE.html"), ["c1", "c2"])
+    check("an empty baseline REFUSES, it does not bless the sheet",
+          C.main([empty, lone, "--journal", nojournal,
+                  "--merges", nomerges]), 2)
+    dup, rows, seen, sources = C.repeats(empty, lone, **HERMETIC)
+    check("and it read no history at all", (len(sources), len(seen)), (0, 0))
+
+    # The journal is the baseline that survives an overwritten sheet.
+    j = os.path.join(d, "journal.csv")
+    with io.open(j, "w", encoding="utf-8", newline="") as f:
+        w = csv.writer(f)
+        w.writerow(["when", "scope", "target", "field", "value", "confidence",
+                    "who", "note"])
+        w.writerow(["t", "cluster", "c1", "person", "Mum", "1.0", "krish", ""])
+        w.writerow(["t", "cluster", "c2", "unidentifiable", "declined", "1.0",
+                    "krish", "shown and not named"])
+    dup, rows, seen, sources = C.repeats(empty, lone, journal=j,
+                                         merges=nomerges)
+    check("a row NAMED in the journal is a repeat even with no sheets",
+          "c1" in dup, True)
+    check("a row DECLINED in the journal is a repeat too - a refusal is an answer",
+          "c2" in dup, True)
 
 
 def test_communal_filter():
