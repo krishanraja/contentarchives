@@ -67,18 +67,32 @@ the 53 learnings are enforced by a named function or test.
 
 **Migration, not finished.** The `STAGE.md` files list code where it lives today.
 
-- **Phase 2 - stages 01-04 and 09-12 into their folders.** In progress. The
-  publisher is **retired**: `D:\_PhotoAudit\scripts\publish_scripts.py` now
+- **Phase 2 - DONE 2026-09-16, bar one file.** Every stage now holds the
+  machinery it claims: 01 sources 9, 02 ingest 14, 03 dating 1, 04 inventory 4,
+  05 enrich 19, 06 faces 8, 07 people 6, 08 index 2, 09 segment 9, 10 reclaim 13,
+  11 mirror 3. `scripts/` went from 54 `.py` files to **one** -
+  `refresh_and_push.py`, claimed by 12 canon, whose other three files live in
+  `tools/`. Moving it would retire `scripts/` entirely; it needs its own survey
+  first.
+
+  **What stays put, by a convention every move settled:** `tools/` holds a
+  stage's operator-facing utilities (8 files: 04 inventory keeps four, 12 canon
+  three, 09 segment's `audit_split.py`), and `contentarchives/` holds the
+  reusable cores (`safety.py`, `dedupe.py`, `dating.py`). A stage owns the
+  logic; it does not have to own the file.
+
+  **The publisher is retired**: `D:\_PhotoAudit\scripts\publish_scripts.py`
   refuses to run, because the repo holds the ONE runnable copy and `--apply`
-  would overwrite it with pseudonym copies that cannot execute. The split it
-  forced is the pattern to follow for the rest: logic in the repo, machine paths
-  in `guards/paths.py`, personal vocabulary in `D:\_PhotoAudit\profile.yaml`.
-  Done this way so far: `route_h.py` (published, proven identical to the machine
-  copy on 6,000 real paths), `h_capacity.py`, `verify_h_batch.py` and
-  `machine_triage.py` (hand-written `main()` guards, so importing them runs
-  nothing, and their mount literals replaced by `P.H_ROOT` and `P.GDRIVE`).
-  Still to do: the `STAGE.md` tables list code where it lives today, and stages
-  01-04 and 09-12 have not moved into their folders.
+  would overwrite it with pseudonym copies that cannot execute. Its ancestor
+  `D:\_PhotoAudit\scripts\paths.py` is marked superseded but NOT deleted -
+  machine-resident scripts may still import it.
+
+  **Read `tests/test_imports.py` before the next move.** Six of its seven
+  sections were written because a move broke something silently: libraries that
+  import, guarded scripts that import without running, a shrinking list of
+  unguarded ones, every subprocess launch pointing at a file that exists, every
+  `stagepath.*` caller importing it, and nothing putting `D:\_PhotoAudit` on
+  `sys.path`. That last one cost eleven scripts' imports in one afternoon.
 - **Phase 3 - DONE 2026-09-16**, once `VIDEO FACES COMPLETE` meant nothing was
   running. 39 files moved with `git mv`: stages 05 enrich, 06 faces, 07 people
   and 08 index into their folders, and `paths.py`, `steps.ps1`, `arm.ps1` and
