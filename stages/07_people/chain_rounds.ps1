@@ -140,7 +140,14 @@ except Exception: print(0)
     return [double]($out -replace '[^\d]', '')
 }
 
-Invoke-Step -Name 'rebuild' -ExpectedUnits 82193 -CheckpointMin 3 -VerifyEvery 1 -StallStrikes 4 `
+# No -ExpectedUnits. It was 82193, the FILE COUNT, from when -Progress returned a
+# row count; -Progress now measures BYTES, so the runner printed
+# "RECALIBRATE: already 184,320 against an expected 82,193" - comparing bytes to
+# files. Divergence is reported and never enforced, so it broke nothing, but a
+# number that means nothing is worse than no number: the next reader tries to
+# reconcile it. The ETA goes with it, which is honest - the rebuild's byte total
+# is not known in advance.
+Invoke-Step -Name 'rebuild' -CheckpointMin 3 -VerifyEvery 1 -StallStrikes 4 `
     -Preflight {
         # The tmp index is readable mode=ro mid-build (committed rows only) and a
         # reader must not be why the final rename fails (learning 55), so prove

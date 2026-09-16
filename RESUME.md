@@ -110,16 +110,27 @@ the 53 learnings are enforced by a named function or test.
 
 ----
 
-## RIGHT NOW: round 13 is with Krish; nothing is running (2026-09-16, 13:12)
+## RIGHT NOW: round 14 is with Krish; nothing is running (2026-09-17, 16:27)
 
 **Nothing is running unattended. The next move is Krish's.**
 
-Round 13 of `PEOPLE.html` was published to `D:\_PhotoAudit\PEOPLE.html` and sent
-to him at 13:12 on 2026-09-16: 60 rows, 717 crops, `verify_people_sheet.py` exit
-0, and `check_repeats.py` proving **0 repeats** against all **546** rows shown in
-rounds 1-12. **Every sheet is crop-verified and repeat-checked before he sees
+Round 14 of `PEOPLE.html` was published to `D:\_PhotoAudit\PEOPLE.html` and sent
+to him at 16:27 on 2026-09-17: 60 rows, 652 crops, `verify_people_sheet.py` exit
+0, and `check_repeats.py` proving **0 repeats** against all **606** rows shown in
+rounds 1-13. **Every sheet is crop-verified and repeat-checked before he sees
 it** - he asked for that after batches he had refused came back a second time.
-Rounds 1-12 are recorded in `D:\_enrichment\answers.csv`.
+Rounds 1-13 are recorded in `D:\_enrichment\answers.csv`.
+
+**Both supervision fixes are confirmed on live data** (round 13's run, the first
+with them in from the start): `-Progress` went 766,259,200 -> 766,443,520 with a
+real checkpoint - `184,320 done in 3 min` - where the previous two runs opened at
+`baseline 0` and reported `still at 0` while accruing stall strikes; and the
+final `-Verify` read `OK library.db` rather than taking its "cannot tell yet"
+escape. `-ExpectedUnits` is gone with them: it was 82,193, the FILE count, from
+when progress was measured in rows, so the runner printed "RECALIBRATE: already
+184,320 against an expected 82,193" - bytes against files. Harmless, since
+divergence is reported and never enforced, but a number that means nothing is
+worse than no number.
 
 Rounds 12 and 13 both ran through `stages/07_people/chain_rounds.ps1`, one
 command each, and the chain's own log caught three faults in its supervision
@@ -221,16 +232,24 @@ pwsh -NoProfile -File guards\arm.ps1 -Chain chain_video_faces.ps1 -TaskName cont
 
 ### Where the naming is
 
-- **Thirteen rounds offered, twelve answered** (2026-09-15 and 16). 722 answers
+- **Fourteen rounds offered, thirteen answered** (2026-09-15 to 17). 782 answers
   in the journal `D:\_enrichment\answers.csv`. After the last rebuild: 82,193
-  files indexed, **24,171** photographs and videos carrying a named person,
-  **225** people, **43,041** person-on-photograph rows, **10,834** group shots
-  with two or more named people. Krish 9,224, Bharti 5,077, Bhasker 2,660,
-  Anya 1,886.
-- **The profile holds 232 personal terms**, seeded from these answers and
+  files indexed, **24,261** photographs and videos carrying a named person,
+  **233** people, **43,348** person-on-photograph rows, **10,929** group shots
+  with two or more named people. Krish 9,245, Bharti 5,087, Bhasker 2,672,
+  Anya 1,897, Lily 1,737.
+- **The photographs each round unlocks is FALLING, and that is expected**: 1,058
+  at round 9, then 833, 764, 720, 666. `people_sheet.py --top 60` takes the
+  largest unnamed clusters first, so what remains is progressively smaller
+  groups. Krish was asked on 2026-09-17 whether to switch to a different cut -
+  a size floor, or the clusters that would unlock the most Communal photographs
+  for Bharti - and has not answered yet. Do not change the cut without him.
+- **The profile holds 240 personal terms**, seeded from these answers and
   extended after each round - every term measured against the library before it
-  is added (learning 54). `D:\_PhotoAudit\profile.yaml`, never committed,
-  backed up beside itself as `profile.yaml.bak-*`.
+  is added, and every added term then asserted through `is_personal()` on a real
+  path rather than inferred from the write succeeding (learning 54).
+  `D:\_PhotoAudit\profile.yaml`, never committed, backed up beside itself as
+  `profile.yaml.bak-*`.
 - **27 of the 222 people Krish had named were NOT protected by it until
   2026-09-16**, Lily among them - 1,724 photographs, named in round 4. The
   seeding rule kept a single name only if it was five or more characters, and
