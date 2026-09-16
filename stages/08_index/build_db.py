@@ -416,6 +416,46 @@ def report(db: sqlite3.Connection) -> None:
     print("human answers in the journal: {:,}".format(a))
 
 
+def promote(tmp: str, out: str, tries: int = 5) -> None:
+    """Swap the finished index into place, retrying a transient lock.
+
+    The whole build writes to `out + ".tmp"` and renames at the end, so a crash
+    leaves the live index untouched. That discipline saved a 19-minute rebuild on
+    2026-09-16: every row was written, then `os.replace` raised
+    `PermissionError: [WinError 5] Access is denied` because a reader still held
+    library.db open for the moment of the swap - and the finished database was
+    sitting at .tmp, complete and passing `quick_check`, to be promoted by hand.
+
+    A bare rename turns someone else's momentary handle into the loss of all that
+    work, so: retry with backoff, and if it still will not go, say plainly that
+    the finished index EXISTS and how to put it in place. A traceback on the last
+    line of a long job reads as total failure when nothing has actually been lost.
+    """
+    last = None
+    for attempt in range(1, tries + 1):
+        try:
+            os.replace(tmp, out)
+            if attempt > 1:
+                print("promoted the index on attempt {}".format(attempt))
+            return
+        except PermissionError as e:
+            last = e
+            print("   rename refused (attempt {} of {}): {} - something holds {} "
+                  "open; retrying".format(attempt, tries, e.__class__.__name__,
+                                          os.path.basename(out)))
+            time.sleep(2 * attempt)
+    raise SystemExit(
+        "STOPPING: the index was built and could NOT be swapped in.\n"
+        "  {}\n"
+        "  NOTHING IS LOST - the finished database is complete at:\n"
+        "    {}\n"
+        "  Find what holds {} open (a reader left connected, a browser, a shell),\n"
+        "  close it, then promote by hand:\n"
+        "    python -c \"import os; os.replace(r'{}', r'{}')\"\n"
+        "  Readers of this file must open it mode=ro and close it (learning 55)."
+        .format(last, tmp, os.path.basename(out), tmp, out))
+
+
 def main() -> None:
     ap = argparse.ArgumentParser(
         description=__doc__,
@@ -460,7 +500,7 @@ def main() -> None:
     for ext in ("-wal", "-shm"):
         if os.path.exists(tmp + ext):
             os.remove(tmp + ext)
-    os.replace(tmp, a.out)
+    promote(tmp, a.out)
 
     db = connect(a.out)
     report(db)

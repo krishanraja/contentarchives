@@ -73,18 +73,29 @@ TOO_BROAD = 0.50
 
 
 def library_paths():
-    """Real library paths, or None when this machine has no index to measure."""
+    """Real library paths, or None when this machine has no index to measure.
+
+    READ-ONLY, and closed before returning. On 2026-09-16 a 19-minute rebuild
+    finished its work and then died on `os.replace(library.db.tmp, library.db)`
+    with WinError 5, because a reader still held the live database open. A test
+    that measures the library must never be the reason the library cannot be
+    rebuilt: mode=ro takes no write lock, creates no -wal, and the connection is
+    closed even when the query raises.
+    """
     import sqlite3
     db_path = r"D:\_PhotoAudit\library.db"
     if not os.path.isfile(db_path):
         return None
-    db = sqlite3.connect(db_path)
+    uri = "file:{}?mode=ro".format(db_path.replace("\\", "/"))
+    db = None
     try:
+        db = sqlite3.connect(uri, uri=True)
         return [r[0].lower() for r in db.execute("select path from files")]
     except sqlite3.Error:
         return None
     finally:
-        db.close()
+        if db is not None:
+            db.close()
 
 
 def test_no_term_is_too_broad():

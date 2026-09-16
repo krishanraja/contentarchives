@@ -27,5 +27,6 @@ every opinion kept and human answers always winning.
 ## Lessons
 | # | what this stage does about it | enforced by |
 |---|---|---|
-| 42 | the database is replaced atomically | `code:stages/08_index/build_db.py:os.replace` |
+| 42 | the database is replaced atomically | `code:stages/08_index/build_db.py:def promote` |
+| 55 | the swap is retried, and a lock is never reported as lost work | `code:stages/08_index/build_db.py:def promote` |
 | 49 | a group photograph keeps every person in it | `test:tests/test_build_db.py:a group photograph keeps everybody in it` |

@@ -1796,3 +1796,46 @@ The test now asserts only what the count can honestly support: that no term is a
 widest term every run, because a threshold is not a substitute for reading what
 it measured. Sheer breadth is not evidence: Krish appears in 9,088 photographs
 because it is his library.
+
+## 55. The last line of a long job is where its work is most at risk
+
+A 19-minute index rebuild did everything correctly - 82,193 files, 1,452,244
+tags, 542 human answers applied, 41,830 person-on-photograph rows - and then
+died on its final statement:
+
+    os.replace(tmp, a.out)
+    PermissionError: [WinError 5] Access is denied:
+      'D:\_PhotoAudit\library.db.tmp' -> 'D:\_PhotoAudit\library.db'
+
+Something held the live database open for the moment of the swap. Almost
+certainly one of my own short-lived readers: I had just run three `python -c`
+queries counting profile terms against `library.db`, none of which closed its
+connection, while the rebuild was finishing. The verifier held open the file the
+writer was about to replace.
+
+**What saved it was tmp-and-rename.** The finished database was sitting at
+`.tmp`, complete and passing `quick_check`, with every row intact. Promoting it
+by hand cost seconds; re-running the build would have cost nineteen minutes. A
+job that writes in place would have had nothing to promote.
+
+**Three rules.**
+
+1. **A reader of a file a writer may replace opens it `mode=ro` and closes it.**
+   `sqlite3.connect("file:...?mode=ro", uri=True)`, closed in a `finally`. A
+   read-only connection takes no write lock and creates no `-wal`.
+2. **Retry the rename, and never report a transient lock as total loss.**
+   `promote()` in `stages/08_index/build_db.py` retries with backoff and, if it
+   still cannot swap, prints that NOTHING IS LOST, where the finished database
+   is, and the one line that promotes it. A traceback on the last line of a long
+   job reads as "the work is gone" when the work is right there.
+3. **A guard whose scope is a hardcoded range stops covering the work as the
+   work grows.** Found the same afternoon: `check_repeats.py`, written to prove
+   no sheet re-shows a cluster Krish refused, matched `PEOPLE-round[1-6].html`.
+   It was written when round 7 was next and never widened, so rounds 7, 8 and 9
+   were invisible to it and "rows shown in earlier ones" sat frozen at 186 for
+   three consecutive runs while each sheet was reported clean. Widened to
+   `round\d+`, the true baseline is 366 rows - and rounds 7 to 10 were all
+   genuinely clean, so the verdicts were right and the test behind them was
+   narrower than the claim made for it. That is luck, not rigour: the same bug
+   in a guard whose subject was not already correct at source would have shipped
+   the defect it existed to catch.

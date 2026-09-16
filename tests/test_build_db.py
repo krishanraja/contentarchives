@@ -105,6 +105,70 @@ def build(d, inv, idx, store):
     return db
 
 
+def promote_checks(d):
+    r"""promote() retries a held target, and refuses LOUDLY without losing work.
+
+    Learning 55: a 19-minute rebuild wrote every row and then died on
+    `os.replace(tmp, library.db)` with WinError 5, because a reader still held
+    the live database open. The finished database was intact at .tmp the whole
+    time. So the three things worth pinning are the swap itself, the retry, and
+    above all the message: a traceback on the last line of a long job reads as
+    "the work is gone" when the work is right there.
+
+    The lock here is a real one - an open handle on the target - not a mock.
+    """
+    import threading
+
+    work = os.path.join(d, "promote")
+    os.makedirs(work, exist_ok=True)
+    out = os.path.join(work, "library.db")
+    tmp = out + ".tmp"
+
+    def fresh(new_bytes=b"new"):
+        io.open(out, "wb").write(b"old")
+        io.open(tmp, "wb").write(new_bytes)
+
+    # --- a clean swap ------------------------------------------------------
+    fresh(b"finished index")
+    B.promote(tmp, out)
+    check("a clean swap replaces the target", io.open(out, "rb").read(),
+          b"finished index")
+    check("and the tmp file is gone", os.path.exists(tmp), False)
+
+    # --- a transient lock: retried, then succeeds ---------------------------
+    # Windows refuses the rename while this handle is open. It is released from
+    # a timer, so the retry loop has to actually wait and try again.
+    fresh(b"second index")
+    handle = io.open(out, "r+b")
+    threading.Timer(3.0, handle.close).start()
+    try:
+        B.promote(tmp, out)
+        swapped = io.open(out, "rb").read()
+    finally:
+        if not handle.closed:
+            handle.close()
+    check("a transient lock is retried, not fatal", swapped, b"second index")
+
+    # --- a lock that never lets go: SystemExit, and the work is named -------
+    fresh(b"third index")
+    handle = io.open(out, "r+b")
+    try:
+        B.promote(tmp, out, tries=2)
+        raised = None
+    except SystemExit as e:
+        raised = str(e)
+    finally:
+        handle.close()
+    check("a permanent lock stops the run", raised is not None, True)
+    said = (raised or "")
+    check("it says nothing is lost", "NOTHING IS LOST" in said, True)
+    check("it names where the finished database is", tmp in said, True)
+    check("and the finished database really is still there",
+          os.path.exists(tmp) and io.open(tmp, "rb").read() == b"third index",
+          True)
+    check("the live file was left untouched", io.open(out, "rb").read(), b"old")
+
+
 def main():
     d = tempfile.mkdtemp()
     try:
@@ -198,6 +262,10 @@ def main():
         check("a renamed cluster replaces its old name, not adds to it",
               got, "Dad; Mother")
         db.close()
+
+        print()
+        print("6. the swap survives a lock, and never reports lost work")
+        promote_checks(d)
     finally:
         shutil.rmtree(d, ignore_errors=True)
 
