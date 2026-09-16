@@ -63,15 +63,21 @@ CODE_DIRS = ["scripts", "stages", "guards", "tools", "contentarchives"]
 # the authority - reading answers.py settled it: its top level is a docstring,
 # imports, the bootstrap, four constants, a threading.Lock() and a class. It
 # touches nothing. It is a library, and the list was wrong, not the classifier.
+# clear_scratch.py and free_wins.py LEFT this list on 2026-09-16, and they are
+# the reason the list matters. Both sat in 10 reclaim - the only stage that
+# destroys data - and both ran their whole body at import: clear_scratch called
+# os.remove and shutil.rmtree, free_wins called os.remove with NO dry-run flag
+# at all, so `import free_wins` deleted a file. The sweep could not touch either,
+# which meant the safety net was built AROUND the two most dangerous files in the
+# repo. Both now have a main() and a __main__ guard, and free_wins gained the
+# --apply gate its sibling always had.
 UNGUARDED = {
     "scripts/audit_deletions.py",
     "scripts/big_files.py",
     "scripts/check_scratch_safe.py",
     "scripts/check_tiny.py",
-    "scripts/clear_scratch.py",
     "scripts/diagnose_new.py",
     "scripts/driver.py",
-    "scripts/free_wins.py",
     "scripts/full_deletion_audit.py",
     "scripts/test_dedup.py",
     "scripts/validate_router.py",
