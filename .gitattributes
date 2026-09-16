@@ -1,0 +1,33 @@
+# Line endings, settled 2026-09-16. Before this there was no policy: core.autocrlf
+# was false, 31 scripts held CRLF and 23 held LF, and a tool that rewrote a file
+# with \n turned a three-line edit into a 630-line diff. Two automatic commits on
+# 2026-09-16 contain exactly that noise, which buries the real change.
+#
+# Git stores LF. Text is normalised on the way in, whatever the editor did.
+* text=auto eol=lf
+
+# PowerShell keeps CRLF in the working tree: the tooling, signing and ISE all
+# expect it, and a .ps1 is the one file type here that is executed by Windows
+# itself rather than by python.
+*.ps1 text eol=crlf
+*.cmd text eol=crlf
+*.bat text eol=crlf
+
+# Data the project reads and writes. Declared text so diffs stay readable and
+# so a csv written by python does not churn against one written by PowerShell.
+*.csv  text eol=lf
+*.json text eol=lf
+*.md   text eol=lf
+*.yaml text eol=lf
+*.yml  text eol=lf
+
+# Never touched: binary, and a mangled byte here is a lost photograph.
+*.jpg  binary
+*.jpeg binary
+*.png  binary
+*.gif  binary
+*.mp4  binary
+*.mov  binary
+*.db   binary
+*.npy  binary
+*.pickle binary
