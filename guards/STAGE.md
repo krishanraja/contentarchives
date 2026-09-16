@@ -23,6 +23,7 @@ unattended. Not a stage on the belt: the rails the belt runs on.
 | `guards/files.py` | atomic writes, absent-input stops, complete lines |
 | `guards/alignment.py` | prove a positional cache still matches its source |
 | `guards/verify.py` | the verifier exit-code contract |
+| `guards/profile.py` | the personal terms, loaded from outside the repo, never guessed |
 | `stagepath.py` | where every stage and script lives, so no file hardcodes a relative depth |
 | `guards/steps.ps1` | Invoke-Step: preflight, progress, verify, postcondition |
 | `guards/arm.ps1` | run a chain as a scheduled task; reap orphans first |
@@ -33,6 +34,7 @@ unattended. Not a stage on the belt: the rails the belt runs on.
 ## Tests
 - `tests/test_guards.py`
 - `tests/test_stagepath.py`
+- `tests/test_profile.py`
 - `tests/test_stage_contracts.py`
 - `tests/test_chain_gating.py`
 - `tests/test_steps.ps1`

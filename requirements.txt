@@ -1,8 +1,11 @@
 # Core safety, dating and dedupe paths have NO dependencies, deliberately -
 # they must be droppable onto any machine with a bare Python install.
 #
-# Optional:
-PyYAML>=6.0        # profile parsing
+# REQUIRED for anything that reads personal terms. It was listed as optional
+# until 2026-09-16, when guards/profile.py made the profile the only home for
+# family and trip names - and it was not installed on this machine at all, so
+# the loader stopped rather than guessing (which is what it is for).
+PyYAML>=6.0        # profile parsing: guards/profile.py
 #
 # External binaries (not pip-installable):
 #   ffmpeg / ffprobe  - video dates and compression

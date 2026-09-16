@@ -34,6 +34,11 @@ import sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 REQUIRED = ["Inputs", "Outputs", "Invariants", "Code", "Tests", "Lessons"]
+# "Edge cases" is optional and holds the one-off investigations: Krish, 2026-09-16,
+# "one off investigations need to be stored not as part of core machinery but how
+# to deal with common edge cases". A script claimed there is OWNED - findable when
+# the edge case recurs - without being machinery anyone must maintain.
+OPTIONAL = ["Edge cases"]
 # stages/ was missing from this list when the conveyor's first stages moved, and
 # 34 files silently became unowned without the test objecting: the ownership
 # check can only see the trees it is told about. Anything holding .py or .ps1
@@ -79,11 +84,17 @@ def audit_stage(name, text, root):
     for s in REQUIRED:
         if s not in sec:
             problems.append("{}: no '## {}' section".format(name, s))
-    for cells in table_rows(sec.get("Code", "")):
-        for p in backticked(cells[0])[:1]:
-            code.append(p)
-            if not os.path.isfile(os.path.join(root, p)):
-                problems.append("{}: Code lists {} which does not exist".format(name, p))
+    # Code, plus any Edge cases table: a one-off investigation is owned so it can
+    # be found when that edge case recurs, without being core machinery.
+    for section in ["Code"] + OPTIONAL:
+        for cells in table_rows(sec.get(section, "")):
+            for p in backticked(cells[0])[:1]:
+                if not p.endswith((".py", ".ps1", ".mjs")):
+                    continue
+                code.append(p)
+                if not os.path.isfile(os.path.join(root, p)):
+                    problems.append("{}: {} lists {} which does not exist".format(
+                        name, section, p))
     for p in re.findall(r"`(tests/[^`]+)`", sec.get("Tests", "")):
         tests.append(p)
         if not os.path.isfile(os.path.join(root, p)):
