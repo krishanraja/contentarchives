@@ -28,7 +28,16 @@ import shutil
 import sys
 from collections import defaultdict
 
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import os as _os, sys as _sys
+_d = _os.path.dirname(_os.path.abspath(__file__))
+while _d != _os.path.dirname(_d) and not _os.path.exists(_os.path.join(_d, 'stagepath.py')):
+    _d = _os.path.dirname(_d)
+_sys.path.insert(0, _d)
+import stagepath  # noqa: E402,F401  - every stage on sys.path, wherever this file lives
+
+# Its own directory found autopilot only while both sat in scripts/, and
+# route_h.py imports THIS file - so a move that separated any of the three would
+# have broken the pair the way zip_fingerprint.py broke (learning 54).
 import autopilot as ap                                          # noqa: E402
 
 # Extensions this will ingest. A format missing from here is not rejected -

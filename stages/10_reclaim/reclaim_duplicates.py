@@ -44,7 +44,16 @@ import hashlib
 import os
 import sys
 
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import os as _os, sys as _sys
+_d = _os.path.dirname(_os.path.abspath(__file__))
+while _d != _os.path.dirname(_d) and not _os.path.exists(_os.path.join(_d, 'stagepath.py')):
+    _d = _os.path.dirname(_d)
+_sys.path.insert(0, _d)
+import stagepath  # noqa: E402,F401  - every stage on sys.path, wherever this file lives
+
+# Its own directory. That happens to work today because guarded_delete.py moved
+# into 10 reclaim alongside it, and it also imports autopilot, which has NOT
+# moved - so this was one relocation away from the zip_fingerprint.py breakage.
 from guarded_delete import delete_with_surviving_copy, DeletionRefused  # noqa: E402
 
 LIB = r"D:\ContentLibrary"

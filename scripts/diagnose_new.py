@@ -17,7 +17,17 @@ from __future__ import annotations
 import csv, json, os, sys
 from collections import Counter, defaultdict
 
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import os as _os, sys as _sys
+_d = _os.path.dirname(_os.path.abspath(__file__))
+while _d != _os.path.dirname(_d) and not _os.path.exists(_os.path.join(_d, 'stagepath.py')):
+    _d = _os.path.dirname(_d)
+_sys.path.insert(0, _d)
+import stagepath  # noqa: E402,F401  - every stage on sys.path, wherever this file lives
+
+# This inserted its own directory, which finds autopilot only while both sit in
+# scripts/. zip_fingerprint.py had the identical line and broke outright when
+# the 01 sources move separated them, so this is fixed BEFORE 02 ingest moves
+# rather than after (learning 54).
 import autopilot as ap
 
 ARCHIVE = "takeout-20260907T082613Z-1-001.zip"
