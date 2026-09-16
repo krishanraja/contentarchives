@@ -85,6 +85,15 @@ def fixture(d):
         w.writerow(["h3", "cluster", "c17", "faces", "1.0", "2026-01-01"])
         # ...and a second face in the same photograph, in another cluster
         w.writerow(["h3", "cluster", "c18", "faces", "1.0", "2026-01-01"])
+        # A PERSON TAG WITH NO CLUSTER BEHIND IT, written per photograph by an
+        # earlier enrichment pass. This is the layer that kept a dead name
+        # alive: section 8 renames the cluster and this tag must not resurrect
+        # the old one. h2 has the tag and no cluster at all, so it also proves
+        # the fix does not strip a name that is a photograph's only one.
+        w.writerow(["h3", "person", "Mum", "google/gemini-3.1-flash-lite",
+                    "0.9", "2026-01-01"])
+        w.writerow(["h2", "person", "Nanna", "google/gemini-3.1-flash-lite",
+                    "0.9", "2026-01-01"])
     return inv, idx, store, (f1, f2, f3)
 
 
@@ -261,6 +270,38 @@ def main():
             "SELECT person FROM v_files WHERE path=?", (f3,)).fetchone()[0]
         check("a renamed cluster replaces its old name, not adds to it",
               got, "Dad; Mother")
+        db.close()
+
+        print()
+        print("8. a name a later answer REPLACED never comes back via the tags")
+        # THE RISHI BUG, 2026-09-16. Krish split one "Rishi" into three people.
+        # Every cluster was renamed correctly and the index STILL showed a person
+        # called "Rishi" on 97 photographs, because `tags` carries person rows
+        # written per photograph by an earlier pass, with no cluster behind them,
+        # and nothing a human answers can supersede one.
+        #
+        # Section 5 above passes either way: it renames a cluster and reads
+        # `resolved`, and c17/c18 have no tag-layer name. This is the case that
+        # engages - "Mum" is BOTH a tag on h3 and a cluster answer that has since
+        # become "Mother" - and it fails loudly against the old code.
+        db = build(d, inv, idx, store)
+        got = [r[0] for r in db.execute(
+            "SELECT person FROM photo_people WHERE hash='h3' ORDER BY person")]
+        check("the replaced name is gone from photo_people", got,
+              ["Dad", "Mother"])
+        check("and gone from the joined field too",
+              db.execute("SELECT person FROM v_files WHERE path=?",
+                         (f3,)).fetchone()[0], "Dad; Mother")
+        n = db.execute("SELECT COUNT(*) FROM tags WHERE tag='person' "
+                       "AND value='Mum'").fetchone()[0]
+        check("but `tags` is untouched - the record of what that pass said", n, 1)
+        # The other half: a tag-layer name nobody has contradicted STAYS. 2,107
+        # real photographs have no human-sourced name at all, and a fix that
+        # dropped the whole layer would silently un-name every one of them.
+        got = db.execute("SELECT person FROM v_files WHERE path=?",
+                         (f2,)).fetchone()[0]
+        check("an uncontradicted tag name still names its photograph",
+              got, "Nanna")
         db.close()
 
         print()

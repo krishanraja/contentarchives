@@ -347,12 +347,48 @@ def resolve_people(db: sqlite3.Connection) -> int:
         if value:
             rows.extend((h, value, "human")
                         for h in scope_hashes(db, scope, target) or [])
+
+    # A NAME KRISH HAS REPLACED MUST NOT COME BACK THROUGH THE TAG LAYER.
+    #
+    # Found 2026-09-16, after he split one "Rishi" into three people. Every
+    # cluster was renamed and the loop above is correct - no cluster asserted
+    # bare "Rishi" any more - yet the index still showed a person called "Rishi"
+    # on 97 photographs and "Rishi (baby)" on 38. The tag rows below were
+    # written per photograph by an earlier enrichment pass, with no cluster
+    # behind them, so nothing a human answers can ever supersede one: INSERT OR
+    # IGNORE only dedupes identical (hash, person) pairs.
+    #
+    # The journal knows which names are dead: a value it once asserted that is
+    # no longer ANY cluster's current answer. That is exact, and it is his own
+    # history rather than a guess about which names look stale. Measured when
+    # this was written: 2 such names in the whole library, on 103 photographs.
+    #
+    # `tags` is NOT touched - it stays the record of what that pass said, and
+    # 2,107 photographs have no human-sourced name at all and keep theirs. Only
+    # this derived table changes, so a rebuild reverses it.
+    #
+    # Krish chose this on 2026-09-16, told that ~32 photographs carrying no
+    # other name would go unnamed until their clusters come up in a round.
+    current = {v for v in latest.values() if v}
+    ever = {(v or "").strip() for (v,) in db.execute(
+        "SELECT value FROM answers WHERE field = 'person' "
+        "AND value IS NOT NULL AND value != ''")}
+    superseded = {v for v in ever if v and v not in current}
+
     # human rows go in first, so a derived tag naming the same person on the
     # same photograph cannot take the provenance away from Krish
-    rows.extend(db.execute(
+    tag_rows = db.execute(
         "SELECT hash, value, source FROM tags "
-        "WHERE tag = 'person' AND value IS NOT NULL AND value != ''").fetchall())
+        "WHERE tag = 'person' AND value IS NOT NULL AND value != ''").fetchall()
+    dropped = sum(1 for _, v, _ in tag_rows if (v or "").strip() in superseded)
+    rows.extend((h, v, s) for h, v, s in tag_rows
+                if (v or "").strip() not in superseded)
     db.executemany("INSERT OR IGNORE INTO photo_people VALUES (?,?,?)", rows)
+    if superseded:
+        print("   {} name(s) superseded by a later answer, {} stale tag row(s) "
+              "not re-imported: {}".format(
+                  len(superseded), dropped,
+                  ", ".join(sorted(superseded)[:6])))
 
     names, human = {}, set()
     for h, p, src in db.execute("SELECT hash, person, source FROM photo_people"):

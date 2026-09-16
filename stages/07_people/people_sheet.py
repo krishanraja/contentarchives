@@ -275,6 +275,20 @@ def main() -> int:
     ap.add_argument("--out", default=OUT)
     ap.add_argument("--top", type=int, default=60)
     ap.add_argument("--per-row", type=int, default=12)
+    # THE ROUNDS HAVE TO BE ABLE TO END, AND TO SAY SO.
+    #
+    # Krish, 2026-09-16, asked how round 19 should pick its 60: "add a size floor
+    # and stop". Reach per round had fallen from 1,058 photographs to 540, because
+    # the big clusters are all named and the ranking keeps offering whatever is
+    # largest among what is left - eventually three-face clusters, for ever.
+    #
+    # The floor is on PHOTOGRAPHS covered, which is what the ranking below sorts
+    # by and what a row is worth answering for. When nothing clears it this says
+    # the naming rounds are DONE and writes no sheet, because an empty page and a
+    # finished job look identical to whoever opens it (learning 44).
+    ap.add_argument("--min-photos", type=int, default=0, metavar="N",
+                    help="skip clusters covering fewer than N photographs, and "
+                         "say the rounds are DONE when none clears the floor")
     # Krish, 2026-09-17, at the end of round 14's answers: "Do not make me
     # identify any more faces from Communal any more." Communal is Bharti's to
     # enrich (decided 2026-09-15); this sheet ranked purely by photographs
@@ -477,7 +491,26 @@ def main() -> int:
         # ranked by PHOTOGRAPHS covered, not faces found: a cluster of 900 faces
         # from one afternoon deserves less attention than 400 across fifteen years
         ranked = sorted(clusters.items(),
-                        key=lambda kv: -len({r["hash"] for r in kv[1]}))[:a.top]
+                        key=lambda kv: -len({r["hash"] for r in kv[1]}))
+        if a.min_photos > 0:
+            above = [kv for kv in ranked
+                     if len({r["hash"] for r in kv[1]}) >= a.min_photos]
+            print("floor: {} of {} cluster(s) cover {}+ photographs".format(
+                len(above), len(ranked), a.min_photos))
+            if not above:
+                # An empty sheet and a finished job look identical to whoever
+                # opens it, so this refuses to write one and says which it is.
+                best = max((len({r["hash"] for r in kv[1]}) for kv in ranked),
+                           default=0)
+                print()
+                print("THE NAMING ROUNDS ARE DONE.")
+                print("  Nothing left covers {}+ photographs - the largest "
+                      "unnamed cluster covers {}.".format(a.min_photos, best))
+                print("  No sheet written. Lower --min-photos to keep going, or "
+                      "hand the tail to the swipe game.")
+                return 0
+            ranked = above
+        ranked = ranked[:a.top]
     out = [HEAD]
     total = 0
     for cid, faces in ranked:
