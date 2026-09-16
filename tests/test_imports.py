@@ -72,13 +72,13 @@ CODE_DIRS = ["scripts", "stages", "guards", "tools", "contentarchives"]
 # repo. Both now have a main() and a __main__ guard, and free_wins gained the
 # --apply gate its sibling always had.
 UNGUARDED = {
-    "scripts/audit_deletions.py",
+    "stages/10_reclaim/audit_deletions.py",
     "scripts/big_files.py",
-    "scripts/check_scratch_safe.py",
+    "stages/10_reclaim/check_scratch_safe.py",
     "scripts/check_tiny.py",
     "scripts/diagnose_new.py",
     "scripts/driver.py",
-    "scripts/full_deletion_audit.py",
+    "stages/10_reclaim/full_deletion_audit.py",
     "scripts/test_dedup.py",
     "scripts/validate_router.py",
     "scripts/verify_dupes.py",
@@ -238,7 +238,23 @@ def main():
     now = {rel for rel, _ in found["unguarded"]}
     joined = sorted(now - UNGUARDED)
     left = sorted(UNGUARDED - now)
-    check("no module has newly started working at import time", joined, [])
+
+    # A RELOCATION is not a regression, and the message used to claim it was.
+    # Moving 10 reclaim's scripts into their stage made this report three modules
+    # as "newly started working at import time" and three as having "left the
+    # list" - the same three files, arriving at one path and departing another.
+    # Nothing about them had changed. A correct result with a wrong explanation
+    # is how somebody comes to distrust a working check, so say `moved` when a
+    # basename appears on both sides.
+    moved = sorted(j for j in joined
+                   if os.path.basename(j) in {os.path.basename(l) for l in left})
+    if moved:
+        print("   {} MOVED rather than regressed - repoint them in UNGUARDED:".format(
+            len(moved)))
+        for m in moved:
+            print("      " + m)
+    arrived = [j for j in joined if j not in moved]
+    check("no module has newly started working at import time", arrived, [])
     if left:
         print("   {} left the list - remove them from UNGUARDED: {}".format(
             len(left), ", ".join(left)))
