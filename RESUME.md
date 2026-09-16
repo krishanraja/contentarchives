@@ -61,9 +61,11 @@ Get-ChildItem tests\test_*.ps1 | ForEach-Object { pwsh -NoProfile -File $_.FullN
 `tests\test_steps.ps1` supervises real processes and sleeps through their
 checkpoints, so the full run takes a couple of minutes rather than seconds.
 
-Current debt, printed by the contracts test: 7 learnings enforced only in prose
-(8, 13, 17, 20, 24, 29, 30). All 110 code files are owned by a stage, and 46 of
-the 53 learnings are enforced by a named function or test.
+Current debt, printed by the contracts test - **read it from the test, never from
+here**: 13 stages, **114 of 114** code files owned, 55 learnings, 50 enforced by
+a named function or test, **5 enforced only in prose: 8, 13, 17, 24, 29**. This
+paragraph carried three stale numbers for a week because it was written from
+memory instead of from the run.
 
 **Migration, not finished.** The `STAGE.md` files list code where it lives today.
 
@@ -110,20 +112,61 @@ the 53 learnings are enforced by a named function or test.
 
 ----
 
-## RIGHT NOW: round 18 is with Krish; nothing is running (2026-09-17, 21:10)
+## RIGHT NOW: the Rishi question is with Krish; round 19 is HELD (2026-09-17, 21:25)
+
+**Do not build round 19.** Krish: *"I think we need to redo the Rishi's the same
+way we redid the Kiran's."* Ten clusters carry a Rishi label, he has the
+disambiguation page, and a new sheet would ask fresh questions on top of labels
+he has said are wrong. Same hold as the Kiran question a round earlier.
+
+`D:\_PhotoAudit\RISHI.html` was built with
+`people_sheet.py --clusters c11525,c1303,c13897,c17449,c2811,c290,c29781,c36,c480,c993`
+and gated - 9 rows, 105 crops, `verify_people_sheet.py` exit 0 - then sent.
+`stages/07_people/name_clusters.py --like Rishi` reprints the whole picture and
+the exact command, so nothing here needs reconstructing:
+
+| label | clusters | photographs | span |
+|---|---|---|---|
+| `Rishi` | `c36` + `c290` (ONE merge group) | 654 | 2008-2026 |
+| `Rishi (baby)` | `c1303`, `c2811`, `c13897`, `c29781`, `c11525` | 174, 28, 18, 13, 12 | all 2025-2026 |
+| `Rishi Chande` | `c993`, `c480` | 18, 13 | 2021-2025 and 2017-2019, NO overlap |
+| `Rishi Unadkat` | `c17449` | 9 | 2024-2026 |
+
+**Do not infer which is which.** On the Kiran question the counts and dates
+pointed the wrong way round. Record his answer as NEW journal rows, rebuild,
+then resume the rounds.
 
 **Nothing is running unattended. The next move is Krish's.**
 
-Round 18 of `PEOPLE.html` was published to `D:\_PhotoAudit\PEOPLE.html` and sent
-to him at 21:10 on 2026-09-17: 60 rows, 536 crops, `verify_people_sheet.py` exit
-0, and `check_repeats.py` proving **0 repeats** against all **846** rows shown in
-rounds 1-17. **Every sheet is crop-verified and repeat-checked before he sees
-it** - he asked for that after batches he had refused came back a second time.
-Rounds 1-17 are recorded in `D:\_enrichment\answers.csv`.
+**Rounds 1-18 are recorded and BUILT IN.** Round 18's answers went into
+`D:\_enrichment\answers.csv` and the rebuild finished cleanly at 21:23 - pid 2564
+exited 0, `wrote D:\_PhotoAudit\library.db in 130s`, empty stderr, no `.tmp` left
+behind. The live index was already swapped at 21:23:09 while the process still
+ran; that is `report()` running after `promote()`, not a half-finished write, and
+it was confirmed rather than assumed. Totals now:
 
-Round 18 needed no `record` step - there were no new answers to apply, only the
-four Kiran corrections below - so the sheet and its two gates were run directly
-rather than through `chain_rounds.ps1`.
+| | |
+|---|---|
+| human answers in the journal | **1,086** |
+| people named | **263** |
+| photographs/videos with a name | **24,649** |
+| person rows | **44,653** |
+
+**Every sheet is crop-verified and repeat-checked before he sees it** - he asked
+for that after batches he had refused came back a second time. Round 18 was 60
+rows, 536 crops, `verify_people_sheet.py` exit 0, `check_repeats.py` 0 repeats
+against all 846 rows of rounds 1-17.
+
+Round 18's two new names, **Gabby** and **Sinitta**, are profile terms now
+(`profile_coverage.py --apply`, 270 terms, **0 of 261 named people
+unprotected**). Run that tool after every round: Lily sat unprotected for eight
+rounds because the seeding dropped names under five characters.
+
+**The open question I have not asked, and should.** Reach per round is falling -
+1,058 photographs unlocked, then 540 - because `--top 60` ranks by cluster size
+and the big clusters are done. Worth asking him whether to keep ranking by size,
+add a cluster-size floor, or rank by what unlocks the most Communal photographs
+for Bharti. Do not change the ranking without asking.
 
 ### RESOLVED: the two Kirans, and why guessing would have been wrong (2026-09-17)
 
@@ -239,11 +282,17 @@ re-check genuinely clean: nothing Krish refused ever came back. The verdicts wer
 right; the test behind them was narrower than the claim (learning 55).
 
 **When his answers arrive there is ONE command.** Save the paste as
-`names-r<N>.txt` beside the sheets, then:
+`names-r<N>.txt` beside the sheets, then record the answered round and build the
+next - **but not until the Rishi question above is settled**, which is why the
+`-Next` here is held rather than run:
 
 ```powershell
-pwsh -NoProfile -File stages\07_people\chain_rounds.ps1 -Answered 11 -Next 12
+# HELD until Rishi is settled. Rounds 1-18 are recorded; 19 is the next sheet.
+pwsh -NoProfile -File stages\07_people\chain_rounds.ps1 -Answered 19 -Next 20
 ```
+
+The Rishi answer itself needs no `-Answered` round: record it as new journal rows
+the way the four Kiran corrections were, rebuild, then resume the rounds.
 
 It records (dry run first), merges at 0.68, rebuilds under `Invoke-Step`
 supervision, builds the next sheet, and runs both gates - refusing to go on at
