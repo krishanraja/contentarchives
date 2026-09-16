@@ -40,6 +40,7 @@ import ast
 import importlib.util
 import io
 import os
+import re
 import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -80,7 +81,6 @@ UNGUARDED = {
     "scripts/driver.py",
     "stages/10_reclaim/full_deletion_audit.py",
     "scripts/test_dedup.py",
-    "scripts/validate_router.py",
     "scripts/verify_dupes.py",
     "scripts/watch_d_downloads.py",
     "scripts/whatsapp_breakdown.py",
@@ -260,6 +260,27 @@ def main():
             len(left), ", ".join(left)))
     check("the list is {} long and documented".format(len(UNGUARDED)),
           len(now - set(left)) <= len(UNGUARDED), True)
+
+    print()
+    print("5. every script a subprocess launches still exists")
+    # An import sweep cannot see a subprocess launch, and two stage moves in one
+    # afternoon each left one dangling: runner.py went on launching
+    # scripts/purge_redundant.py after it moved to stages/10_reclaim/. The
+    # failure is silent until somebody runs that stage, which for a runner means
+    # overnight. stagepath.script() resolves a name wherever the conveyor put it,
+    # so the rule is: launch by NAME, never by a path built from __file__.
+    launched = re.compile(r'os\.path\.join\(\s*(?:SCRIPTS|HERE|_HERE)\s*,\s*["\']([^"\']+\.py)["\']')
+    dangling = []
+    for rel, full in modules():
+        src = io.open(full, encoding="utf-8", errors="replace").read()
+        for m in launched.finditer(src):
+            target = m.group(1)
+            line = src[:m.start()].count("\n") + 1
+            if not os.path.isfile(os.path.join(os.path.dirname(full), target)):
+                where = stagepath.find(target)
+                dangling.append("{}:{} launches {} (it is at {})".format(
+                    rel, line, target, where or "NOWHERE"))
+    check("no launch points at a script that has moved", dangling, [])
 
     print()
     print("summary: {} libraries, {} guarded, {} unguarded".format(

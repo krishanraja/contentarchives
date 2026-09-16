@@ -33,7 +33,28 @@ import threading
 import time
 
 PY = sys.executable
-SCRIPTS = os.path.dirname(os.path.abspath(__file__))
+
+import os as _os, sys as _sys                                    # noqa: E402
+_d = _os.path.dirname(_os.path.abspath(__file__))
+while _d != _os.path.dirname(_d) and not _os.path.exists(_os.path.join(_d, 'stagepath.py')):
+    _d = _os.path.dirname(_d)
+_sys.path.insert(0, _d)
+import stagepath  # noqa: E402,F401  - every stage on sys.path, wherever this file lives
+
+
+def script(name: str) -> str:
+    r"""The path to a script by name, wherever the conveyor has put it.
+
+    NOT os.path.join(os.path.dirname(__file__), name). That assumed every script
+    this runner launches is its own neighbour, and the conveyor moved them into
+    their stages: purge_redundant.py went to stages/10_reclaim/ on 2026-09-16 and
+    this file went on pointing at scripts/purge_redundant.py, which no longer
+    exists. A subprocess launch is invisible to tests/test_imports.py - nothing
+    imports it - so the break was silent until a launch survey went looking.
+    """
+    return stagepath.script(name)
+
+
 AUDIT = r"D:\_PhotoAudit"
 STATUS = os.path.join(AUDIT, "RUN-STATUS.json")
 LOG = os.path.join(AUDIT, "RUN-LOG.txt")
@@ -42,18 +63,18 @@ PROGRESS_RE = re.compile(r"(\d[\d,]*)\s*/\s*(\d[\d,]*)")
 
 STAGES = [
     ("inspect-old-zips",
-     [PY, "-u", os.path.join(SCRIPTS, "inspect_old_zips.py")],
+     [PY, "-u", script("inspect_old_zips.py")],
      "read the 2022/2024 export archives and flag media with no size match"),
     ("ingest-family-phone",
-     [PY, "-u", os.path.join(SCRIPTS, "ingest_tree.py"),
+     [PY, "-u", script("ingest_tree.py"),
       "--source", r"D:\2019-09-15 PERSON-A phone upto sept 2019",
       "--label", "family-phone-2019", "--min-size", "0", "--apply"],
      "76 files, 1.85 GB of family phone media not yet in the library"),
     ("purge-redundant",
-     [PY, "-u", os.path.join(SCRIPTS, "purge_redundant.py"), "--apply"],
+     [PY, "-u", script("purge_redundant.py"), "--apply"],
      "delete byte-identical copies across the laptop backups, keeping one"),
     ("refresh-canon",
-     [PY, "-u", os.path.join(SCRIPTS, "refresh_and_push.py")],
+     [PY, "-u", script("refresh_and_push.py")],
      "regenerate origin map and state, verify the manifest, push to GitHub"),
 ]
 
