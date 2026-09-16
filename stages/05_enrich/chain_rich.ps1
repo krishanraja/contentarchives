@@ -24,7 +24,7 @@
 param([double] $MaxUsd = 55.0, [int] $Workers = 5)
 
 $log  = 'D:\_PhotoAudit\rich.log'
-$repo = 'C:\Users\krish\dev\contentarchives'
+$repo = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 function Say($m) {
     $line = "$((Get-Date).ToString('HH:mm:ss'))  $m"
     Add-Content -Path $log -Value $line

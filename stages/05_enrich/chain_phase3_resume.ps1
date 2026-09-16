@@ -43,7 +43,7 @@ param(
 )
 
 $log  = 'D:\_PhotoAudit\phase3.log'
-$repo = 'C:\Users\krish\dev\contentarchives'
+$repo = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 # Write-Host, NOT Tee-Object. Tee passes its string down the pipeline, so a Say
 # inside a function becomes part of that function's RETURN VALUE. Should-Run
 # returned @('skipping step A', $false), and PowerShell treats a non-empty array
@@ -266,7 +266,7 @@ if (Should-Run '3a-video') {
             # another machine's username, probe_video returned {} in silence, and
             # 33 minutes produced 0.0% duration across 12,988 videos. Five
             # seconds of asking where ffprobe is would have caught all of it.
-            $out = & python -c "import importlib.util,sys;spec=importlib.util.spec_from_file_location('bi',sys.argv[1]);m=importlib.util.module_from_spec(spec);spec.loader.exec_module(m);print(m.FFPROBE or 'NONE')" "$repo\scripts\build_inventory.py" 2>&1 | Select-Object -Last 1
+            $out = & python -c "import importlib.util,sys;spec=importlib.util.spec_from_file_location('bi',sys.argv[1]);m=importlib.util.module_from_spec(spec);spec.loader.exec_module(m);print(m.FFPROBE or 'NONE')" "$repo\stages\04_inventory\build_inventory.py" 2>&1 | Select-Object -Last 1
             if (-not $out -or "$out" -eq 'NONE' -or -not (Test-Path "$out")) {
                 Say "  ffprobe not resolvable ('$out') - every video would silently get no duration"
                 return $false
@@ -276,7 +276,7 @@ if (Should-Run '3a-video') {
         } `
         -Start {
             Start-Process python -PassThru -WindowStyle Hidden `
-                -ArgumentList @('-u', "$repo\scripts\build_inventory.py", '--video') `
+                -ArgumentList @('-u', "$repo\stages\04_inventory\build_inventory.py", '--video') `
                 -RedirectStandardOutput 'D:\_PhotoAudit\inv.out' `
                 -RedirectStandardError  'D:\_PhotoAudit\inv.err'
         } `

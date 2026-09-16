@@ -17,7 +17,7 @@
 param([int] $FrameShards = 3)
 
 $log  = 'D:\_PhotoAudit\video-faces.log'
-$repo = 'C:\Users\krish\dev\contentarchives'
+$repo = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 function Say($m) {
     $line = "$((Get-Date).ToString('HH:mm:ss'))  $m"
     Add-Content -Path $log -Value $line

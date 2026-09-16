@@ -30,7 +30,8 @@ if (Test-Path 'D:\_PhotoAudit\H-COPY-FAILURES.csv') {
 }
 
 $env:PYTHONIOENCODING = 'utf-8'
-$eng = 'C:\Users\krish\dev\contentarchives\stages\05_enrich\thumbnail.py'
+$repo = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
+$eng = "$repo\stages\05_enrich\thumbnail.py"
 . "$PSScriptRoot\steps.ps1"
 # A supervisor that failed to load is indistinguishable from one that approved
 # everything, because PowerShell reports an unknown command and carries on.

@@ -285,11 +285,52 @@ def main():
     # broken. The sweep reported "no launch points at a script that has moved"
     # while holding a dead launch, which is this file's own recurring fault:
     # a pattern narrower than the thing it claims to cover (learning 54).
+    dangling = []
+
+    # CHAINS TOO, not just Python. This section walked modules(), which yields
+    # .py only - so stages/05_enrich/chain_phase3_resume.ps1 went on naming
+    # "$repo\scripts\build_inventory.py" after the 04 inventory move, through a
+    # green sweep, and would have halted an unattended overnight run at its
+    # preflight. Chains are the highest-stakes launchers here: they run for
+    # hours with nobody watching, which is the argument for covering them FIRST,
+    # not last (learning 54).
+    # Anchor on the repo ROOT first, so an absolute path resolves instead of
+    # being mistaken for a relative one. chain_thumbnails.ps1 hardcodes
+    # 'C:\Users\krish\dev\contentarchives\stages\05_enrich\thumbnail.py', and a
+    # pattern that starts matching at `contentarchives\` turns that into a
+    # repo-relative path which does not exist - flagging a real problem for the
+    # wrong reason. Strip a leading repo root or $repo, THEN take the remainder.
+    ps1_launch = re.compile(
+        r'(?:\$repo|' + re.escape(ROOT) + r')?[\\/]?'
+        r'((?:scripts|stages|tools|guards|contentarchives|tests)'
+        r'[\\/][A-Za-z0-9_.\\/\-]*?\.py)')
+    for dp, dns, fns in os.walk(ROOT):
+        dns[:] = [x for x in dns if x not in ("__pycache__", ".git", "node_modules")]
+        for fn in sorted(fns):
+            if not fn.endswith(".ps1"):
+                continue
+            full = os.path.join(dp, fn)
+            rel = os.path.relpath(full, ROOT).replace("\\", "/")
+            for i, line in enumerate(
+                    io.open(full, encoding="utf-8", errors="replace").read().splitlines(), 1):
+                if line.lstrip().startswith("#"):
+                    continue
+                for m in ps1_launch.finditer(line):
+                    target = m.group(1).replace("\\", "/")
+                    if os.path.isfile(os.path.join(ROOT, target)):
+                        continue
+                    where = stagepath.find(os.path.basename(target))
+                    dangling.append("{}:{} launches {} - it is at {}".format(
+                        rel, i, m.group(1), where or "NOWHERE"))
+
     launched = re.compile(
         r'os\.path\.join\(\s*([A-Za-z_][\w.]*)\s*,'          # the base
         r'(?:\s*["\'][^"\']*["\']\s*,)*'                      # any middle segments
         r'\s*["\']([^"\']+\.py)["\']')                        # the script
-    dangling = []
+    # NOT `dangling = []` here. It was, and it sat between the .ps1 walk above
+    # and this loop - so every chain finding was discarded before the Python
+    # check ran. The section would have reported clean on a dead chain launch
+    # while containing the code to catch it.
     for rel, full in modules():
         src = io.open(full, encoding="utf-8", errors="replace").read()
         for m in launched.finditer(src):

@@ -22,7 +22,7 @@ what the last session claimed, and keep the machine itself in a known state.
 | `tools/refresh.py` | recount from disk and update state/, one command |
 | `tools/publish_state.py` | publish local state into the repo, redacted, behind a tripwire |
 | `tools/audit_previous_session.py` | verify what the previous session actually did |
-| `scripts/refresh_and_push.py` | regenerate, verify and push, refusing a false report |
+| `stages/12_canon/refresh_and_push.py` | regenerate, verify and push, refusing a false report |
 | `tools/machine-hygiene/guard-profile-root.mjs` | refuse loose files in the profile root |
 | `tools/machine-hygiene/sweep-profile-root.mjs` | sweep the profile root to the agreed state |
 | `tools/machine-hygiene/guard-profile-root.test.mjs` | tests for the profile-root guard |
