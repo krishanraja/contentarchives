@@ -23,8 +23,21 @@ import sys
 import zipfile
 from collections import Counter
 
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import os as _os, sys as _sys
+_d = _os.path.dirname(_os.path.abspath(__file__))
+while _d != _os.path.dirname(_d) and not _os.path.exists(_os.path.join(_d, 'stagepath.py')):
+    _d = _os.path.dirname(_d)
+_sys.path.insert(0, _d)
+import stagepath  # noqa: E402,F401  - every stage on sys.path, wherever this file lives
 import autopilot as ap                                          # noqa: E402
+
+# This was `sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))` -
+# its own directory - which found autopilot only while both sat in scripts/.
+# Moving this file into stages/01_sources on 2026-09-16 broke it outright:
+# `ModuleNotFoundError: No module named 'autopilot'`, exit 1, run from its own
+# directory. tests/test_imports.py did not catch it because the sweep imports
+# from the REPO ROOT, where scripts/ is importable anyway - the check passed for
+# a reason that had nothing to do with the thing it was checking (learning 54).
 
 
 CACHE = r"D:\_PhotoAudit\arc-sizes.json"

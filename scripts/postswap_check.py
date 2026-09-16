@@ -113,7 +113,7 @@ def main() -> None:
     try:
         import importlib.util
         spec = importlib.util.spec_from_file_location(
-            "ifh", os.path.join(P.SCRIPTS, "ingest_from_h.py"))
+            "ifh", stagepath.script("ingest_from_h.py"))
         m = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(m)
         h = m.handled_from_stage()

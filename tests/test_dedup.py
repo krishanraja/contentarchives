@@ -1,6 +1,20 @@
 """Prove the archive dedup logic is content-proven, not name-based.
-Uses a throwaway library in a temp dir. Touches nothing real."""
+Uses a throwaway library in a temp dir. Touches nothing real.
+
+It had NO sys.path line, and worked only because autopilot.py was its
+neighbour in scripts/. Moving it into tests/ - so that the suite actually runs
+it - broke it instantly: `ModuleNotFoundError: No module named 'autopilot'`.
+That is the third file today whose imports depended on which directory it
+happened to sit in, and the first one to say so the moment it moved, because
+here something runs it. While it sat in scripts/ it could fail in silence and
+go on being cited as proof.
+"""
 import os, sys, tarfile, tempfile, shutil, importlib
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+ROOT = os.path.dirname(HERE)
+sys.path.insert(0, ROOT)
+import stagepath  # noqa: E402,F401  - every stage and script on sys.path
 
 root = tempfile.mkdtemp(prefix="dedup_test_")
 LIB  = os.path.join(root, "lib", "Library")
@@ -17,6 +31,24 @@ ap.DUPLOG = os.path.join(root, "dups.csv")
 ap.LOGF   = os.path.join(root, "log.txt")
 ap.MIN_D_GB, ap.MIN_C_GB = 0.0, 0.0
 ap.AUDIT = root
+
+# INDEX_ROOTS and INDEX_CACHE MUST be patched too, and this test spent months
+# proving nothing because they were not.
+#
+# autopilot builds INDEX_ROOTS = [LIB, NODATE, ...five hardcoded library roots]
+# at IMPORT time, and build_index() walks INDEX_ROOTS - not the globals patched
+# above. So this test indexed the REAL library, never saw its own temp fixture,
+# and reported dup=0 new=3 against an expected dup=1 new=2. It then replayed
+# D:\_PhotoAudit\lib-index.pickle on top: 100,706 cached files. The dedup logic
+# was never exercised; ingest_archive takes by_size and ns as ARGUMENTS, so it
+# was always testable - the fixture simply never reached it.
+#
+# 02 ingest's STAGE.md cites this file as "the archive dedup path is
+# content-proven". Nothing ran it: it lives in scripts/, not tests/, and it is on
+# the unguarded list so the import sweep skips it. A claimed proof that no longer
+# holds is worse than an admitted gap (learning 54).
+ap.INDEX_ROOTS = [LIB, ND]
+ap.INDEX_CACHE = os.path.join(root, "lib-index.pickle")
 
 # --- build a tiny "library" -------------------------------------------------
 same     = b"AAAA" * 4096          # will also be in the archive, identical

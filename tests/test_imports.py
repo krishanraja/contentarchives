@@ -80,7 +80,6 @@ UNGUARDED = {
     "scripts/diagnose_new.py",
     "scripts/driver.py",
     "stages/10_reclaim/full_deletion_audit.py",
-    "scripts/test_dedup.py",
     "scripts/verify_dupes.py",
     "stages/01_sources/watch_d_downloads.py",
     "stages/01_sources/whatsapp_breakdown.py",
@@ -269,17 +268,50 @@ def main():
     # failure is silent until somebody runs that stage, which for a runner means
     # overnight. stagepath.script() resolves a name wherever the conveyor put it,
     # so the rule is: launch by NAME, never by a path built from __file__.
-    launched = re.compile(r'os\.path\.join\(\s*(?:SCRIPTS|HERE|_HERE)\s*,\s*["\']([^"\']+\.py)["\']')
+    # ANY base, not just a bare SCRIPTS/HERE. The first version matched three of
+    # the thirty-one path-building sites in the repo: it could not see
+    # `os.path.join(P.SCRIPTS, "ingest_from_h.py")` in postswap_check.py or
+    # ingest_from_h.py, where P.SCRIPTS is a machine directory outside the repo
+    # altogether. A launch check blind to 28 of 31 launches is the shape of
+    # defect this file keeps finding elsewhere (learning 54).
+    #
+    # The bootstrap probe is excluded by TARGET, not by base: every module
+    # carries `os.path.join(_d, 'stagepath.py')` while walking up to find the
+    # repo root, and that file is deliberately NOT its neighbour.
+    launched = re.compile(
+        r'os\.path\.join\(\s*([A-Za-z_][\w.]*)\s*,\s*["\']([^"\']+\.py)["\']')
     dangling = []
     for rel, full in modules():
         src = io.open(full, encoding="utf-8", errors="replace").read()
         for m in launched.finditer(src):
-            target = m.group(1)
+            base, target = m.group(1), m.group(2)
+            if target == "stagepath.py":
+                continue
             line = src[:m.start()].count("\n") + 1
-            if not os.path.isfile(os.path.join(os.path.dirname(full), target)):
-                where = stagepath.find(target)
-                dangling.append("{}:{} launches {} (it is at {})".format(
-                    rel, line, target, where or "NOWHERE"))
+
+            # A base that is not a bare local name cannot be the repo's copy.
+            # P.SCRIPTS is D:\_PhotoAudit\scripts - the MACHINE's scripts - and
+            # ingest_from_h.py and postswap_check.py were launching those, which
+            # is the two-codebases problem the publisher retirement existed to
+            # end. Checking "is there a same-named neighbour" passed both, so the
+            # check agreed with itself and not with the question.
+            if "." in base:
+                dangling.append(
+                    "{}:{} launches {} from {} - that is outside the repo "
+                    "(the machine's copy). Use stagepath.script(\"{}\")".format(
+                        rel, line, target, base, target))
+                continue
+
+            if os.path.isfile(os.path.join(os.path.dirname(full), target)):
+                continue
+            if stagepath.find(target):
+                dangling.append(
+                    "{}:{} builds a path to {} from {}, but it now lives at {} - "
+                    "launch by name through stagepath.script()".format(
+                        rel, line, target, base, stagepath.find(target)))
+            else:
+                dangling.append("{}:{} launches {} which exists NOWHERE".format(
+                    rel, line, target))
     check("no launch points at a script that has moved", dangling, [])
 
     print()

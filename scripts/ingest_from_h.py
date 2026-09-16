@@ -388,7 +388,7 @@ def do_folder(folder: str, apply: bool, rw: csv.writer | None,
                 # kept everything, but a per-run report that silently loses
                 # earlier runs is worse than no report.
                 cmd = [sys.executable, "-u",
-                       os.path.join(P.SCRIPTS, "ingest_tree.py"),
+                       stagepath.script("ingest_tree.py"),
                        "--source", sub,
                        "--label", f"h-{safe}-{d}-b{i:02d}", "--apply"]
                 if DEST_ROOT[d]:

@@ -34,10 +34,10 @@ where the volume allows, resumable across kills.
 | `scripts/validate_router.py` | test routing rules against known folders |
 | `scripts/verify_h_batch.py` | prove a pulled batch landed, by count and hash |
 | `scripts/verify_dupes.py` | re-verify a duplicate claim by whole-file hash |
-| `scripts/test_dedup.py` | the archive dedup path is content-proven |
 
 ## Tests
 - `tests/test_safety_and_dedupe.py`
+- `tests/test_dedup.py`
 - `tests/test_route_h.py`
 
 ## Edge cases
