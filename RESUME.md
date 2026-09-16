@@ -84,24 +84,24 @@ the 53 learnings are enforced by a named function or test.
 
 ----
 
-## RIGHT NOW: round 10 is with Krish; nothing is running (2026-09-16, 12:09)
+## RIGHT NOW: round 11 is with Krish; nothing is running (2026-09-16, 12:25)
 
 **Nothing is running unattended. The next move is Krish's.**
 
-Round 10 of `PEOPLE.html` was published to `D:\_PhotoAudit\PEOPLE.html` and sent
-to him at 12:09 on 2026-09-16: 60 rows, 720 crops, `verify_people_sheet.py` exit
-0, and `check_repeats.py` proving **0 repeats** against all **366** rows shown in
-rounds 1-9. **Every sheet is crop-verified and repeat-checked before he sees it**
-- he asked for that after batches he had refused came back a second time.
-Rounds 1-9 are recorded: **542 answers** in `D:\_enrichment\answers.csv`.
+Round 11 of `PEOPLE.html` was published to `D:\_PhotoAudit\PEOPLE.html` and sent
+to him at 12:25 on 2026-09-16: 60 rows, 720 crops, `verify_people_sheet.py` exit
+0, and `check_repeats.py` proving **0 repeats** against all **426** rows shown in
+rounds 1-10. **Every sheet is crop-verified and repeat-checked before he sees
+it** - he asked for that after batches he had refused came back a second time.
+Rounds 1-10 are recorded: **602 answers** in `D:\_enrichment\answers.csv`.
 
-**That repeat check was under-reporting until 12:05 and the fix matters.** It
-matched `PEOPLE-round[1-6].html`, written when round 7 was next and never
-widened, so rounds 7-9 were invisible to it and its baseline sat frozen at 186
-for three runs while each sheet was called clean. Widened to `round\d+`, the real
-baseline is 366 - and rounds 7, 8, 9 and 10 all re-check genuinely clean, so
-nothing Krish refused ever came back. The verdicts were right; the test behind
-them was narrower than the claim (learning 55).
+**The chain now calls the REPO copy of the guard**, `stages/07_people/check_repeats.py`.
+It lived in a session scratch directory and matched `PEOPLE-round[1-6].html` -
+written when round 7 was next, never widened - so rounds 7-9 were invisible to it
+and its baseline sat frozen at 186 for three runs while each sheet was called
+clean. Widened to `round\d+`, the real baseline is 426, and rounds 7-11 all
+re-check genuinely clean: nothing Krish refused ever came back. The verdicts were
+right; the test behind them was narrower than the claim (learning 55).
 
 When his answers arrive, run them as one chain, and stop on any non-zero exit:
 
@@ -167,11 +167,15 @@ pwsh -NoProfile -File guards\arm.ps1 -Chain chain_video_faces.ps1 -TaskName cont
 
 ### Where the naming is
 
-- **Ten rounds offered, nine answered** (2026-09-15 and 16). 542 answers in the
+- **Eleven rounds offered, ten answered** (2026-09-15 and 16). 602 answers in the
   journal `D:\_enrichment\answers.csv`. After the last rebuild: 82,193 files
-  indexed, **23,799** photographs and videos carrying a named person, **202**
-  people, **41,830** person-on-photograph rows, **10,553** group shots with two or
-  more named people. Krish tops the list at 9,088, then Bharti 5,032.
+  indexed, **23,997** photographs and videos carrying a named person, **212**
+  people, **42,276** person-on-photograph rows, **10,647** group shots with two or
+  more named people. Krish tops the list at 9,188, then Bharti 5,063.
+- **The profile holds 193 personal terms**, seeded from these answers and
+  extended after each round - every term measured against the library before it
+  is added (learning 54). `D:\_PhotoAudit\profile.yaml`, never committed,
+  backed up beside itself as `profile.yaml.bak-*`.
 - **A photograph can carry many people** - `photo_people` holds one row per
   person per file (learning 49). The earlier `resolved` table had a `(hash, field)`
   primary key and silently kept only one name per photograph.
