@@ -18,7 +18,7 @@ camera wrote, and say "no date" rather than invent one.
 | file | role |
 |---|---|
 | `contentarchives/dating.py` | the date precedence chain, the reusable core |
-| `scripts/redate_videos.py` | re-date videos from the container's own clock |
+| `stages/03_dating/redate_videos.py` | re-date videos from the container's own clock |
 
 ## Tests
 - none yet: dating has no test file (debt)
@@ -27,4 +27,4 @@ camera wrote, and say "no date" rather than invent one.
 | # | what this stage does about it | enforced by |
 |---|---|---|
 | 3 | mtime is never a date | `code:contentarchives/dating.py:def date_for` |
-| 19 | a video's container clock outranks the folder it arrived in | `code:scripts/redate_videos.py:creation_time` |
+| 19 | a video's container clock outranks the folder it arrived in | `code:stages/03_dating/redate_videos.py:creation_time` |

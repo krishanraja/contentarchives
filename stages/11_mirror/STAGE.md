@@ -17,9 +17,9 @@ destination's own evidence, never by reading back what was just written.
 ## Code
 | file | role |
 |---|---|
-| `scripts/migrate_library.py` | move the library to a bigger drive, verified |
-| `scripts/postswap_check.py` | after a drive-letter swap, prove the new disk is the library |
-| `scripts/move_audio_to_h.py` | move to a cloud mount, deleting only once the queue proves receipt |
+| `stages/11_mirror/migrate_library.py` | move the library to a bigger drive, verified |
+| `stages/11_mirror/postswap_check.py` | after a drive-letter swap, prove the new disk is the library |
+| `stages/11_mirror/move_audio_to_h.py` | move to a cloud mount, deleting only once the queue proves receipt |
 
 ## Tests
 - none yet: the H: upload and its verification are not built (debt)
@@ -29,4 +29,4 @@ destination's own evidence, never by reading back what was just written.
 |---|---|---|
 | 5 | a cloud mount's placeholders and free space are not what they look like | prose-only HERE; enforced in 02 ingest by `code:stages/02_ingest/ingest_from_h.py:learning 5` |
 | 17 | capacity comes from the account, not the mount | prose-only |
-| 25 | receipt is proven by the Drive client's operations queue | `code:scripts/move_audio_to_h.py:operations` |
+| 25 | receipt is proven by the Drive client's operations queue | `code:stages/11_mirror/move_audio_to_h.py:operations` |

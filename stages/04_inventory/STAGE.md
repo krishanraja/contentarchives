@@ -18,10 +18,10 @@ disk and reconciled against the records.
 ## Code
 | file | role |
 |---|---|
-| `scripts/build_inventory.py` | one row per library file, with every signal about it |
-| `scripts/reconcile_disk.py` | find what the records missed |
-| `scripts/enrich_origin_status.py` | whether an origin still exists, and what deleting it frees |
-| `scripts/big_files.py` | the largest files, surfaced for review |
+| `stages/04_inventory/build_inventory.py` | one row per library file, with every signal about it |
+| `stages/04_inventory/reconcile_disk.py` | find what the records missed |
+| `stages/04_inventory/enrich_origin_status.py` | whether an origin still exists, and what deleting it frees |
+| `stages/04_inventory/big_files.py` | the largest files, surfaced for review |
 | `tools/check_manifest.py` | every manifest row still points at a file, or is explained |
 | `tools/origin_map.py` | where every library file came from |
 | `tools/track.py` | derive project state from artefacts on disk |
@@ -33,6 +33,6 @@ disk and reconciled against the records.
 ## Lessons
 | # | what this stage does about it | enforced by |
 |---|---|---|
-| 4 | an extension is sanity-checked against size | `code:scripts/build_inventory.py:learning 4` |
+| 4 | an extension is sanity-checked against size | `code:stages/04_inventory/build_inventory.py:learning 4` |
 | 8 | compression settings are per source and measured (compression is abandoned) | prose-only |
 | 16 | the manifest is reconciled against the disk, absences explained | `code:tools/check_manifest.py:accepted-absences` |

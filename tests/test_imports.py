@@ -74,7 +74,7 @@ CODE_DIRS = ["scripts", "stages", "guards", "tools", "contentarchives"]
 # --apply gate its sibling always had.
 UNGUARDED = {
     "stages/10_reclaim/audit_deletions.py",
-    "scripts/big_files.py",
+    "stages/04_inventory/big_files.py",
     "stages/10_reclaim/check_scratch_safe.py",
     "stages/02_ingest/check_tiny.py",
     "stages/02_ingest/diagnose_new.py",
