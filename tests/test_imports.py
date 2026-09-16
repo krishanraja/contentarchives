@@ -82,8 +82,8 @@ UNGUARDED = {
     "stages/10_reclaim/full_deletion_audit.py",
     "scripts/test_dedup.py",
     "scripts/verify_dupes.py",
-    "scripts/watch_d_downloads.py",
-    "scripts/whatsapp_breakdown.py",
+    "stages/01_sources/watch_d_downloads.py",
+    "stages/01_sources/whatsapp_breakdown.py",
     "stages/05_enrich/consensus.py",
     "stages/05_enrich/store_summary.py",
 }
