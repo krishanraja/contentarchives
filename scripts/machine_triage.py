@@ -14,8 +14,19 @@ import csv
 import os
 import re
 
-LOG = r"G:\My Drive\_photo-consolidation\out\machine-b-copy-log.csv"
-OUT = r"D:\_PhotoAudit\machine-b-TRIAGE.csv"
+import os as _os, sys as _sys
+_d = _os.path.dirname(_os.path.abspath(__file__))
+while _d != _os.path.dirname(_d) and not _os.path.exists(_os.path.join(_d, 'stagepath.py')):
+    _d = _os.path.dirname(_d)
+_sys.path.insert(0, _d)
+import stagepath  # noqa: E402,F401  - every stage on sys.path, wherever this file lives
+import paths as P                                                # noqa: E402
+
+# The copy log the second machine wrote to the shared drive, and where this
+# triage lands. Both were spelled out as machine literals; the drive and the
+# audit directory are defined once in guards/paths.py.
+LOG = os.path.join(P.GDRIVE, "_photo-consolidation", "out", "machine-b-copy-log.csv")
+OUT = os.path.join(P.AUDIT, "machine-b-TRIAGE.csv")
 
 # Filenames a camera or phone assigns itself.
 CAMERA = re.compile(

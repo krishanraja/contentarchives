@@ -49,6 +49,16 @@ def main():
     check("every chronology tree sits under MEDIA",
           all(str(p).startswith(str(P.MEDIA)) for p in P.CHRONOLOGY), True)
 
+    # The mounts material comes FROM and the drive it is backed up TO. Three
+    # scripts each carried their own copy of the H: root and two carried
+    # G:\My Drive. A second definition is how a script comes to survey a folder
+    # that has moved and report that it is empty.
+    for attr in ("H_ROOT", "H_STAGE", "GDRIVE"):
+        check("paths.{} is defined".format(attr), hasattr(P, attr), True)
+    check("no mount is nested inside the library",
+          any(str(getattr(P, a)).lower().startswith(str(P.ROOT).lower())
+              for a in ("H_ROOT", "H_STAGE", "GDRIVE")), False)
+
     print()
     print("2. tools are resolved, never hardcoded to one machine's username")
     check("no path under another user's profile",

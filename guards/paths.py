@@ -61,6 +61,13 @@ REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 # scripts each hardcoded it and one of them verifies batches against it.
 H_STAGE = r"D:\_h_stage"
 
+# The cloud mount this project pulls FROM, as distinct from the local stage it
+# lands in. survey_h_folders.py, h_capacity.py and verify_h_batch.py all read it;
+# one definition means a remount or a rename is one edit rather than three, and
+# three copies of a mount path is how a script comes to survey a folder that is
+# no longer there and report that it is empty.
+H_ROOT = r"H:\My Drive\_photo-consolidation"
+
 SCRATCH_DIRS = [
     TMPDIR,
     H_STAGE,
@@ -89,6 +96,12 @@ SKIP_FOLDERS = {"_audit-trail", "in", "out"}
 DRIVEFS = os.path.join(os.environ.get("LOCALAPPDATA")
                        or os.path.join(os.path.expanduser("~"), "AppData", "Local"),
                        "Google", "DriveFS")
+
+# The Google Drive mount itself, where things are written TO be backed up - the
+# answers journal, and a copy log from a second machine. Note that writing here
+# proves nothing about upload: DRIVEFS above is how that question gets answered
+# (learning 25).
+GDRIVE = r"G:\My Drive"
 
 
 def _resolve(binary: str, required: bool = True) -> str | None:

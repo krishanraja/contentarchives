@@ -56,18 +56,24 @@ python tests/test_video_faces.py       python tests/test_build_db.py
 python tests/test_chain_gating.py      python tests/test_safety_and_dedupe.py
 ```
 
-Current debt, printed by the contracts test: 10 learnings enforced only in prose
-(5, 8, 13, 17, 20, 23, 24, 29, 30, 33) and five stages with no test file.
+Current debt, printed by the contracts test: 7 learnings enforced only in prose
+(8, 13, 17, 20, 24, 29, 30). All 110 code files are owned by a stage, and 46 of
+the 53 learnings are enforced by a named function or test.
 
 **Migration, not finished.** The `STAGE.md` files list code where it lives today.
 
-- **Phase 2 - stages 01-04 and 09-12 into their folders.** The repo's `scripts/`
-  are REDACTED copies published from `D:\_PhotoAudit\scripts` by the machine-only
-  `publish_scripts.py`: 54 of 56 match their originals after redaction, but 34
-  executable lines carry a pseudonym, so the repo copies cannot run. Moving them
-  means making ONE runnable copy - personal values into local config, not into
-  code - and retiring the publisher. `build_inventory.py` and `migrate_library.py`
-  are newer in the repo than on the machine.
+- **Phase 2 - stages 01-04 and 09-12 into their folders.** In progress. The
+  publisher is **retired**: `D:\_PhotoAudit\scripts\publish_scripts.py` now
+  refuses to run, because the repo holds the ONE runnable copy and `--apply`
+  would overwrite it with pseudonym copies that cannot execute. The split it
+  forced is the pattern to follow for the rest: logic in the repo, machine paths
+  in `guards/paths.py`, personal vocabulary in `D:\_PhotoAudit\profile.yaml`.
+  Done this way so far: `route_h.py` (published, proven identical to the machine
+  copy on 6,000 real paths), `h_capacity.py`, `verify_h_batch.py` and
+  `machine_triage.py` (hand-written `main()` guards, so importing them runs
+  nothing, and their mount literals replaced by `P.H_ROOT` and `P.GDRIVE`).
+  Still to do: the `STAGE.md` tables list code where it lives today, and stages
+  01-04 and 09-12 have not moved into their folders.
 - **Phase 3 - DONE 2026-09-16**, once `VIDEO FACES COMPLETE` meant nothing was
   running. 39 files moved with `git mv`: stages 05 enrich, 06 faces, 07 people
   and 08 index into their folders, and `paths.py`, `steps.ps1`, `arm.ps1` and
@@ -78,26 +84,52 @@ Current debt, printed by the contracts test: 10 learnings enforced only in prose
 
 ----
 
-## RIGHT NOW: naming faces; video faces running unattended (2026-09-15, 15:00)
+## RIGHT NOW: round 9 is with Krish; nothing is running (2026-09-16, 11:40)
 
-**One chain is running and nothing needs a human until it finishes.**
+**Nothing is running unattended. The next move is Krish's.**
 
-**Audited against all 50 learnings before it ran unattended** (2026-09-15, learning
-50). Eleven gaps were fixed, `tests/test_video_faces.py` watches every guard pass
-and fail, and the chain was re-armed onto the fixed code at 15:37 - the re-arm
-reaped three orphaned frame workers that the old reaper would have missed.
-Before arming anything new, do the same walk: every numbered learning against
-every new component, written down.
+Round 9 of `PEOPLE.html` was published to `D:\_PhotoAudit\PEOPLE.html` and sent to
+him at 11:40 on 2026-09-16: 60 rows, 720 crops, `verify_people_sheet.py` exit 0,
+and `check_repeats.py` proving **0 repeats** against all 186 rows shown in rounds
+1-8. **Every sheet is crop-verified and repeat-checked before he sees it** - he
+asked for that after batches he had refused came back a second time. Rounds 1-8
+are recorded: **482 answers** in `D:\_enrichment\answers.csv`.
 
-**What the audit above prints, and what it means** (as of 2026-09-15, 15:15):
+When his answers arrive, run them as one chain, and stop on any non-zero exit:
 
-- `[PASS] running jobs belong to an armed chain ... do NOT kill` - the python and
-  ffmpeg processes are the video-faces chain doing its work. Never kill them as
-  leftovers. If this line instead says `[FAIL] no jobs left running`, the chain's
-  task has ended: check the log below before anything else.
-- `[FAIL] identity documents moved out of the chronology - 5 still` - known and
-  deliberate, waiting on Krish (see "Waiting on the user"). Report it, do not act.
-- Every other check passed. Anything else failing is new: report it first.
+```powershell
+python -u stages\07_people\record_people.py --file <answers.txt> --sheet <the sheet he was shown> --apply
+python -u stages\06_faces\merge_clusters.py --threshold 0.68 --apply
+python -u stages\08_index\build_db.py            # ~15 min, tmp+rename
+python -u stages\07_people\people_sheet.py --top 60 --out <next sheet>
+python -u stages\07_people\verify_people_sheet.py --page <next sheet>   # MUST exit 0
+python -u <scratch>\check_repeats.py <scratch> <next sheet>             # MUST say CLEAN
+```
+
+`--sheet` is not optional: it is what records a row he was shown and left blank as
+*declined*, so it is never offered again. Without it, refused clusters return.
+
+**VIDEO FACES ARE COMPLETE** - 41,931 video faces are joined to the frozen
+clusters. The chain described below is finished; its commands are kept because the
+verification argument they make is the one to reuse for the next long job.
+
+**THE RULE THIS PRODUCED, which still applies: audit every numbered learning
+against every new component, written down, BEFORE arming anything unattended**
+(learning 50). Done for the video chain on 2026-09-15: eleven gaps were found and
+fixed, `tests/test_video_faces.py` now watches every guard pass and fail, and the
+re-arm at 15:37 reaped three orphaned frame workers the old reaper would have
+missed. That walk is not optional for the next long job.
+
+**History, not instruction** - what the audit printed on 2026-09-15 at 15:15,
+while the chain was still running. Do NOT read these as the current state:
+
+- `[PASS] running jobs belong to an armed chain ... do NOT kill` - at the time,
+  the python and ffmpeg processes were the video-faces chain doing its work.
+  **That chain has since finished.** Any python or ffmpeg process found running
+  now is unexplained until proven otherwise: check `arm.ps1 -Status` first.
+- `[FAIL] identity documents moved out of the chronology - 5 still` - still open,
+  still deliberate, waiting on Krish (see "Waiting on the user"). Report, do not act.
+- Every other check passed. Re-run the audit rather than trusting this list.
 
 ```powershell
 pwsh -NoProfile -File guards\arm.ps1 -Status -TaskName contentarchives-video-faces
@@ -112,7 +144,7 @@ Healthy looks like `state : Running`, a `CHECKPOINT` line every 15 minutes and a
 | frames | `stages/06_faces/video_face_frames.py`, 3 shards, one frame per 30 s into `D:\_frames` | ~32,670 frames, ~7 h (80/min measured at 14:56) |
 | faces | `stages/06_faces/faces_embed.py --frames`, ONE process, into `D:\_enrichment\faces.video.csv` | ~18 h at 0.5 img/s |
 | assign | `stages/06_faces/assign_video_faces.py --apply`, joins the FROZEN clusters | minutes |
-| rebuild | `stages/08_index/build_db.py` | ~8 min |
+| rebuild | `stages/08_index/build_db.py` | ~19 min measured 2026-09-16 (82,193 files, 1,452,186 tags), not the ~8 min this said - it writes `library.db.tmp` and renames, and stays read-bound with flat writes for minutes at a time without being stuck |
 
 The last line will be `VIDEO FACES COMPLETE`.
 
@@ -127,20 +159,31 @@ pwsh -NoProfile -File guards\arm.ps1 -Chain chain_video_faces.ps1 -TaskName cont
 
 ### Where the naming is
 
-- **Three rounds of `PEOPLE.html` answered on 2026-09-15.** 169 answers in the
-  journal `D:\_enrichment\answers.csv`. After the rebuild: 20,724 photographs and
-  videos carry a named person, 106 people, 8,363 group photographs with 2+ names.
-- **The loop:** `stages/07_people/people_sheet.py --top 60` writes `D:\_PhotoAudit\PEOPLE.html`
-  -> Krish pastes answers -> `stages/07_people/record_people.py --file answers.txt` (dry run,
-  then `--apply`) -> `stages/06_faces/merge_clusters.py --threshold 0.68 --apply` ->
-  `stages/08_index/build_db.py`.
+- **Nine rounds offered, eight answered** (2026-09-15 and 16). 482 answers in the
+  journal `D:\_enrichment\answers.csv`. After the last rebuild: 82,193 files
+  indexed, **23,549** photographs and videos carrying a named person, **183**
+  people, **41,101** person-on-photograph rows, **10,344** group shots with two or
+  more named people. Krish tops the list at 9,088, then Bharti 5,032.
+- **A photograph can carry many people** - `photo_people` holds one row per
+  person per file (learning 49). The earlier `resolved` table had a `(hash, field)`
+  primary key and silently kept only one name per photograph.
+- **The loop:** `stages/07_people/people_sheet.py --top 60` writes the sheet ->
+  Krish pastes answers -> `stages/07_people/record_people.py --file answers.txt
+  --sheet <the sheet he saw>` (dry run, then `--apply`) ->
+  `stages/06_faces/merge_clusters.py --threshold 0.68 --apply` ->
+  `stages/08_index/build_db.py` -> verify and repeat-check the next sheet.
 - **Answer conventions Krish uses:** `c123 = Name`. `c123 = for <who>` is a
   question queued for the game, recorded as `needs_identifying = <who>`.
   `c123 = unsure, blurry` is recorded as `unidentifiable` and never asked again.
   `c123 = ?` is `needs_identifying = yes`. A trailing ` - remark` is a note.
-- **Round 4 was previewed and deliberately NOT shown** (60 rows, 2,261
-  photographs). Wait for `VIDEO FACES COMPLETE`: video frames add faces to known
-  people and create video-only people, and those belong in round 4.
+- **A cluster he was shown and did not name is DECLINED, not unanswered.**
+  `record_people.py --sheet` writes those rows to the journal so no later sheet
+  offers them again; 105 refusals were recorded retrospectively on 2026-09-16
+  after he said "stop resending me batches I have refused to identify - they are
+  unidentifiable". Rounds 7, 8 and 9 each verified 0 repeats.
+- **A name longer than 60 characters is refused, and prose after a name becomes a
+  note.** `c4576 = Krish. Agree with your recommendation...` records Krish, and
+  keeps the sentence as the note.
 - **Backed up off the library disk** to
   `G:\My Drive\Personal\Family\Photo library - answers backup\`: answers.csv,
   FACE-CLUSTERS.csv, CLUSTER-MERGES.csv and faces.0.csv. Hashing the copies
@@ -150,7 +193,13 @@ pwsh -NoProfile -File guards\arm.ps1 -Chain chain_video_faces.ps1 -TaskName cont
   read 0 for both accounts at 15:25. `record_people.py --apply` refreshes
   answers.csv there every time; re-check that queue before trusting a new copy.
 
-### When `VIDEO FACES COMPLETE` appears
+### When `VIDEO FACES COMPLETE` appeared - all four steps are DONE (2026-09-16)
+
+Kept because step 3's argument about joining on `(image, face_index)` rather than
+by position is the one to reuse. `merge_clusters.py` now reads video faces:
+41,931 of them joined, 7,896 clusters with 3+ faces, 305 named by a human, 378
+unnamed clusters inheriting a name from a named sibling, and no group mixing two
+differently-named people at threshold 0.68.
 
 1. `python stages\06_faces\assign_video_faces.py --verify` and `--verify-db` - prove it.
 2. Copy `D:\_enrichment\faces.video.csv` and `D:\_PhotoAudit\FACE-CLUSTERS-VIDEO.csv`
@@ -177,7 +226,7 @@ pwsh -NoProfile -File guards\arm.ps1 -Chain chain_video_faces.ps1 -TaskName cont
 
 ### Next, in order
 
-1. Finish naming: round 4 after video faces.
+1. Finish naming: record Krish's round 9 answers, then keep the loop turning.
 2. Build the game (roadmap Phase 8), starting with Bharti's queue.
 3. Segment (Phase 4), reclaim (5), mirror to H: with server-side checksums (6),
    and only then purge Elements (7).
