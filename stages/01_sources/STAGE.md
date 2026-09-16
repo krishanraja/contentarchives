@@ -31,6 +31,20 @@ copied: names, sizes and completeness, read cheaply and never trusted blindly.
 ## Tests
 - none yet: every lesson below is enforced by code, not by a test (debt)
 
+## Edge cases
+
+One-off investigations, kept as playbooks rather than machinery (Krish,
+2026-09-16). These are the questions worth asking of a source BEFORE committing
+hours to pulling it.
+
+| script | the question it answered | what it found |
+|---|---|---|
+| `scripts/whatsapp_breakdown.py` | what would a messenger ingest actually add? | characterise it first: 13,446 received files, most not photographs anyone took - and a later vision pass found 10,004 of the evicted ones were real memories after all. |
+| `scripts/video_variants.py` | is this the same footage twice? | GoPro and DJI keep chapters of one recording, which are NOT duplicates. Refuse to touch chapters; compare trims and re-encodes only. |
+| `scripts/inspect_old_zips.py` | what is inside an export archive, without extracting it? | read the central directory; a 50 GB archive is triaged in seconds. |
+| `scripts/machine_triage.py` | is a second machine's media worth ingesting? | 1,525 files by extension looked like a photo collection; by origin folder it was 1,055 software screenshots and 460 media (learning 14). |
+| `scripts/watch_d_downloads.py` | is this download failing? | alarm on a partial that shrinks or stalls - the failure signature of the enclosure that logged 14 controller errors in a day. |
+
 ## Lessons
 | # | what this stage does about it | enforced by |
 |---|---|---|

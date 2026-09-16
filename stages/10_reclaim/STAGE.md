@@ -36,6 +36,22 @@ The only stage that destroys data, so the most guarded.
 ## Tests
 - `tests/test_safety_and_dedupe.py`
 
+## Edge cases
+
+One-off investigations, kept as playbooks rather than machinery (Krish,
+2026-09-16). Each is the recorded answer to a question about freeing space, and
+every one of them exists because an obvious-looking reclaim was wrong.
+
+| script | the question it answered | what it found |
+|---|---|---|
+| `scripts/free_wins.py` | what can be reclaimed with no judgement at all? | 8.99 GB: a commercial film, and one half of a re-muxed pair proven identical by duration and creation time. Everything else needed a human. |
+| `scripts/space_audit.py` | where are this volume's bytes actually going? | count by inode, never by name: 879.5 GB of real data read as 1,202.0 GB counted by path, a phantom 322.5 GB (learning 28). |
+| `scripts/space_tiers.py` | how much judgement does each freeable tier need? | sort by judgement required, then start at the tier that needs none. |
+| `scripts/already_in_library.py` | which freeable files are already safely held? | content-hash proof, not path similarity - the question that precedes any deletion plan. |
+| `scripts/audit_deletions.py` | does every journalled deletion carry its evidence? | run after any purge; 46,430 deletions, 0 without evidence at the last run. |
+| `scripts/full_deletion_audit.py` | the same question across every journal at once | the exhaustive version, for when a category rather than a file is in doubt. |
+| `scripts/check_scratch_safe.py` | does this scratch tree hold anything unique? | must pass before `clear_scratch.py` runs. A scratch directory is only scratch if it is provably a copy. |
+
 ## Lessons
 | # | what this stage does about it | enforced by |
 |---|---|---|

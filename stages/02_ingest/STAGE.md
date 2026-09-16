@@ -40,6 +40,22 @@ where the volume allows, resumable across kills.
 - `tests/test_safety_and_dedupe.py`
 - `tests/test_route_h.py`
 
+## Edge cases
+
+One-off investigations, kept as playbooks rather than machinery (Krish,
+2026-09-16: "one off investigations need to be stored not as part of core
+machinery but how to deal with common edge cases"). Each answered a question
+once; the answer is here, the script is there for when the same edge case
+recurs, and nobody maintains it as part of the belt.
+
+| script | the question it answered | what it found |
+|---|---|---|
+| `scripts/diagnose_new.py` | why is an ingest calling almost everything new? | the dedup index covered 12% of the library, so nothing matched. Run it against a baseline that excludes the ingest itself, or the answer is circular. |
+| `scripts/check_tiny.py` | were any files skipped as "too small" actually photographs? | check before a size threshold is trusted, not after: a 1.5 KB `.mts` is app junk, but small `.jpg` files were real. |
+| `scripts/ingest_eta.py` | when will this ingest finish? | weight by bytes, never by member count - a 40 GB archive of videos and one of screenshots share a file count and nothing else. |
+| `scripts/verify_dupes.py` | is a head+tail duplicate signature trustworthy? | re-verify by whole-file hash before anything acts on it; the signature rules out, never in. |
+| `scripts/validate_router.py` | do the routing rules agree with folders whose character is already known? | run it after any change to `route_h.py`, on folders you can judge by eye. |
+
 ## Lessons
 | # | what this stage does about it | enforced by |
 |---|---|---|

@@ -85,13 +85,18 @@ def audit_stage(name, text, root):
         if s not in sec:
             problems.append("{}: no '## {}' section".format(name, s))
     # Code, plus any Edge cases table: a one-off investigation is owned so it can
-    # be found when that edge case recurs, without being core machinery.
+    # be found when that edge case recurs, without being core machinery. A stage
+    # naming the same file in both tables is ONE claim, not two - Edge cases is
+    # usually commentary on a script the Code table already lists.
+    seen = set()
     for section in ["Code"] + OPTIONAL:
         for cells in table_rows(sec.get(section, "")):
             for p in backticked(cells[0])[:1]:
                 if not p.endswith((".py", ".ps1", ".mjs")):
                     continue
-                code.append(p)
+                if p not in seen:
+                    seen.add(p)
+                    code.append(p)
                 if not os.path.isfile(os.path.join(root, p)):
                     problems.append("{}: {} lists {} which does not exist".format(
                         name, section, p))
