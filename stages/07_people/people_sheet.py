@@ -290,6 +290,24 @@ def main() -> int:
     ap.add_argument("--include-communal", action="store_true",
                     help="show clusters that are majority Communal photographs "
                          "(default: skip them - they are Bharti's)")
+    # Show exactly these clusters, in this order, whatever else is true of them.
+    #
+    # Krish, 2026-09-17: "I have labelled two different people Kiran, one of
+    # them should be Kiran Nathwani." There are THREE Kiran clusters in the
+    # journal - c306 (157 photographs, 2012-2026), c1160 (11) and c1165 (10) -
+    # plus c4122, the new Kiran Nathwani, and none of them share a merge group.
+    # Nothing in the data says which two he means or which becomes Nathwani, and
+    # relabelling the wrong one renames a real person across every photograph
+    # they appear in. So he needs to SEE them side by side.
+    #
+    # The normal selection cannot do that: it ranks by photographs covered and
+    # skips anything already answered, and all four of these are answered by
+    # definition. This bypasses both, and only those two - the crop logic is
+    # untouched, so the faces shown are the same faces verify_people_sheet.py
+    # checks against the assignment files.
+    ap.add_argument("--clusters", default="",
+                    help="comma-separated cluster ids to show, in order, "
+                         "ignoring the ranking and the already-answered filter")
     a = ap.parse_args()
 
     # PER-FACE assignments. Not the tag store.
@@ -401,10 +419,42 @@ def main() -> int:
               "Bharti's side; {:,} left".format(
                   before - len(clusters), dropped_photos, len(clusters)))
 
-    # ranked by PHOTOGRAPHS covered, not faces found: a cluster of 900 faces from
-    # one afternoon deserves less attention than 400 across fifteen years
-    ranked = sorted(clusters.items(),
-                    key=lambda kv: -len({r["hash"] for r in kv[1]}))[:a.top]
+    if a.clusters:
+        # EXACTLY these, in this order. Bypasses the ranking and the
+        # already-answered filter, both of which would drop them: the clusters
+        # worth disambiguating are answered by definition (see --clusters).
+        wanted = [c.strip() for c in a.clusters.split(",") if c.strip()]
+        by_group = collections.defaultdict(list)
+        for path in (a.assign, a.video_assign):
+            if not os.path.exists(path):
+                continue
+            for r in csv.DictReader(io.open(path, encoding="utf-8",
+                                            errors="replace", newline="")):
+                if r.get("bbox"):
+                    by_group[group_of.get(r["cluster"], r["cluster"])].append(r)
+        ranked, missing = [], []
+        for c in wanted:
+            g = group_of.get(c, c)
+            if by_group.get(g):
+                ranked.append((c, by_group[g]))
+            else:
+                missing.append(c)
+        if missing:
+            # A cluster id with no faces is a typo or a renumbering, and showing
+            # three rows when four were asked for is the kind of quiet shortfall
+            # that gets believed (learning 54).
+            print("STOPPING: no faces found for {}".format(", ".join(missing)))
+            print("  Asked for {} clusters, found {}. Check the ids against")
+            print("  FACE-CLUSTERS.csv rather than accepting a short page."
+                  .format(len(wanted), len(ranked)))
+            return 1
+        print("showing {} named clusters explicitly: {}".format(
+            len(ranked), ", ".join(wanted)))
+    else:
+        # ranked by PHOTOGRAPHS covered, not faces found: a cluster of 900 faces
+        # from one afternoon deserves less attention than 400 across fifteen years
+        ranked = sorted(clusters.items(),
+                        key=lambda kv: -len({r["hash"] for r in kv[1]}))[:a.top]
     out = [HEAD]
     total = 0
     for cid, faces in ranked:
