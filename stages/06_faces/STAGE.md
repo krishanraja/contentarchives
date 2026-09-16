@@ -44,3 +44,4 @@ people, and keep the cluster ids Krish's answers point at stable for ever.
 | 41 | an unreadable frame is recorded as -2, not "no faces" | `code:engine/faces_embed.py:face_index -2`, `test:tests/test_video_faces.py:counts 2 to look at, 1 done, 1 unreadable` |
 | 45 | frozen centroids are re-derived before assigning to them | `code:tools/assign_video_faces.py:check_alignment`, `test:tests/test_video_faces.py:a cache drifted by one row is refused` |
 | 47 | completion is asked of the disk and the store, with --dry-run | `test:tests/test_video_faces.py:--dry-run exits 0 without loading a model`, `code:scripts/chains/chain_video_faces.ps1:--outstanding` |
+| 51 | a frame that will not decode is marked and counted, so the pass doubles as a decode census of every video | `code:engine/video_face_frames.py:def marker`, `test:tests/test_video_faces.py:--outstanding counts outstanding/present/failed` |

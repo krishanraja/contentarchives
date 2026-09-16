@@ -134,6 +134,7 @@ def main():
         os.path.join("stages", d, "STAGE.md") for d in os.listdir(os.path.join(ROOT, "stages"))
         if os.path.isdir(os.path.join(ROOT, "stages", d))) + [os.path.join("guards", "STAGE.md")]
     problems, owners, test_owners, all_owned, prose = [], {}, set(), {}, {}
+    enforced_refs = {}                  # learning -> [refs from each stage that cites code/tests]
     for sf in stage_files:
         full = os.path.join(ROOT, sf)
         if not os.path.isfile(full):
@@ -147,6 +148,8 @@ def main():
         test_owners.update(t.replace("\\", "/") for t in tests)
         for n, refs in owned.items():
             all_owned.setdefault(n, []).append(name)
+            if refs:
+                enforced_refs.setdefault(n, []).append(refs)
         for n in pr:
             prose.setdefault(n, []).append(name)
 
@@ -175,7 +178,13 @@ def main():
                 if rel not in test_owners:
                     problems.append("every test belongs to a stage: {} belongs to none".format(rel))
 
-    enforced = [n for n in learnings if n in all_owned and n not in prose]
+    # Debt is a learning NO stage enforces. One stage may enforce it in code
+    # while another records it as prose-only work still to do - as 02 ingest does
+    # for learning 51, which 06 faces enforces - and that is not debt, it is a
+    # stage being honest about what it has not built yet.
+    enforced = [n for n in learnings
+                if any(refs for stage_refs in enforced_refs.get(n, []) for refs in [stage_refs])]
+    prose = {n: s for n, s in prose.items() if n not in enforced}
     print("stages: {}   code files owned: {} of {}   learnings: {}".format(
         len(stage_files), sum(1 for f in repo_code if f in owners), len(repo_code), len(learnings)))
     print("learnings enforced in code or tests: {}".format(len(enforced)))

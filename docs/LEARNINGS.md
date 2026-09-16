@@ -1648,3 +1648,40 @@ evidence the author knows them, which is precisely the state in which eleven
 got broken. Knowing is not the same as having checked.
 
 `tests/test_video_faces.py` now watches each of those guards pass and fail.
+
+## 51. A content hash proves the bytes arrived, never that they are valid video
+
+Sampling frames for face detection decoded every video in the library for the
+first time, eighteen months into the consolidation. 12,724 of 12,805 videos gave
+frames. **70 gave none and 86 lost some.**
+
+The 70 break down as 65 numbered clips from one phone dump on the failing WD6400
+drive, three WhatsApp audio files filed as video and containing no picture at all,
+one Takeout mp4 and one other. ffmpeg on the 65: `Invalid NAL unit size`,
+`missing picture in access unit`. ffprobe still reports them as 1920x1080 H.264
+with audio, so nothing short of decoding could tell.
+
+**The damage predates the consolidation, and that was proven rather than assumed:**
+each library file and its staged copy from the rescue are byte-identical by
+sha256, and neither decodes. The ingest copied faithfully; the source was already
+broken. Hashing could only ever answer "did these bytes arrive intact", and the
+question that mattered was "is this a video".
+
+**The near-miss is the other half of the lesson.** 42 of those filenames have a
+differently-sized staged copy that decodes perfectly, which reads as 42 recovered
+videos. Their durations differ (98s against 25s, 58s against 13s) and their
+container clocks are two years apart: they are unrelated clips from later phone
+dumps that reuse the same numbered filenames. Restoring them would have replaced a
+broken 146 MB clip with an unrelated 34 MB one, and reported success. That is
+learning 36 - one name, different content - arriving as a rescue plan.
+
+**The rule.** For media, "copied correctly" and "playable" are different claims,
+and only one of them is what an archive is for. Decode at least one frame of every
+video before trusting an archive or destroying a source. It is cheap: this census
+fell out of a pass that was run for another reason entirely, and it is the only
+reason anybody knows.
+
+**What it cost.** 5.75 GB, 65 clips from 2022-11 and 2023-03, with no good copy
+anywhere in the rescue tree and none in the Norton recovery set. Recovering them
+now would mean re-reading the physical drive with a recovery tool, if it still
+exists.
