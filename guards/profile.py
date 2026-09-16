@@ -40,7 +40,11 @@ from __future__ import annotations
 import io
 import os
 
-DEFAULT = os.path.join(os.path.expanduser("~"), ".contentarchives", "profile.yaml")
+# Beside the library, not in the Windows profile folder: profiles/example.yaml
+# says "keep it next to the library so the next run - or the next machine -
+# inherits the same decisions", and the library's own audit directory is where
+# every other uncommitted working file for this job already lives.
+DEFAULT = r"D:\_PhotoAudit\profile.yaml"
 ENV = "CONTENTARCHIVES_PROFILE"
 
 
