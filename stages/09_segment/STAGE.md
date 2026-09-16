@@ -41,3 +41,4 @@ and non-memories moved to `_Review` - moved, never deleted.
 | 29 | a self-declaring filename outranks a recognised pattern | prose-only |
 | 30 | \b treats underscore as a letter in filename patterns | `code:guards/profile.py:def is_personal`, `test:tests/test_profile.py:a term inside an underscored filename matches` |
 | 54 | a term is dropped for being too broad only after counting what it matches | `test:tests/test_profile.py:def test_no_term_is_too_broad` |
+| 54 | every person named in the journal is protected, asserted through is_personal | `test:tests/test_profile.py:def test_every_named_person_is_protected` |

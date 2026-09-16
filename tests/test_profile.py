@@ -139,6 +139,68 @@ def test_no_term_is_too_broad():
               True)
 
 
+JOURNAL = r"D:\_enrichment\answers.csv"
+
+
+def named_people(journal=JOURNAL):
+    """Every person named in the answers journal, or None if it is not here."""
+    import csv
+    import re
+    if not os.path.isfile(journal):
+        return None
+    out = set()
+    with io.open(journal, encoding="utf-8", newline="") as fh:
+        for row in csv.DictReader(fh):
+            if row.get("field") != "person" or not row.get("value"):
+                continue
+            v = re.sub(r"\s*\(.*?\)\s*", " ", row["value"]).strip()
+            if not v or v.lower().startswith(("for ", "unsure")):
+                continue
+            out.add(v.lower())
+    return out
+
+
+def test_every_named_person_is_protected():
+    r"""A person Krish took the trouble to name must be covered by the rule.
+
+    A profile term means THIS MATTERS: never swept, never compressed, never
+    deleted, overriding every exclusion. The profile is SEEDED from these same
+    answers - so a name in the journal and not in the profile is a gap, not a
+    choice.
+
+    Owned by learning 54, not learning 1. Learning 1 is about DELETION - a path
+    is never sufficient grounds, prove the bytes exist elsewhere first - and
+    10 reclaim enforces it with safety.py's allowlist and the test that refuses
+    the file which was actually lost. Citing it here would stretch it to cover a
+    claim it does not make. What this check is really about is a measurement that
+    reported success while measuring the wrong thing, which is learning 54.
+
+    It silently held 27 of 222 for most of a day. The seeding script kept a
+    single name only if it was five or more characters, which dropped Lily
+    (1,724 photographs, named in round 4), Mak (444), JY (515), Mami, Adil,
+    Rani, Blainey and twenty more - and every per-round top-up after that
+    considered only THAT round's new names, so nobody dropped at the start was
+    ever revisited. Eight rounds of "the profile is seeded from his answers"
+    were true of the process and false of the result.
+
+    Asked through is_personal() on a real-shaped path, never by comparing names
+    to the term list, which was wrong three times in one afternoon (learning 54).
+    """
+    prof = P.load(required=False)
+    if prof is None:
+        print("  (no profile on this machine - nothing to check)")
+        return
+    people = named_people()
+    if people is None:
+        print("  (no answers journal on this machine - nothing to check)")
+        return
+    missing = sorted(n for n in people
+                     if not prof.is_personal(
+                         r"D:\ContentLibrary\Media\Personal\2024\{} at dinner.jpg".format(n)))
+    print("  {} people named in the journal".format(len(people)))
+    check("every one of them is protected", missing, [])
+
+
 def main():
     d = tempfile.mkdtemp()
     try:
@@ -189,6 +251,10 @@ def main():
     print()
     print("5. no term is too broad - MEASURED, not assumed (learning 54)")
     test_no_term_is_too_broad()
+
+    print()
+    print("6. EVERY person Krish has named is protected (learning 54)")
+    test_every_named_person_is_protected()
 
     print()
     if FAILURES:

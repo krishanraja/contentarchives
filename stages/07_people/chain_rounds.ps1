@@ -166,9 +166,20 @@ Invoke-Step -Name 'rebuild' -ExpectedUnits 82193 -CheckpointMin 3 -VerifyEvery 1
         # KILLED on a false stall at strike 4, throwing away a correct rebuild -
         # a progress signal that cannot move is worse than none, because the
         # supervisor acts on it (learnings 54, 55).
+        # TMP IF IT EXISTS, OTHERWISE THE LIVE FILE - the same fallback -Verify
+        # needed, and I fixed that one and left its twin two lines away. The tmp
+        # file VANISHES on a successful rename, so measuring only it reads zero
+        # again the moment the work succeeds: this run finished its build at
+        # 13:09:28 and the 13:09:53 checkpoint still reported `still at 0` and
+        # took a stall strike. A progress signal that reads zero on success is
+        # the same defect as one that cannot move (learnings 54, 55).
         $n = 0
-        foreach ($f in @($tmp, "$tmp-wal")) {
-            if (Test-Path $f) { $n += (Get-Item $f).Length }
+        if (Test-Path $tmp) {
+            foreach ($f in @($tmp, "$tmp-wal")) {
+                if (Test-Path $f) { $n += (Get-Item $f).Length }
+            }
+        } elseif (Test-Path $live) {
+            $n = (Get-Item $live).Length
         }
         return [double]$n
     } `
