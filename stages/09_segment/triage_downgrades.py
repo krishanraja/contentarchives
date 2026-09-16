@@ -54,6 +54,13 @@ import shutil
 import sys
 from collections import defaultdict
 
+# PRE-MIGRATION PATHS, and safe to leave that way: `Library\`, `Personal\`,
+# `Communal\` and `NoDate\` sat directly under the root when this ran, and are
+# now under `Media\` (PATH_MIGRATION in guards/paths.py). main() exits loudly on
+# a missing NEW rather than acting on nothing, so on today's layout this script
+# stops instead of doing damage - which is why it is annotated rather than
+# rewritten. A re-run against the current library should take its roots from
+# guards/paths.py (P.PENDING, P.CHRONOLOGY, P.REVIEW, P.MANIFEST) instead.
 LIBROOT = r"D:\ContentLibrary"
 NEW = os.path.join(LIBROOT, "Library")
 CHRONOLOGY = [os.path.join(LIBROOT, d) for d in ("Personal", "Communal", "NoDate")]

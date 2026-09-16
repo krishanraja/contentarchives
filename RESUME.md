@@ -92,16 +92,25 @@ the 53 learnings are enforced by a named function or test.
 
 ----
 
-## RIGHT NOW: round 12 is with Krish; nothing is running (2026-09-16, 12:50)
+## RIGHT NOW: round 13 is with Krish; nothing is running (2026-09-16, 13:12)
 
 **Nothing is running unattended. The next move is Krish's.**
 
-Round 12 of `PEOPLE.html` was published to `D:\_PhotoAudit\PEOPLE.html` and sent
-to him at 12:50 on 2026-09-16: 60 rows, 715 crops, `verify_people_sheet.py` exit
-0, and `check_repeats.py` proving **0 repeats** against all **486** rows shown in
-rounds 1-11. **Every sheet is crop-verified and repeat-checked before he sees
+Round 13 of `PEOPLE.html` was published to `D:\_PhotoAudit\PEOPLE.html` and sent
+to him at 13:12 on 2026-09-16: 60 rows, 717 crops, `verify_people_sheet.py` exit
+0, and `check_repeats.py` proving **0 repeats** against all **546** rows shown in
+rounds 1-12. **Every sheet is crop-verified and repeat-checked before he sees
 it** - he asked for that after batches he had refused came back a second time.
-Rounds 1-11 are recorded: **662 answers** in `D:\_enrichment\answers.csv`.
+Rounds 1-12 are recorded in `D:\_enrichment\answers.csv`.
+
+Rounds 12 and 13 both ran through `stages/07_people/chain_rounds.ps1`, one
+command each, and the chain's own log caught three faults in its supervision
+that are now fixed (learning 54, instances 6 and 7): `-Progress` counted
+committed rows, then counted a file that vanishes on success - it reads the tmp
+file if present and the live file otherwise, proven non-zero in both states; and
+`-Verify`'s "cannot tell yet" branch was the one firing at the end, so the check
+that gates the step passed on nothing - it now reports `OK library.db` after the
+rename, which the round 13 log shows.
 
 **The repeat guard lives in the repo now**, `stages/07_people/check_repeats.py`.
 It lived in a session scratch directory and matched `PEOPLE-round[1-6].html` -
@@ -194,15 +203,28 @@ pwsh -NoProfile -File guards\arm.ps1 -Chain chain_video_faces.ps1 -TaskName cont
 
 ### Where the naming is
 
-- **Twelve rounds offered, eleven answered** (2026-09-15 and 16). 662 answers in
-  the journal `D:\_enrichment\answers.csv`. After the last rebuild: 82,193 files
-  indexed, **24,070** photographs and videos carrying a named person, **222**
-  people, **42,693** person-on-photograph rows, **10,744** group shots with two or
-  more named people. Krish 9,199, Bharti 5,077, Bhasker 2,648, Anya 1,886.
-- **The profile holds 205 personal terms**, seeded from these answers and
+- **Thirteen rounds offered, twelve answered** (2026-09-15 and 16). 722 answers
+  in the journal `D:\_enrichment\answers.csv`. After the last rebuild: 82,193
+  files indexed, **24,171** photographs and videos carrying a named person,
+  **225** people, **43,041** person-on-photograph rows, **10,834** group shots
+  with two or more named people. Krish 9,224, Bharti 5,077, Bhasker 2,660,
+  Anya 1,886.
+- **The profile holds 232 personal terms**, seeded from these answers and
   extended after each round - every term measured against the library before it
   is added (learning 54). `D:\_PhotoAudit\profile.yaml`, never committed,
   backed up beside itself as `profile.yaml.bak-*`.
+- **27 of the 222 people Krish had named were NOT protected by it until
+  2026-09-16**, Lily among them - 1,724 photographs, named in round 4. The
+  seeding rule kept a single name only if it was five or more characters, and
+  every per-round top-up afterwards looked only at that round's new names, so
+  nobody dropped at the start was ever revisited. All 27 measured and added;
+  `tests/test_profile.py` section 6 now asserts every name in the journal is
+  protected, through `is_personal()` on a real path.
+- **The group-photograph question used to take over two minutes and now takes
+  9.4 seconds**: `photo_people` had an index on `person` and none on `hash`,
+  which is what every "how many photographs have two or more people" query
+  groups by - and what `chain_rounds.ps1`'s `-Verify` joins on at every
+  checkpoint, so the supervision was paying for it too.
 - **A kept term must appear IN a path to protect it.** `mick evans` in the
   profile does nothing for a photograph named `mick at the pub`, and `david
   storey` does nothing for `tore`. Three real people were reported "already

@@ -1,5 +1,23 @@
 r"""Split the chronology into Personal and Communal, by origin folder.
 
+SPENT. This RAN on 2026-09-06 and it is what created the Personal and Communal
+trees the library now has. Kept for the record and for the argument it makes,
+not to be re-run as it stands.
+
+Its path vocabulary is PRE-MIGRATION throughout, deliberately, because that is
+the library it acted on: `Library\` for the unassigned tree, `Personal\` and
+`Communal\` directly under the root. Those are now `Media\Pending-Segmentation`,
+`Media\Personal` and `Media\Communal` - see PATH_MIGRATION in guards/paths.py,
+which exists because this move invalidated 85 hardcoded paths.
+
+Do NOT "fix" the constants below to point at the new layout. It reads
+ORIGIN-MAP.csv and SPLIT-PROPOSAL.csv, whose rows store the OLD relative paths
+(RELATIVE_MIGRATION in guards/paths.py translates them), and it filters on
+`rel.startswith("Library")`. Repointing the destinations alone would give a
+script that reads old-format rows and writes new-format paths - coherent in
+neither layout, and it ends in shutil.move. A future split should be written
+fresh against guards/paths.py: P.PENDING, P.PERSONAL, P.COMMUNAL, P.MANIFEST.
+
     PhotoLibrary\Personal\YYYY\YYYY-MM\
     PhotoLibrary\Communal\YYYY\YYYY-MM\
     PhotoLibrary\Personal\NoDate\  and  Communal\NoDate\
