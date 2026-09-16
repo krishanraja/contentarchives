@@ -32,6 +32,7 @@ nothing can ever overwrite it.
 | `stages/07_people/people_sheet.py` | a page of faces to name, one row per person |
 | `stages/07_people/verify_people_sheet.py` | every crop belongs to the row it is shown in |
 | `stages/07_people/record_people.py` | record pasted answers into the journal, and back it up |
+| `stages/07_people/check_repeats.py` | no sheet re-shows a row already offered, compared by merge group |
 
 ## Tests
 - `tests/test_build_db.py`
@@ -42,3 +43,4 @@ nothing can ever overwrite it.
 |---|---|---|
 | 48 | the page a human looks at is verified, not only the data behind it | `code:stages/07_people/verify_people_sheet.py:data-face` |
 | 52 | a row shown and not named is recorded as declined, so no face is offered twice | `code:stages/07_people/record_people.py:shown and not named`, `test:tests/test_people_rounds.py:the BLANK row is recorded as declined` |
+| 55 | the repeat guard covers EVERY round, never a hardcoded range of them | `code:stages/07_people/check_repeats.py:NEVER a bounded range`, `test:tests/test_people_rounds.py:def test_repeat_guard` |

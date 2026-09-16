@@ -84,16 +84,24 @@ the 53 learnings are enforced by a named function or test.
 
 ----
 
-## RIGHT NOW: round 9 is with Krish; nothing is running (2026-09-16, 11:40)
+## RIGHT NOW: round 10 is with Krish; nothing is running (2026-09-16, 12:09)
 
 **Nothing is running unattended. The next move is Krish's.**
 
-Round 9 of `PEOPLE.html` was published to `D:\_PhotoAudit\PEOPLE.html` and sent to
-him at 11:40 on 2026-09-16: 60 rows, 720 crops, `verify_people_sheet.py` exit 0,
-and `check_repeats.py` proving **0 repeats** against all 186 rows shown in rounds
-1-8. **Every sheet is crop-verified and repeat-checked before he sees it** - he
-asked for that after batches he had refused came back a second time. Rounds 1-8
-are recorded: **482 answers** in `D:\_enrichment\answers.csv`.
+Round 10 of `PEOPLE.html` was published to `D:\_PhotoAudit\PEOPLE.html` and sent
+to him at 12:09 on 2026-09-16: 60 rows, 720 crops, `verify_people_sheet.py` exit
+0, and `check_repeats.py` proving **0 repeats** against all **366** rows shown in
+rounds 1-9. **Every sheet is crop-verified and repeat-checked before he sees it**
+- he asked for that after batches he had refused came back a second time.
+Rounds 1-9 are recorded: **542 answers** in `D:\_enrichment\answers.csv`.
+
+**That repeat check was under-reporting until 12:05 and the fix matters.** It
+matched `PEOPLE-round[1-6].html`, written when round 7 was next and never
+widened, so rounds 7-9 were invisible to it and its baseline sat frozen at 186
+for three runs while each sheet was called clean. Widened to `round\d+`, the real
+baseline is 366 - and rounds 7, 8, 9 and 10 all re-check genuinely clean, so
+nothing Krish refused ever came back. The verdicts were right; the test behind
+them was narrower than the claim (learning 55).
 
 When his answers arrive, run them as one chain, and stop on any non-zero exit:
 
@@ -144,7 +152,7 @@ Healthy looks like `state : Running`, a `CHECKPOINT` line every 15 minutes and a
 | frames | `stages/06_faces/video_face_frames.py`, 3 shards, one frame per 30 s into `D:\_frames` | ~32,670 frames, ~7 h (80/min measured at 14:56) |
 | faces | `stages/06_faces/faces_embed.py --frames`, ONE process, into `D:\_enrichment\faces.video.csv` | ~18 h at 0.5 img/s |
 | assign | `stages/06_faces/assign_video_faces.py --apply`, joins the FROZEN clusters | minutes |
-| rebuild | `stages/08_index/build_db.py` | ~19 min measured 2026-09-16 (82,193 files, 1,452,186 tags), not the ~8 min this said - it writes `library.db.tmp` and renames, and stays read-bound with flat writes for minutes at a time without being stuck |
+| rebuild | `stages/08_index/build_db.py` | ~19 min measured 2026-09-16 (82,193 files, 1,452,244 tags), not the ~8 min this said - it writes `library.db.tmp` and renames, and stays read-bound with flat writes for minutes at a time without being stuck. If the final swap fails on a lock, NOTHING IS LOST: the finished database is at `library.db.tmp` and `promote()` says how to put it in place (learning 55) |
 
 The last line will be `VIDEO FACES COMPLETE`.
 
@@ -159,10 +167,10 @@ pwsh -NoProfile -File guards\arm.ps1 -Chain chain_video_faces.ps1 -TaskName cont
 
 ### Where the naming is
 
-- **Nine rounds offered, eight answered** (2026-09-15 and 16). 482 answers in the
+- **Ten rounds offered, nine answered** (2026-09-15 and 16). 542 answers in the
   journal `D:\_enrichment\answers.csv`. After the last rebuild: 82,193 files
-  indexed, **23,549** photographs and videos carrying a named person, **183**
-  people, **41,101** person-on-photograph rows, **10,344** group shots with two or
+  indexed, **23,799** photographs and videos carrying a named person, **202**
+  people, **41,830** person-on-photograph rows, **10,553** group shots with two or
   more named people. Krish tops the list at 9,088, then Bharti 5,032.
 - **A photograph can carry many people** - `photo_people` holds one row per
   person per file (learning 49). The earlier `resolved` table had a `(hash, field)`
@@ -226,7 +234,7 @@ differently-named people at threshold 0.68.
 
 ### Next, in order
 
-1. Finish naming: record Krish's round 9 answers, then keep the loop turning.
+1. Finish naming: record Krish's round 10 answers, then keep the loop turning.
 2. Build the game (roadmap Phase 8), starting with Bharti's queue.
 3. Segment (Phase 4), reclaim (5), mirror to H: with server-side checksums (6),
    and only then purge Elements (7).

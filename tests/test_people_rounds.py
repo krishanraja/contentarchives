@@ -75,6 +75,73 @@ def answers_of(store):
     return list(csv.DictReader(io.open(p, encoding="utf-8", newline="")))
 
 
+def sheet_of(path, cids):
+    """A naming sheet showing exactly these cluster rows."""
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    io.open(path, "w", encoding="utf-8").write(
+        "".join('<div class="row" data-cid="{}" data-photos="5"></div>'.format(c)
+                for c in cids))
+    return path
+
+
+def test_repeat_guard(d):
+    r"""No sheet re-shows a row already offered - over EVERY round.
+
+    check_repeats.py matched `PEOPLE-round[1-6].html` until 2026-09-16. It was
+    written when round 7 was the next sheet and never widened, so rounds 7, 8
+    and 9 were invisible to it: its baseline sat frozen at 186 rows for three
+    consecutive runs while each new sheet was reported clean. Rounds 7-10 were
+    genuinely clean, so the verdicts held - by luck, not by test (learning 55).
+
+    So the regression check that matters is the one on round SEVEN, and the
+    guard has to be watched catching a repeat as well as passing a clean sheet:
+    a guard nobody has seen fail is indistinguishable from one that cannot fail
+    (learning 44).
+    """
+    import check_repeats as C
+
+    os.makedirs(d, exist_ok=True)
+    sheet_of(os.path.join(d, "PEOPLE-round1.html"), ["c1", "c2"])
+    sheet_of(os.path.join(d, "PEOPLE-round7.html"), ["c7", "c8"])
+    # Fixtures that live beside real sheets must not join the baseline.
+    sheet_of(os.path.join(d, "PEOPLE-tampered.html"), ["c99"])
+
+    clean = sheet_of(os.path.join(d, "PEOPLE-round8.html"), ["c20", "c21"])
+    dup, rows, seen, sources = C.repeats(d, clean)
+    check("a sheet of new rows is clean", dup, [])
+    check("it read both earlier rounds", sorted(sources),
+          ["PEOPLE-round1.html", "PEOPLE-round7.html"])
+    check("the fixture is not in the baseline", "c99" in seen, False)
+    check("main() exits 0 on a clean sheet", C.main([d, clean]), 0)
+
+    # A row from round 1 coming back: the original defect.
+    again = sheet_of(os.path.join(d, "PEOPLE-round9.html"), ["c1", "c30"])
+    dup, rows, seen, sources = C.repeats(d, again)
+    check("a repeat from round 1 is CAUGHT", dup, ["c1"])
+    check("main() exits 1 on a repeat", C.main([d, again]), 1)
+
+    # THE REGRESSION: a row from round 7, which the old [1-6] pattern missed.
+    seven = sheet_of(os.path.join(d, "PEOPLE-round10.html"), ["c7", "c31"])
+    dup, rows, seen, sources = C.repeats(d, seven)
+    check("a repeat from round SEVEN is caught (the [1-6] scar)", dup, ["c7"])
+
+    # A merged cluster: same person, new id, still a repeat.
+    merges = os.path.join(d, "CLUSTER-MERGES.csv")
+    with io.open(merges, "w", encoding="utf-8", newline="") as f:
+        w = csv.writer(f)
+        w.writerow(["cluster", "group"])
+        w.writerow(["c1", "g1"])
+        w.writerow(["c500", "g1"])
+    merged = sheet_of(os.path.join(d, "PEOPLE-round11.html"), ["c500"])
+    dup, rows, seen, sources = C.repeats(d, merged, merges=merges)
+    check("the same person under a new cluster id is still a repeat", dup, ["g1"])
+
+    # The sheet under test never counts as its own history.
+    solo = sheet_of(os.path.join(d, "PEOPLE-round12.html"), ["c77"])
+    dup, rows, seen, sources = C.repeats(d, solo)
+    check("a sheet is not its own baseline", "c77" in seen, False)
+
+
 def main():
     d = tempfile.mkdtemp()
     try:
@@ -139,6 +206,10 @@ def main():
                         "--apply")
         check("it stops", code, 1)
         check("and says why", "no sheet at" in out, True)
+
+        print()
+        print("6. the repeat guard covers every round, and is seen FAILING")
+        test_repeat_guard(os.path.join(d, "sheets"))
     finally:
         shutil.rmtree(d, ignore_errors=True)
 
