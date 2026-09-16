@@ -83,7 +83,8 @@ def main() -> None:
     print(f"  journalled moves  : {len(came_from):,}")
 
     # walk _Review, hash-match against the keep set
-    sys.path.insert(0, r"C:\Users\user\dev\contentarchives\engine")
+    sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+import stagepath  # noqa: E402,F401  - every stage on sys.path, wherever it lives
     from store import content_hash                               # noqa: E402
 
     plan, no_origin, not_keep = [], 0, 0

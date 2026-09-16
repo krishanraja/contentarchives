@@ -2,12 +2,14 @@
 import os, re, csv, subprocess, json
 from collections import defaultdict
 
+import os as _os, sys as _sys
+_sys.path.insert(0, _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__))))
+import stagepath  # noqa: E402,F401
+import paths as P  # noqa: E402
 LIB = "D:/PhotoLibrary"
 BS = chr(92)
 THRESH = 200 * 1024 * 1024
-FFPROBE = (r"C:\Users\user\AppData\Local\Microsoft\WinGet\Packages"
-           r"\Gyan.FFmpeg_Microsoft.Winget.Source_8wekyb3d8bbwe"
-           r"\ffmpeg-8.1.1-full_build\bin\ffprobe.exe")
+FFPROBE = P.ffprobe(required=False)
 
 # Device signatures - filename or path gives it away
 DEVICE = [

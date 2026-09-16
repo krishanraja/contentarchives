@@ -6,11 +6,15 @@ Safe to kill and relaunch - autopilot itself is fully checkpointed.
 """
 import os, re, sys, csv, time, subprocess
 
+import os as _os, sys as _sys
+_sys.path.insert(0, _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__))))
+import stagepath  # noqa: E402,F401
+import paths as P  # noqa: E402
 SCRIPTS = os.path.dirname(os.path.abspath(__file__))
 AP      = os.path.join(SCRIPTS, "autopilot.py")
 STATE   = "D:/_PhotoAudit/autopilot-state.csv"
 RESCUE  = "D:/_PhotoAudit/e-rescue.csv"
-WATCH   = ["C:/Users/user/Downloads", "D:/", "C:/GoogleTakeout", "D:/Takeout"]
+WATCH = list(P.SOURCES)
 ARC_RX  = re.compile(r"^takeout[-_].*\.(tgz|tar\.gz|zip)$", re.I)
 MAXRUN  = 8 * 3600
 PAUSE   = 240

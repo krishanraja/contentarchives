@@ -45,9 +45,11 @@ import re
 import subprocess
 import sys
 
-FFPROBE = (r"C:\Users\user\AppData\Local\Microsoft\WinGet\Packages"
-           r"\Gyan.FFmpeg_Microsoft.Winget.Source_8wekyb3d8bbwe"
-           r"\ffmpeg-8.1.1-full_build\bin\ffprobe.exe")
+import os as _os, sys as _sys
+_sys.path.insert(0, _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__))))
+import stagepath  # noqa: E402,F401
+import paths as P  # noqa: E402
+FFPROBE = P.ffprobe(required=False)
 OUT = r"D:\_PhotoAudit\VIDEO-VARIANTS.csv"
 
 VIDEO = {".mp4", ".mov", ".avi", ".mkv", ".m4v", ".mts", ".m2ts", ".mod", ".webm"}

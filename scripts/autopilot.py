@@ -21,6 +21,10 @@ HARD RULES
 import csv, os, re, sys, json, time, shutil, hashlib, tarfile, zipfile, datetime, struct, contextlib, subprocess
 from collections import defaultdict
 
+import os as _os, sys as _sys
+_sys.path.insert(0, _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__))))
+import stagepath  # noqa: E402,F401
+import paths as P  # noqa: E402
 AUDIT   = r"D:\_PhotoAudit"
 LIB     = r"D:\ContentLibrary\Media\Pending-Segmentation"
 NODATE  = r"D:\ContentLibrary\Media\NoDate"
@@ -31,7 +35,7 @@ LOGF    = os.path.join(AUDIT, "autopilot.log")
 DUPLOG  = os.path.join(AUDIT, "autopilot-duplicates.csv")
 TMPDIR  = r"D:\_takeout_tmp"
 
-ARCHIVE_DIRS = [r"C:\Users\user\Downloads", "D:\\", r"C:\GoogleTakeout", r"D:\Takeout"]
+ARCHIVE_DIRS = list(P.SOURCES)
 ARCHIVE_RX   = re.compile(r"^takeout[-_].*\.(tgz|tar\.gz|zip)$", re.I)
 MIN_D_GB, MIN_C_GB = 25.0, 20.0
 BUDGET = float(os.environ.get("AUTOPILOT_BUDGET", "3000"))
@@ -384,9 +388,7 @@ def exif_ym(path):
 VIDEO_EXT = ('.mp4', '.mov', '.avi', '.mkv', '.m4v', '.3gp', '.webm', '.wmv',
              '.mpg', '.mpeg', '.mts', '.m2ts')
 BOGUS_DATES = ('1970-01-01', '1904-01-01', '2000-01-01', '1601-01-01')
-FFPROBE = (r"C:\Users\user\AppData\Local\Microsoft\WinGet\Packages"
-           r"\Gyan.FFmpeg_Microsoft.Winget.Source_8wekyb3d8bbwe"
-           r"\ffmpeg-8.1.1-full_build\bin\ffprobe.exe")
+FFPROBE = P.ffprobe(required=False)
 
 
 def container_ym(path):

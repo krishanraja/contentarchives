@@ -78,6 +78,14 @@ WATCH_DIRS = list(SOURCES)
 # Folders that are this project's own bookkeeping, never ingested as media.
 SKIP_FOLDERS = {"_audit-trail", "in", "out"}
 
+# Google Drive for Desktop's own state, under the CURRENT user. Its `operations`
+# table is the only honest answer to "has this really uploaded?" - the mount
+# itself serves the local cache and will happily verify bytes against themselves
+# (learning 25).
+DRIVEFS = os.path.join(os.environ.get("LOCALAPPDATA")
+                       or os.path.join(os.path.expanduser("~"), "AppData", "Local"),
+                       "Google", "DriveFS")
+
 
 def _resolve(binary: str, required: bool = True) -> str | None:
     """Find an external tool. Raise when it is missing; never return "".

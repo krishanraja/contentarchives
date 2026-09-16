@@ -37,11 +37,15 @@ import sqlite3
 import sys
 import tempfile
 
+import os as _os, sys as _sys
+_sys.path.insert(0, _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__))))
+import stagepath  # noqa: E402,F401
+import paths as P  # noqa: E402
 MANIFEST = r"D:\_PhotoAudit\tier2-audio.json"
 DEST_ROOT = r"H:\My Drive\Music"
 LOG = r"D:\_PhotoAudit\audio-move.csv"
 JOURNAL = r"D:\_PhotoAudit\user-directed-deletions.csv"
-DRIVEFS = r"C:\Users\user\AppData\Local\Google\DriveFS"
+DRIVEFS = P.DRIVEFS
 
 
 def _accounts():

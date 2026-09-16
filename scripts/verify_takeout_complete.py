@@ -34,12 +34,16 @@ import os
 import sys
 from collections import Counter
 
+import os as _os, sys as _sys
+_sys.path.insert(0, _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__))))
+import stagepath  # noqa: E402,F401
+import paths as P  # noqa: E402
 AUDIT = r"D:\_PhotoAudit"
 SIZES = os.path.join(AUDIT, "arc-sizes.json")
 PROG = os.path.join(AUDIT, "arc-progress")
 STATE = os.path.join(AUDIT, "autopilot-state.csv")
 STEM = "takeout-20260907T082613Z-1-{:03d}.zip"
-SEARCH = [r"C:\Users\user\Downloads", "D:\\", r"D:\Takeout", r"C:\GoogleTakeout"]
+SEARCH = list(P.SOURCES)
 
 
 def consumed() -> set[str]:

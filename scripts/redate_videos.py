@@ -37,13 +37,15 @@ import sys
 from collections import Counter
 from concurrent.futures import ThreadPoolExecutor
 
+import os as _os, sys as _sys
+_sys.path.insert(0, _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__))))
+import stagepath  # noqa: E402,F401
+import paths as P  # noqa: E402
 LIB = r"D:\ContentLibrary\Media\Pending-Segmentation"
 NODATE = r"D:\ContentLibrary\Media\NoDate"
 MANIFEST = r"D:\ContentLibrary\_Catalog\manifest.csv"
 JOURNAL = r"D:\_PhotoAudit\video-redate.csv"
-FFPROBE = (r"C:\Users\user\AppData\Local\Microsoft\WinGet\Packages"
-           r"\Gyan.FFmpeg_Microsoft.Winget.Source_8wekyb3d8bbwe"
-           r"\ffmpeg-8.1.1-full_build\bin\ffprobe.exe")
+FFPROBE = P.ffprobe(required=False)
 
 VID = (".mp4", ".mov", ".avi", ".mkv", ".m4v", ".3gp", ".webm", ".wmv",
        ".mpg", ".mpeg", ".mts", ".m2ts")

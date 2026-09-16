@@ -33,13 +33,17 @@ import sys
 import time
 import zipfile
 
+import os as _os, sys as _sys
+_sys.path.insert(0, _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__))))
+import stagepath  # noqa: E402,F401
+import paths as P  # noqa: E402
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import autopilot as ap                                          # noqa: E402
 
 AUDIT = r"D:\_PhotoAudit"
 PROG = os.path.join(AUDIT, "arc-progress")
 CACHE = os.path.join(AUDIT, "arc-sizes.json")
-WATCH = [r"C:\Users\user\Downloads", "D:\\", r"C:\GoogleTakeout", r"D:\Takeout"]
+WATCH = list(P.SOURCES)
 
 
 def hms(seconds: float) -> str:

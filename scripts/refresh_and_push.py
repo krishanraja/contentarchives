@@ -20,7 +20,11 @@ import subprocess
 import sys
 from pathlib import Path
 
-REPO = Path(r"C:\Users\user\dev\contentarchives")
+import os as _os, sys as _sys
+_sys.path.insert(0, _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__))))
+import stagepath  # noqa: E402,F401
+import paths as P  # noqa: E402
+REPO = Path(P.REPO)
 PY = sys.executable
 
 
