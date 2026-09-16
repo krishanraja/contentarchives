@@ -19,6 +19,7 @@ every opinion kept and human answers always winning.
 | file | role |
 |---|---|
 | `stages/08_index/build_db.py` | build library.db from every source of truth |
+| `stages/08_index/sample_rebuild.py` | record what the index files do through a rebuild, so a progress signal is chosen from a trace rather than guessed |
 | `stages/08_index/master_sheet.py` | one row per file, everything known about it |
 
 ## Tests

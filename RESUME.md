@@ -110,16 +110,16 @@ the 53 learnings are enforced by a named function or test.
 
 ----
 
-## RIGHT NOW: round 15 is with Krish; nothing is running (2026-09-17, 18:05)
+## RIGHT NOW: round 16 is with Krish; nothing is running (2026-09-17, 18:26)
 
 **Nothing is running unattended. The next move is Krish's.**
 
-Round 15 of `PEOPLE.html` was published to `D:\_PhotoAudit\PEOPLE.html` and sent
-to him at 18:00 on 2026-09-17: 60 rows, 636 crops, `verify_people_sheet.py` exit
-0, and `check_repeats.py` proving **0 repeats** against all **666** rows shown in
-rounds 1-14. **Every sheet is crop-verified and repeat-checked before he sees
+Round 16 of `PEOPLE.html` was published to `D:\_PhotoAudit\PEOPLE.html` and sent
+to him at 18:26 on 2026-09-17: 60 rows, 598 crops, `verify_people_sheet.py` exit
+0, and `check_repeats.py` proving **0 repeats** against all **726** rows shown in
+rounds 1-15. **Every sheet is crop-verified and repeat-checked before he sees
 it** - he asked for that after batches he had refused came back a second time.
-Rounds 1-14 are recorded in `D:\_enrichment\answers.csv`.
+Rounds 1-15 are recorded in `D:\_enrichment\answers.csv`.
 
 ### NO COMMUNAL FACES IN KRISH'S SHEETS (decided 2026-09-17)
 
@@ -146,12 +146,30 @@ functions in `people_sheet.py` so `tests/test_people_rounds.py` section 7 calls
 the same code the sheet calls, and is watched EXCLUDING a Communal cluster
 rather than only passing.
 
-**Both supervision fixes are confirmed on live data** (round 13's run, the first
-with them in from the start): `-Progress` went 766,259,200 -> 766,443,520 with a
-real checkpoint - `184,320 done in 3 min` - where the previous two runs opened at
-`baseline 0` and reported `still at 0` while accruing stall strikes; and the
-final `-Verify` read `OK library.db` rather than taking its "cannot tell yet"
-escape. `-ExpectedUnits` is gone with them: it was 82,193, the FILE count, from
+**`-Verify` is fixed and confirmed. `-Progress` IS STILL WRONG - I claimed it
+fixed here two rounds ago and that claim was premature.**
+
+`-Verify` genuinely works: it reads `OK library.db` after the rename rather than
+taking its "cannot tell yet" escape, which is the branch that used to make the
+one check gating the whole step pass on nothing.
+
+`-Progress` has now been wrong twice. Version one counted committed rows, saw
+nothing (build_db inserts in one long transaction) and reported `still at 0`.
+Version two sums the bytes of `library.db.tmp` and its `-wal`, falling back to
+the live file - and round 16's run opened at baseline 766,623,744 then read
+`still at 692,263,728` at checkpoint 1, LOWER than where it started, so it took
+a stall strike. `Invoke-Step` treats any non-increase as a stall and four
+strikes kills the work: on a slower rebuild this would destroy a correct index.
+
+**Do not guess a third time.** `stages/08_index/sample_rebuild.py` records
+library.db, library.db.tmp and the -wal every few seconds through a rebuild and
+reports whether each candidate signal ever falls. Run it alongside the next
+round's rebuild and choose the signal from the trace. It lives in the repo
+rather than a scratchpad on purpose: `check_repeats.py` spent three rounds in a
+session temp directory carrying a stale pattern, and an instrument you depend on
+is the last thing that should be unversioned.
+
+`-ExpectedUnits` is gone, which was right: it was 82,193, the FILE count, from
 when progress was measured in rows, so the runner printed "RECALIBRATE: already
 184,320 against an expected 82,193" - bytes against files. Harmless, since
 divergence is reported and never enforced, but a number that means nothing is
@@ -257,18 +275,18 @@ pwsh -NoProfile -File guards\arm.ps1 -Chain chain_video_faces.ps1 -TaskName cont
 
 ### Where the naming is
 
-- **Fifteen rounds offered, fourteen answered** (2026-09-15 to 17). 842 answers
+- **Sixteen rounds offered, fifteen answered** (2026-09-15 to 17). 902 answers
   in the journal `D:\_enrichment\answers.csv`. After the last rebuild: 82,193
-  files indexed, **24,327** photographs and videos carrying a named person,
-  **238** people, **43,576** person-on-photograph rows. Krish 9,245,
-  Bharti 5,087, Bhasker 2,672, Anya 1,897, Lily 1,737.
+  files indexed, **24,419** photographs and videos carrying a named person,
+  **245** people, **43,924** person-on-photograph rows. Krish 9,306,
+  Bharti 5,098, Bhasker 2,672, Anya 1,897, Lily 1,747.
 - **The photographs each round unlocks is FALLING, and that is expected**: 1,058
   at round 9, then 833, 764, 720, 666. `people_sheet.py --top 60` takes the
   largest unnamed clusters first, so what remains is progressively smaller
   groups. Krish was asked on 2026-09-17 whether to switch to a different cut -
   a size floor, or the clusters that would unlock the most Communal photographs
   for Bharti - and has not answered yet. Do not change the cut without him.
-- **The profile holds 245 personal terms**, seeded from these answers and
+- **The profile holds 252 personal terms**, seeded from these answers and
   extended after each round - every term measured against the library before it
   is added, and every added term then asserted through `is_personal()` on a real
   path rather than inferred from the write succeeding (learning 54).
