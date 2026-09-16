@@ -52,7 +52,10 @@ import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)),
                                 "..", "stages", "05_enrich"))
-sys.path.insert(0, r"D:\_PhotoAudit\scripts")
+# The second insert here was `r"D:\_PhotoAudit\scripts"`, and batch_classify is
+# in the repo - the line above finds it. What the machine directory DID supply
+# was a paths.py from 2026-09-08, which shadowed guards/paths.py for the rest of
+# the process and made eleven other scripts fail on constants that exist.
 from batch_classify import assets_for                            # noqa: E402
 
 AUDIT = r"D:\_PhotoAudit"

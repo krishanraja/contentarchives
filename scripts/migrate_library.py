@@ -42,8 +42,17 @@ while _d != _os.path.dirname(_d) and not _os.path.exists(_os.path.join(_d, 'stag
     _d = _os.path.dirname(_d)
 _sys.path.insert(0, _d)
 import stagepath  # noqa: E402,F401  - every stage on sys.path, wherever this file lives
-sys.path.insert(0, r"D:\_PhotoAudit\scripts")
 import paths as P                                                # noqa: E402
+
+# The line removed here was `sys.path.insert(0, r"D:\_PhotoAudit\scripts")`,
+# directly above this import, and it was pure damage. The walk-up two lines up
+# already puts guards/ on sys.path, so `import paths as P` resolves to the repo's
+# copy without it - while the machine directory holds a paths.py from 2026-09-08
+# that stops at TMPDIR: no REPO, H_STAGE, H_ROOT, SCRATCH_DIRS, SOURCES, DRIVEFS,
+# GDRIVE, ffprobe, ffmpeg. Importing this module bound sys.modules["paths"] to
+# that relic for the whole process, and ELEVEN unrelated scripts then raised
+# AttributeError for constants that exist. Nothing caught it: every one of them
+# imports fine on its own (learning 54).
 
 CHUNK = 8 * 1024 * 1024
 HASHES = os.path.join(P.AUDIT, "lib-hashes.csv")

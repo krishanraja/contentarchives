@@ -76,11 +76,11 @@ UNGUARDED = {
     "stages/10_reclaim/audit_deletions.py",
     "scripts/big_files.py",
     "stages/10_reclaim/check_scratch_safe.py",
-    "scripts/check_tiny.py",
-    "scripts/diagnose_new.py",
-    "scripts/driver.py",
+    "stages/02_ingest/check_tiny.py",
+    "stages/02_ingest/diagnose_new.py",
+    "stages/02_ingest/driver.py",
     "stages/10_reclaim/full_deletion_audit.py",
-    "scripts/verify_dupes.py",
+    "stages/02_ingest/verify_dupes.py",
     "stages/01_sources/watch_d_downloads.py",
     "stages/01_sources/whatsapp_breakdown.py",
     "stages/05_enrich/consensus.py",
@@ -313,6 +313,39 @@ def main():
                 dangling.append("{}:{} launches {} which exists NOWHERE".format(
                     rel, line, target))
     check("no launch points at a script that has moved", dangling, [])
+
+    print()
+    print("6. nothing puts the MACHINE's script directory on sys.path")
+    # THE MOST EXPENSIVE FAULT OF THE DAY, and invisible to every other check.
+    # scripts/migrate_library.py and tools/audit_split.py each did
+    #     sys.path.insert(0, r"D:\_PhotoAudit\scripts")
+    # and that directory holds a paths.py from 2026-09-08 which stops at TMPDIR:
+    # no REPO, H_STAGE, H_ROOT, SCRATCH_DIRS, SOURCES, DRIVEFS, GDRIVE, ffprobe.
+    # Whichever of the two imported first bound sys.modules["paths"] to that
+    # relic, and every later `import paths as P` IN THE SAME PROCESS silently got
+    # it - so eleven unrelated scripts raised AttributeError for constants that
+    # exist. The repo has held the single runnable copy since 2026-09-16; reaching
+    # into D:\_PhotoAudit\scripts is the two-codebases problem the publisher
+    # retirement existed to end.
+    # Line by line, and COMMENTS DO NOT COUNT. The first version matched the
+    # whole file, so it flagged migrate_library.py for the comment explaining the
+    # line that had just been removed - which quotes it verbatim, deliberately,
+    # for the next reader. A check satisfied by rewording a comment is measuring
+    # text rather than behaviour, which is the same fault it exists to catch.
+    shadowing = []
+    for rel, full in modules():
+        for i, line in enumerate(
+                io.open(full, encoding="utf-8", errors="replace").read().splitlines(), 1):
+            if line.lstrip().startswith("#"):
+                continue
+            code_part = line.split("#", 1)[0]
+            if not re.search(r"sys\.path\.(?:insert|append)\(", code_part):
+                continue
+            if "_PhotoAudit" in code_part or re.search(r"\bP\.SCRIPTS\b", code_part):
+                shadowing.append(
+                    "{}:{} puts a machine directory on sys.path - it shadows "
+                    "guards/paths.py with an older copy".format(rel, i))
+    check("no module inserts D:\\_PhotoAudit on sys.path", shadowing, [])
 
     print()
     print("summary: {} libraries, {} guarded, {} unguarded".format(
