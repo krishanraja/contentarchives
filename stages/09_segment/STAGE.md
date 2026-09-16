@@ -14,6 +14,15 @@ and non-memories moved to `_Review` - moved, never deleted.
 - a split is decided per origin folder, reviewed, then applied
 - `_Review` is emptied by Krish, never by a rule
 - a file's own name outranks a pattern recognised in it
+- **"for Bharti" on a cluster means its photographs belong in Communal. A
+  photograph that merely CONTAINS Bharti does not.** Krish, 2026-09-17: *"all
+  'for Bharti' photos definitely belong in Communal, but all photos of Bharti do
+  not necessarily belong in Communal"*. She is his mother and appears in 5,087
+  of his own photographs, so `person = Bharti` is not a Communal signal - using
+  it as one would move a large slice of the Personal chronology to the wrong
+  side. The Communal signal is the ANSWER he gave about a cluster
+  (`needs_identifying = Bharti`, recorded from "for Bharti"), not the person
+  detected in the frame.
 
 ## Code
 | file | role |

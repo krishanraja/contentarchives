@@ -202,6 +202,15 @@ What it needs to become a daily habit:
   uploaded is a working set of thumbnails for the questions being asked, never the
   whole ~4.8 GB, and because these are family photographs the page needs access
   control rather than an unguessable URL.
+- **"for Bharti" means Communal. "A photograph of Bharti" does not.** Krish,
+  2026-09-17: *"all 'for Bharti' photos definitely belong in Communal, but all
+  photos of Bharti do not necessarily belong in Communal."* The Communal signal
+  is `needs_identifying = Bharti` - the answer he gave ABOUT a cluster - never
+  `person = Bharti`, the person a detector found in the frame. She is his mother
+  and appears in 5,087 of his own photographs, so building the split on the
+  second would move a large slice of the Personal chronology to the wrong side.
+  It is the obvious heuristic and it is wrong; see `stages/09_segment/STAGE.md`,
+  where it is an invariant.
 - **Bharti plays only the Communal side.** Her queue is questions whose evidence is
   Communal photographs. A cluster answer still labels the person everywhere they
   appear; the rule decides what she is *shown*, not how far her answer reaches.
