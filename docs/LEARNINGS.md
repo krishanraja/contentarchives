@@ -1685,3 +1685,64 @@ reason anybody knows.
 anywhere in the rescue tree and none in the Norton recovery set. Recovering them
 now would mean re-reading the physical drive with a recovery tool, if it still
 exists.
+## 52. A refusal that is not written down is a question you will ask again
+
+Krish, 2026-09-16: "Stop resending me batches I have refused to identify - they
+are unidentifiable." He was right, and it was structural rather than careless.
+
+`people_sheet.py` hides a row when the answers journal holds something about it.
+`record_people.py` recorded names, questions and verdicts - and dropped
+`c123 = -`, the sheet's own skip button, on the floor. A row left blank never
+reached the journal at all. So a refusal and a question never asked were the
+same thing to the generator, and every new sheet re-offered faces he had already
+passed over. Measured when he complained: **186 rows shown across four sheets,
+60 never answered**, some of them three times.
+
+The fix is not a filter, it is recording the answer that was actually given.
+`record_people.py --sheet <the page these answers came from>` writes
+`unidentifiable = declined` for every row on that page the paste does not name,
+and the dash is recorded rather than discarded. 105 refusals went into the
+journal the first time it ran, and the next sheet repeated none of them - checked
+against the sheets themselves rather than inferred from the journal it was
+supposed to have been written into.
+
+**The rule.** When a person is asked a question, every outcome is data: the
+answer, the deferral, AND the refusal. Record all three, or the cheapest
+possible interaction - "not this one" - is the one your system forgets, and you
+will spend the user's attention on it again. Ask of any human-in-the-loop step:
+*what does silence mean here, and where is it stored?*
+
+**The tell.** A queue that keeps presenting the same items to a person who has
+already dealt with them. It reads as a ranking bug and is usually an absence of
+a write.
+
+## 53. A wrapper that will not parse skips every step it was supposed to run
+
+The pipeline that was to record those 105 refusals died before step one, because
+a `python -u - << 'PY'` heredoc - bash syntax - sat inside a PowerShell script.
+PowerShell rejects an unparseable file whole, so nothing ran: no answers
+recorded, no merge, no rebuild. The log was empty and the only evidence was a
+`ParserError` in a stderr file nobody was watching, which read as "the job is
+still going" for several minutes.
+
+That is learning 44 (a guard that did not load is indistinguishable from a guard
+that passed) in the launcher rather than the guard: an orchestrator that fails to
+parse is indistinguishable from one that ran and found nothing to do.
+
+**The rule.** Parse a script before launching it, and fail loudly on the parse
+rather than on the silence afterwards:
+
+```powershell
+$e = $null
+[System.Management.Automation.Language.Parser]::ParseFile($p, [ref]$null, [ref]$e)
+if ($e) { throw "$p has $($e.Count) parse error(s)" }
+```
+
+`guards/arm.ps1` now does this before registering a chain as a scheduled task,
+so a chain that cannot run is refused at arming time - when somebody is watching
+- instead of at 2am, when nobody is.
+
+**The tell.** Generated shell scripts. Every heredoc, quote and `$` in them is
+written by something that is not the shell that will run it, and this is the
+second time in one day that a shell-quoting mistake cost a cycle here: a
+PowerShell `-replace` also wrote a literal `$2` into ten files.

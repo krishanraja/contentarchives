@@ -72,6 +72,10 @@ def main() -> int:
     ap.add_argument("--file", default="")
     ap.add_argument("--store", default=r"D:\_enrichment")
     ap.add_argument("--tags", default=TAGS)
+    ap.add_argument("--sheet", default="",
+                    help="the PEOPLE.html these answers came from. Every row on it "
+                         "that is not named here is recorded as declined, so it is "
+                         "never shown again")
     ap.add_argument("--apply", action="store_true")
     a = ap.parse_args()
 
@@ -85,7 +89,7 @@ def main() -> int:
     known = known_clusters(a.tags)
     print("clusters in the store: {:,}".format(len(known)))
 
-    pairs, bad, unknown, unreadable = [], [], [], []
+    pairs, bad, unknown, unreadable, declined = [], [], [], [], []
     for ln in raw.splitlines():
         if not ln.strip():
             continue
@@ -94,7 +98,12 @@ def main() -> int:
             bad.append((ln.strip(), "could not read a cluster id and a name"))
             continue
         cid, name = m.group(1), m.group(2).strip()
+        # A dash is the skip button, and it USED to be dropped here. That is why
+        # Krish was shown the same faces four rounds running: a refusal that is
+        # not written down is indistinguishable from a question never asked, and
+        # the sheet only hides what the journal knows about. It is an answer.
         if name in ("-", "--", "skip"):
+            declined.append((cid, known.get(cid, 0), "skipped on the sheet"))
             continue
 
         # A trailing " - ..." is a remark, not part of the name. Recording
@@ -145,7 +154,31 @@ def main() -> int:
         for ln, why in bad:
             print("   {:<34} {}".format(ln[:34], why))
 
-    if not (pairs or unknown or unreadable):
+    # EVERY ROW SHOWN AND NOT NAMED IS A REFUSAL, and refusals are answers.
+    #
+    # Krish, 2026-09-16: "Stop resending me batches I have refused to identify -
+    # they are unidentifiable." Measured when he said it: 186 rows had been shown
+    # across four sheets and 60 were never answered, so each new sheet re-showed
+    # faces he had already passed over - twice, in some cases. people_sheet only
+    # skips what the journal holds, and a blank row reached the journal as
+    # nothing at all.
+    if a.sheet:
+        if not os.path.exists(a.sheet):
+            print("STOPPING: no sheet at {} - without it, rows you left blank "
+                  "would be shown again".format(a.sheet))
+            return 1
+        html = io.open(a.sheet, encoding="utf-8", errors="replace").read()
+        rows_on_sheet = re.findall(r'data-cid="(c\d+)"', html)
+        if not rows_on_sheet:
+            print("STOPPING: no rows parsed out of {}".format(a.sheet))
+            return 1
+        named_here = {c for c, _, _, _ in pairs} | {c for c, _, _, _ in unknown} \
+            | {c for c, _, _, _ in unreadable} | {c for c, _, _ in declined}
+        for cid in rows_on_sheet:
+            if cid not in named_here:
+                declined.append((cid, known.get(cid, 0), "shown and not named"))
+
+    if not (pairs or unknown or unreadable or declined):
         print()
         print("nothing recordable.")
         return 1
@@ -181,6 +214,15 @@ def main() -> int:
         for cid, n, verdict, note in unreadable:
             print("   {:<8} {:>6,} faces   {}".format(cid, n, verdict))
 
+    if declined:
+        print()
+        print("{} DECLINED - shown and not named, so never shown again:".format(
+            len(declined)))
+        for cid, n, why in declined[:12]:
+            print("   {:<8} {:>6,} faces   {}".format(cid, n, why))
+        if len(declined) > 12:
+            print("   ... and {} more".format(len(declined) - 12))
+
     if not a.apply:
         print()
         print("dry run - nothing written. Re-run with --apply.")
@@ -194,9 +236,11 @@ def main() -> int:
         j.record("cluster", cid, "needs_identifying", who, note=note)
     for cid, n, verdict, note in unreadable:
         j.record("cluster", cid, "unidentifiable", verdict, note=note)
+    for cid, n, why in declined:
+        j.record("cluster", cid, "unidentifiable", "declined", note=why)
     print()
-    print("recorded {} names, {} questions, {} unidentifiable to {}".format(
-        len(pairs), len(unknown), len(unreadable), j.path))
+    print("recorded {} names, {} questions, {} unidentifiable, {} declined to {}".format(
+        len(pairs), len(unknown), len(unreadable), len(declined), j.path))
     try:
         os.makedirs(BACKUP, exist_ok=True)
         shutil.copyfile(j.path, os.path.join(BACKUP, "answers.csv"))

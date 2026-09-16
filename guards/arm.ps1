@@ -93,7 +93,28 @@ if ($Stop) {
 if (-not $Chain) { throw "give -Chain <file in scripts\chains>, or -Status / -Stop" }
 
 $script = Join-Path $PSScriptRoot $Chain
-if (-not (Test-Path $script)) { throw "no such chain: $script" }
+if (-not (Test-Path $script)) {
+    # the chain may live with the stage it drives
+    $found = Get-ChildItem (Join-Path (Split-Path -Parent $PSScriptRoot) 'stages') `
+                -Recurse -Filter $Chain -File -ErrorAction SilentlyContinue |
+             Select-Object -First 1
+    if ($found) { $script = $found.FullName } else { throw "no such chain: $Chain" }
+}
+
+# PARSE IT BEFORE REGISTERING IT (learning 53).
+#
+# On 2026-09-16 a pipeline with a bash heredoc in it died before its first step:
+# PowerShell rejects an unparseable file whole, so nothing ran, the log stayed
+# empty, and the only evidence was a ParserError in a stderr file nobody was
+# watching. A chain that cannot run must be refused while somebody is watching,
+# not at 2am.
+$perr = $null
+[void][System.Management.Automation.Language.Parser]::ParseFile($script, [ref]$null, [ref]$perr)
+if ($perr) {
+    Write-Host "REFUSING TO ARM $Chain - $($perr.Count) parse error(s):"
+    $perr | Select-Object -First 5 | ForEach-Object { Write-Host ("  " + $_.Message) }
+    throw "$Chain does not parse; fix it before arming it"
+}
 
 # A task left over from a previous arming would otherwise refuse the register -
 # and its python workers would outlive it, so reap them before starting new ones.

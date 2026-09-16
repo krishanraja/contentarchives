@@ -14,6 +14,9 @@ nothing can ever overwrite it.
 
 ## Invariants
 - only people write the journal; no machine does, ever
+- a row shown and not named is a REFUSAL and is recorded as such, so no face is
+  ever offered twice: `record_people.py --sheet` writes `unidentifiable = declined`
+  for every row on the sheet the paste does not name
 - "?" and "for <who>" are questions, "unsure, blurry" is unidentifiable: none
   is ever recorded as a person
 - a cluster id that does not exist is refused
@@ -32,8 +35,10 @@ nothing can ever overwrite it.
 
 ## Tests
 - `tests/test_build_db.py`
+- `tests/test_people_rounds.py`
 
 ## Lessons
 | # | what this stage does about it | enforced by |
 |---|---|---|
 | 48 | the page a human looks at is verified, not only the data behind it | `code:stages/07_people/verify_people_sheet.py:data-face` |
+| 52 | a row shown and not named is recorded as declined, so no face is offered twice | `code:stages/07_people/record_people.py:shown and not named`, `test:tests/test_people_rounds.py:the BLANK row is recorded as declined` |

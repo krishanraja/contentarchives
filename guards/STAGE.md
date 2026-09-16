@@ -56,3 +56,4 @@ unattended. Not a stage on the belt: the rails the belt runs on.
 | 46 | every Invoke-Step must declare a -Verify that re-derives | `test:tests/test_chain_gating.py:an Invoke-Step has no -Verify`, `test:tests/test_steps.ps1:halted on the verify` |
 | 47 | a postcondition that fails is watched failing | `test:tests/test_steps.ps1:halted on the postcondition` |
 | 50 | every learning is owned and its enforcement must exist | `test:tests/test_stage_contracts.py:every learning has an owner` |
+| 53 | a chain is parsed before it is armed, so one that cannot run is refused while somebody is watching | `code:guards/arm.ps1:ParseFile` |
