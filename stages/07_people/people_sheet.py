@@ -432,13 +432,30 @@ def main() -> int:
                                             errors="replace", newline="")):
                 if r.get("bbox"):
                     by_group[group_of.get(r["cluster"], r["cluster"])].append(r)
-        ranked, missing = [], []
+        # COLLAPSE MERGE GROUPS FIRST. Asking for c36 and c290 - which share
+        # group c290 - built two rows from the same pooled faces, and
+        # verify_people_sheet.py rightly refused the page: c36's row was showing
+        # c290 faces, because the group is the unit the crops come from. The
+        # effect was worse than a duplicate row. It asked Krish the same
+        # question twice under two different labels, and double-counted 654
+        # photographs into a "1,593 photographs" total for ten rows whose true
+        # union is far smaller. One row per GROUP, naming every cluster that
+        # contributes to it.
+        seen_groups, ranked, missing = {}, [], []
         for c in wanted:
             g = group_of.get(c, c)
-            if by_group.get(g):
-                ranked.append((c, by_group[g]))
-            else:
+            if not by_group.get(g):
                 missing.append(c)
+                continue
+            if g in seen_groups:
+                seen_groups[g].append(c)
+                continue
+            seen_groups[g] = [c]
+            ranked.append((g, by_group[g]))
+        for g, members in seen_groups.items():
+            if len(members) > 1:
+                print("  {} are one merge group ({}) - shown as a single row"
+                      .format(", ".join(members), g))
         if missing:
             # A cluster id with no faces is a typo or a renumbering, and showing
             # three rows when four were asked for is the kind of quiet shortfall
@@ -448,8 +465,14 @@ def main() -> int:
             print("  FACE-CLUSTERS.csv rather than accepting a short page."
                   .format(len(wanted), len(ranked)))
             return 1
-        print("showing {} named clusters explicitly: {}".format(
-            len(ranked), ", ".join(wanted)))
+        # The GROUPS shown, not the ids asked for. It printed len(ranked)
+        # against `wanted`, so a collapsed request read "showing 9 named
+        # clusters explicitly" followed by TEN ids - a count and a list that
+        # disagree, which a later reader has to stop and reconcile.
+        shown = ["{} (+{})".format(g, ", ".join(m[1:])) if len(m) > 1 else g
+                 for g, m in seen_groups.items()]
+        print("showing {} row(s) from {} requested cluster(s): {}".format(
+            len(ranked), len(wanted), ", ".join(shown)))
     else:
         # ranked by PHOTOGRAPHS covered, not faces found: a cluster of 900 faces
         # from one afternoon deserves less attention than 400 across fifteen years
