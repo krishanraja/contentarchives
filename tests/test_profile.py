@@ -51,6 +51,83 @@ def load_in(path):
     return r.returncode, r.stdout + r.stderr
 
 
+# A term may match at most this share of the library.
+#
+# THE FIRST VERSION OF THIS NUMBER WAS 2%, AND IT WAS WRONG IN EXACTLY THE WAY
+# learning 54 DESCRIBES. It was derived from the 33 restored terms, whose worst
+# case is 0.04%, without once measuring the terms already in the profile. Four
+# of those exceed 2% and every one of them is correct and load-bearing:
+#
+#     old photos      4,958 paths   6.03%    a real library folder name
+#     bharti          3,147 paths   3.83%    the second most photographed person
+#     bharti phone    3,126 paths   3.80%    a real library folder name
+#     krish              >2%                 the most photographed person
+#
+# A term matching a lot of the library is not evidence of anything: Krish
+# appears in 9,088 photographs because it is his library. What this check can
+# honestly catch is a CATCH-ALL - a term like "img", "photo" or "dcim" that
+# would mark nearly everything personal and make the protection meaningless.
+# So the line sits where a term stops describing a subject and starts
+# describing the medium.
+TOO_BROAD = 0.50
+
+
+def library_paths():
+    """Real library paths, or None when this machine has no index to measure."""
+    import sqlite3
+    db_path = r"D:\_PhotoAudit\library.db"
+    if not os.path.isfile(db_path):
+        return None
+    db = sqlite3.connect(db_path)
+    try:
+        return [r[0].lower() for r in db.execute("select path from files")]
+    except sqlite3.Error:
+        return None
+    finally:
+        db.close()
+
+
+def test_no_term_is_too_broad():
+    """Count every live profile term against the library. Never assume.
+
+    84 terms were once dropped from the profile because a comment said a short
+    name "would mark half the library personal". Nobody counted. The worst of
+    them matched 0.04%, and the drop had left people Krish had just named
+    outside the rule that protects his own material (learning 54).
+    """
+    prof = P.load(required=False)
+    if prof is None:
+        print("  (no profile on this machine - nothing to measure)")
+        return
+    paths = library_paths()
+    if paths is None:
+        print("  (no library index on this machine - nothing to measure against)")
+        return
+    total = len(paths)
+    print("  measuring {} terms against {:,} real library paths".format(
+        len(prof.personal_terms), total))
+    worst = []
+    for term in prof.personal_terms:
+        n = sum(1 for p in paths if term in p)
+        worst.append((n / max(total, 1), n, term))
+    worst.sort(reverse=True)
+    for share, n, term in worst[:3]:
+        print("    widest: {:<18} {:>7,} paths  {:.2f}%".format(term, n, share * 100))
+    over = [(t, n, s) for s, n, t in worst if s > TOO_BROAD]
+    check("no term is a catch-all (over {:.0%} of the library)".format(TOO_BROAD),
+          [t for t, _, _ in over], [])
+    # The widest term is reported every run, so a new catch-all is visible in the
+    # output long before it crosses the line. A threshold is not a substitute for
+    # reading what it measured.
+    print("    (widest is {:.2f}%; the line is at {:.0%})".format(
+        worst[0][0] * 100 if worst else 0.0, TOO_BROAD))
+    # And the protection actually covers the people Krish named this week.
+    for name in ("tima", "max", "olly"):
+        check("{} is protected".format(name),
+              prof.is_personal(r"D:\ContentLibrary\Media\Personal\2019\{}.jpg".format(name)),
+              True)
+
+
 def main():
     d = tempfile.mkdtemp()
     try:
@@ -97,6 +174,10 @@ def main():
     finally:
         os.environ.pop(P.ENV, None)
         shutil.rmtree(d, ignore_errors=True)
+
+    print()
+    print("5. no term is too broad - MEASURED, not assumed (learning 54)")
+    test_no_term_is_too_broad()
 
     print()
     if FAILURES:

@@ -1746,3 +1746,53 @@ so a chain that cannot run is refused at arming time - when somebody is watching
 written by something that is not the shell that will run it, and this is the
 second time in one day that a shell-quoting mistake cost a cycle here: a
 PowerShell `-replace` also wrote a literal `$2` into ten files.
+## 54. A threshold nobody measured is a guess wearing a number
+
+The profile that decides which files are personal - never swept, never
+compressed, never deleted, overriding every exclusion rule (learning 1) - was
+seeded from Krish's own 227 face answers. 84 of those names were then dropped,
+and the file said why in its own header:
+
+> guards/profile.py matches these as SUBSTRINGS, so a short common word
+> (Lee, Max, Grace) would mark half the library personal and make the
+> protection meaningless.
+
+That is a plausible sentence and it was never checked. Counting the terms
+against all 82,193 real library paths took four seconds and said the opposite:
+
+    stan        29 paths   0.04%      <-- the WORST of them
+    max          8 paths   0.01%
+    leo          6 paths   0.01%
+    tima         5 paths   0.01%
+    twelve terms 0 paths   0.00%
+
+"Half the library" was 0.04%. Worse, the drop had removed people Krish had just
+named - Tima, Max, Olly, Viv, Bec, Izzy, Dom - so the rule that protects his own
+material did not cover them, and the file explained that absence with a
+measurement that had never been taken. 33 terms were restored the same day.
+
+The 51 that stayed dropped were right to drop, for a reason the header never
+gave: a kept full name already covers them. `garrett` needs no entry of its own
+while `laura garrett` is in the list. That is a real argument; "too common" was
+not.
+
+**The rule.** A number in a comment is a claim. Count it against the real data
+before acting on it, and write the count down instead of the intuition - a
+future reader cannot tell a measured threshold from an invented one, and will
+inherit both with equal confidence.
+
+**And then it happened again, in the fix.** The test written to enforce this
+learning failed any term matching more than 2% of the library - a number taken
+from the 33 restored terms, whose worst case is 0.04%, without measuring the
+terms already in the profile. Four of those are over 2%, and all four are
+correct: `old photos` at 6.03% and `bharti phone` at 3.80% are real library
+folder names, and `bharti` and `krish` are the two most photographed people in
+a library that is theirs. The second threshold was as unmeasured as the first,
+and it took the test run to notice.
+
+The test now asserts only what the count can honestly support: that no term is a
+**catch-all** - over half the library, the signature of a term like `img`,
+`photo` or `dcim` that describes the medium rather than a subject. It prints the
+widest term every run, because a threshold is not a substitute for reading what
+it measured. Sheer breadth is not evidence: Krish appears in 9,088 photographs
+because it is his library.

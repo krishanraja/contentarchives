@@ -40,3 +40,4 @@ and non-memories moved to `_Review` - moved, never deleted.
 | 21 | a resolution is evidence only by aspect ratio | `code:scripts/classify_screenshots.py:aspect` |
 | 29 | a self-declaring filename outranks a recognised pattern | prose-only |
 | 30 | \b treats underscore as a letter in filename patterns | prose-only |
+| 54 | a term is dropped for being too broad only after counting what it matches | `test:tests/test_profile.py:def test_no_term_is_too_broad` |
