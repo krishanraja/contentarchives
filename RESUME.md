@@ -67,13 +67,17 @@ the 53 learnings are enforced by a named function or test.
 
 **Migration, not finished.** The `STAGE.md` files list code where it lives today.
 
-- **Phase 2 - DONE 2026-09-16, bar one file.** Every stage now holds the
-  machinery it claims: 01 sources 9, 02 ingest 14, 03 dating 1, 04 inventory 4,
-  05 enrich 19, 06 faces 8, 07 people 6, 08 index 2, 09 segment 9, 10 reclaim 13,
-  11 mirror 3. `scripts/` went from 54 `.py` files to **one** -
-  `refresh_and_push.py`, claimed by 12 canon, whose other three files live in
-  `tools/`. Moving it would retire `scripts/` entirely; it needs its own survey
-  first.
+- **Phase 2 - DONE 2026-09-16. `scripts/` no longer exists.** Every stage holds
+  the machinery it claims: 01 sources 9, 02 ingest 14, 03 dating 1,
+  04 inventory 4, 05 enrich 19, 06 faces 8, 07 people 6, 08 index 2,
+  09 segment 9, 10 reclaim 13, 11 mirror 3, 12 canon 1. It went from 54 `.py`
+  files to none, and `scripts/README.md` went with it - it indexed all 56 by
+  their old paths, and the twelve `STAGE.md` Code tables already own every one.
+
+  **Every chain derives the repo root** - `Split-Path -Parent (Split-Path
+  -Parent $PSScriptRoot)` - rather than hardcoding
+  `C:\Users\krish\dev\contentarchives`, which four of them did. The repo works
+  from any checkout, the same argument as `stagepath`'s walk-up.
 
   **What stays put, by a convention every move settled:** `tools/` holds a
   stage's operator-facing utilities (8 files: 04 inventory keeps four, 12 canon
