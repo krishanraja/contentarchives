@@ -33,6 +33,7 @@ nothing can ever overwrite it.
 | `stages/07_people/verify_people_sheet.py` | every crop belongs to the row it is shown in |
 | `stages/07_people/record_people.py` | record pasted answers into the journal, and back it up |
 | `stages/07_people/check_repeats.py` | no sheet re-shows a row already offered, compared by merge group |
+| `stages/07_people/profile_coverage.py` | every person named in the journal is protected by the profile; measures a term before adding it |
 | `stages/07_people/chain_rounds.ps1` | one round: record, merge, rebuild (supervised), then build and gate the next sheet |
 
 ## Tests

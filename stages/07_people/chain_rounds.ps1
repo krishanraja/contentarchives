@@ -84,6 +84,12 @@ $journal      = 'D:\_enrichment\answers.csv'
 $live         = 'D:\_PhotoAudit\library.db'
 $tmp          = "$live.tmp"
 
+# The high-water mark -Progress returns. Declared HERE because an undeclared
+# $script: variable reads as $null, `$null -gt 0` is false, so the mark would
+# never update and every checkpoint would return $null - a fifth wrong progress
+# signal, from referencing a variable I had not created.
+$script:ProgressHigh = 0
+
 Say "round $Answered -> $Next"
 
 # ---- preflight on the whole run, before anything is written ------------------
@@ -173,22 +179,32 @@ Invoke-Step -Name 'rebuild' -CheckpointMin 3 -VerifyEvery 1 -StallStrikes 4 `
         # KILLED on a false stall at strike 4, throwing away a correct rebuild -
         # a progress signal that cannot move is worse than none, because the
         # supervisor acts on it (learnings 54, 55).
-        # TMP IF IT EXISTS, OTHERWISE THE LIVE FILE - the same fallback -Verify
-        # needed, and I fixed that one and left its twin two lines away. The tmp
-        # file VANISHES on a successful rename, so measuring only it reads zero
-        # again the moment the work succeeds: this run finished its build at
-        # 13:09:28 and the 13:09:53 checkpoint still reported `still at 0` and
-        # took a stall strike. A progress signal that reads zero on success is
-        # the same defect as one that cannot move (learnings 54, 55).
+        # A RUNNING MAXIMUM, monotone by construction. Chosen from a recorded
+        # trace (stages/08_index/sample_rebuild.py) after two guesses failed and
+        # a third was about to:
+        #
+        #   v1  committed rows in library.db.tmp -> `still at 0` for four of
+        #       five checkpoints. build_db inserts in one long transaction, so a
+        #       mode=ro reader sees nothing.
+        #   v2  bytes of tmp + tmp-wal, falling back to live when tmp is absent.
+        #       The trace shows tmp and tmp-wal are ZERO for the first ~30s, so
+        #       the fallback silently switches basis mid-run: baseline
+        #       766,763,008 then 42,110,528 once tmp appears. Reads as a stall.
+        #   v3  live + tmp + tmp-wal, summed unconditionally - which I was ready
+        #       to call the honest signal. The trace says it FALLS ONCE in 40
+        #       samples: 1,455,201,864 at t=127, then 766,902,272 at t=132 when
+        #       the rename lands. One strike, at the very end of every run.
+        #
+        # Invoke-Step treats any non-increase as a stall and four strikes kills
+        # the work, so the signal must never decrease. tmp+wal never fell across
+        # 18 samples while it existed; keeping the high-water mark carries that
+        # through the rename instead of collapsing at it (learnings 54, 55).
         $n = 0
-        if (Test-Path $tmp) {
-            foreach ($f in @($tmp, "$tmp-wal")) {
-                if (Test-Path $f) { $n += (Get-Item $f).Length }
-            }
-        } elseif (Test-Path $live) {
-            $n = (Get-Item $live).Length
+        foreach ($f in @($live, $tmp, "$tmp-wal")) {
+            if (Test-Path $f) { $n += (Get-Item $f).Length }
         }
-        return [double]$n
+        if ($n -gt $script:ProgressHigh) { $script:ProgressHigh = $n }
+        return [double]$script:ProgressHigh
     } `
     -Verify {
         # RE-DERIVE, do not inspect shape: ask the index whether the person named

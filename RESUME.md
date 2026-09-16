@@ -110,16 +110,16 @@ the 53 learnings are enforced by a named function or test.
 
 ----
 
-## RIGHT NOW: round 16 is with Krish; nothing is running (2026-09-17, 18:26)
+## RIGHT NOW: round 17 is with Krish; nothing is running (2026-09-17, 18:39)
 
 **Nothing is running unattended. The next move is Krish's.**
 
-Round 16 of `PEOPLE.html` was published to `D:\_PhotoAudit\PEOPLE.html` and sent
-to him at 18:26 on 2026-09-17: 60 rows, 598 crops, `verify_people_sheet.py` exit
-0, and `check_repeats.py` proving **0 repeats** against all **726** rows shown in
-rounds 1-15. **Every sheet is crop-verified and repeat-checked before he sees
+Round 17 of `PEOPLE.html` was published to `D:\_PhotoAudit\PEOPLE.html` and sent
+to him at 18:39 on 2026-09-17: 60 rows, 596 crops, `verify_people_sheet.py` exit
+0, and `check_repeats.py` proving **0 repeats** against all **786** rows shown in
+rounds 1-16. **Every sheet is crop-verified and repeat-checked before he sees
 it** - he asked for that after batches he had refused came back a second time.
-Rounds 1-15 are recorded in `D:\_enrichment\answers.csv`.
+Rounds 1-16 are recorded in `D:\_enrichment\answers.csv`.
 
 ### NO COMMUNAL FACES IN KRISH'S SHEETS (decided 2026-09-17)
 
@@ -146,28 +146,32 @@ functions in `people_sheet.py` so `tests/test_people_rounds.py` section 7 calls
 the same code the sheet calls, and is watched EXCLUDING a Communal cluster
 rather than only passing.
 
-**`-Verify` is fixed and confirmed. `-Progress` IS STILL WRONG - I claimed it
-fixed here two rounds ago and that claim was premature.**
+**Both supervision fixes are in, and `-Progress` was chosen from a RECORDED
+TRACE after two guesses failed and a third was about to.**
 
-`-Verify` genuinely works: it reads `OK library.db` after the rename rather than
-taking its "cannot tell yet" escape, which is the branch that used to make the
-one check gating the whole step pass on nothing.
+`-Verify` reads `OK library.db` after the rename rather than taking its "cannot
+tell yet" escape - the branch that used to make the one check gating the whole
+step pass on nothing.
 
-`-Progress` has now been wrong twice. Version one counted committed rows, saw
-nothing (build_db inserts in one long transaction) and reported `still at 0`.
-Version two sums the bytes of `library.db.tmp` and its `-wal`, falling back to
-the live file - and round 16's run opened at baseline 766,623,744 then read
-`still at 692,263,728` at checkpoint 1, LOWER than where it started, so it took
-a stall strike. `Invoke-Step` treats any non-increase as a stall and four
-strikes kills the work: on a slower rebuild this would destroy a correct index.
+`-Progress` returns a **running maximum** of `live + tmp + tmp-wal`, monotone by
+construction. `Invoke-Step` treats any non-increase as a stall and four strikes
+kills the work, so the signal must never decrease. Replaying all 40 samples of
+`D:\_PhotoAudit\rebuild-progress-trace.csv` through each candidate:
 
-**Do not guess a third time.** `stages/08_index/sample_rebuild.py` records
-library.db, library.db.tmp and the -wal every few seconds through a rebuild and
-reports whether each candidate signal ever falls. Run it alongside the next
-round's rebuild and choose the signal from the trace. It lives in the repo
-rather than a scratchpad on purpose: `check_repeats.py` spent three rounds in a
-session temp directory carrying a stale pattern, and an instrument you depend on
-is the last thing that should be unversioned.
+| candidate | falls |
+|---|---|
+| v1 committed rows in `library.db.tmp` | never rose at all - one long transaction, a `mode=ro` reader sees nothing |
+| v2 `tmp + tmp-wal`, else live | **2** - the temp files do not exist for the first ~30s, so it switches basis mid-run |
+| v3 `live + tmp + tmp-wal` | **1** - 2,221,964,872 then 766,902,272 at the rename |
+| v4 high-water mark (in use) | **0** |
+
+v3 is the one I had already called "the honest signal" in this file. It takes a
+strike at the end of EVERY run. The trace is the only reason it was not shipped.
+
+`stages/08_index/sample_rebuild.py` produced it and stays in the repo for the
+next time a signal is in doubt - `check_repeats.py` spent three rounds in a
+session temp directory carrying a stale pattern, and an instrument a fix depends
+on is the last thing that should be unversioned.
 
 `-ExpectedUnits` is gone, which was right: it was 82,193, the FILE count, from
 when progress was measured in rows, so the runner printed "RECALIBRATE: already
@@ -275,21 +279,24 @@ pwsh -NoProfile -File guards\arm.ps1 -Chain chain_video_faces.ps1 -TaskName cont
 
 ### Where the naming is
 
-- **Sixteen rounds offered, fifteen answered** (2026-09-15 to 17). 902 answers
+- **Seventeen rounds offered, sixteen answered** (2026-09-15 to 17). 962 answers
   in the journal `D:\_enrichment\answers.csv`. After the last rebuild: 82,193
-  files indexed, **24,419** photographs and videos carrying a named person,
-  **245** people, **43,924** person-on-photograph rows. Krish 9,306,
-  Bharti 5,098, Bhasker 2,672, Anya 1,897, Lily 1,747.
+  files indexed, **247** named people, **44,130** person-on-photograph rows.
+  Krish 9,306, Bharti 5,098, Bhasker 2,672, Anya 1,897, Lily 1,747.
 - **The photographs each round unlocks is FALLING, and that is expected**: 1,058
   at round 9, then 833, 764, 720, 666. `people_sheet.py --top 60` takes the
   largest unnamed clusters first, so what remains is progressively smaller
   groups. Krish was asked on 2026-09-17 whether to switch to a different cut -
   a size floor, or the clusters that would unlock the most Communal photographs
   for Bharti - and has not answered yet. Do not change the cut without him.
-- **The profile holds 252 personal terms**, seeded from these answers and
-  extended after each round - every term measured against the library before it
-  is added, and every added term then asserted through `is_personal()` on a real
-  path rather than inferred from the write succeeding (learning 54).
+- **The profile holds 257 personal terms.** Run
+  `python stages/07_people/profile_coverage.py` after every round: it reads the
+  journal, reports every named person the profile misses, measures each against
+  the library, and `--apply` adds the ones that are not catch-alls - then asserts
+  each through `is_personal()`, because the write succeeding is not the term
+  working. It replaced five near-identical throwaway scripts that had
+  accumulated in a session scratchpad across rounds 13-15, which is how
+  `check_repeats.py` came to carry a stale pattern for three rounds.
   `D:\_PhotoAudit\profile.yaml`, never committed, backed up beside itself as
   `profile.yaml.bak-*`.
 - **27 of the 222 people Krish had named were NOT protected by it until
