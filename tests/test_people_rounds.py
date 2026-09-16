@@ -142,6 +142,68 @@ def test_repeat_guard(d):
     check("a sheet is not its own baseline", "c77" in seen, False)
 
 
+def test_communal_filter():
+    r"""Krish must not be asked about Communal faces, and the rule is measured.
+
+    Krish, 2026-09-17, at the end of round 14: "Do not make me identify any
+    more faces from Communal any more." Communal is Bharti's to enrich.
+
+    Calls the REAL functions out of people_sheet.py rather than restating the
+    rule here - a test that reimplements its subject agrees with itself and not
+    with the code (learning 54). It is also watched EXCLUDING, not only passing:
+    a filter nobody has seen reject is indistinguishable from no filter
+    (learning 44).
+
+    The first attempt at this filter read files.side, which holds the top-level
+    tree ('Media', 'Archive'), found no Personal photograph anywhere and would
+    have excluded all 58,033 unnamed clusters. So side_of() is checked against
+    real path shapes too.
+    """
+    import importlib.util
+    spec = importlib.util.spec_from_file_location(
+        "people_sheet_under_test",
+        os.path.join(ROOT, "stages", "07_people", "people_sheet.py"))
+    ps = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(ps)
+
+    P = r"D:\ContentLibrary\Media\Personal\2019\2019-05\IMG_1234.jpg"
+    C = r"D:\ContentLibrary\Media\Communal\2008\2008-10\old photos 238.JPG"
+    N = r"D:\ContentLibrary\Media\NoDate\.facebook_1412285900220-edited.jpg"
+    G = r"D:\ContentLibrary\Media\Pending-Segmentation\1995\1995-07\VID_19950714_211040_577.mp4"
+    A = r"D:\ContentLibrary\Archive\99-Unsorted\Downloads\1780924709428.jpg"
+
+    check("a Personal path reads Personal", ps.side_of(P), "Personal")
+    check("a Communal path reads Communal", ps.side_of(C), "Communal")
+    check("NoDate is neither", ps.side_of(N), "NoDate")
+    check("Pending-Segmentation is neither", ps.side_of(G), "Pending")
+    check("Archive is other", ps.side_of(A), "other")
+    check("a forward-slashed path still reads",
+          ps.side_of(P.replace("\\", "/")), "Personal")
+    check("case does not matter", ps.side_of(P.upper()), "Personal")
+
+    # sides, as main() builds it: hash -> side
+    sides = {"h1": "Personal", "h2": "Personal", "h3": "Communal",
+             "h4": "Communal", "h5": "Communal", "h6": "NoDate",
+             "h7": "Pending"}
+
+    check("3 Communal vs 2 Personal is EXCLUDED",
+          ps.is_majority_communal({"h1", "h2", "h3", "h4", "h5"}, sides), True)
+    check("2 Personal vs 1 Communal is kept",
+          ps.is_majority_communal({"h1", "h2", "h3"}, sides), False)
+    check("a tie goes to Krish",
+          ps.is_majority_communal({"h1", "h3"}, sides), False)
+    check("wholly Communal is EXCLUDED",
+          ps.is_majority_communal({"h3", "h4"}, sides), True)
+    check("wholly Personal is kept",
+          ps.is_majority_communal({"h1", "h2"}, sides), False)
+    # He was offered the wider exclusion - the unsided old scans - and chose
+    # true Communal only, so these stay in his sheets.
+    check("unsided NoDate/Pending stay with Krish",
+          ps.is_majority_communal({"h6", "h7"}, sides), False)
+    check("a cluster whose hashes are unknown stays with Krish",
+          ps.is_majority_communal({"nope1", "nope2"}, sides), False)
+
+
 def main():
     d = tempfile.mkdtemp()
     try:
@@ -210,6 +272,10 @@ def main():
         print()
         print("6. the repeat guard covers every round, and is seen FAILING")
         test_repeat_guard(os.path.join(d, "sheets"))
+
+        print()
+        print("7. Communal faces are Bharti's, and the filter is seen EXCLUDING")
+        test_communal_filter()
     finally:
         shutil.rmtree(d, ignore_errors=True)
 

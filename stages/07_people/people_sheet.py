@@ -186,6 +186,54 @@ document.addEventListener('DOMContentLoaded', () => {
 """
 
 
+def side_of(path):
+    r"""Which side of the chronology a library path sits on.
+
+    From the PATH, not from files.side. That column holds the top-level tree -
+    'Media', 'Archive', '_Review', 'ContentProduction' - and Personal and
+    Communal are one level below it:
+
+        D:\ContentLibrary\Media\Personal\2019\2019-05\IMG_1234.jpg
+        D:\ContentLibrary\Media\Communal\2008\2008-10\old photos 238.JPG
+
+    A first attempt at the Communal filter joined on files.side, found no
+    cluster with a Personal photograph, and reported 0 majority-Personal out of
+    58,033 - which would have excluded every cluster there is (learning 54).
+
+    Pending-Segmentation and NoDate are neither: unsided material, and where the
+    scanned old photo libraries sit. Krish was offered the wider exclusion on
+    2026-09-17 and chose true Communal only, so those stay in his sheets.
+    """
+    p = (path or "").lower().replace("/", "\\")
+    if "\\media\\personal\\" in p:
+        return "Personal"
+    if "\\media\\communal\\" in p:
+        return "Communal"
+    if "\\media\\nodate\\" in p:
+        return "NoDate"
+    if "\\media\\pending-segmentation\\" in p:
+        return "Pending"
+    return "other"
+
+
+def is_majority_communal(hashes, sides):
+    r"""Is this cluster more Bharti's than Krish's?
+
+    A cluster is not Personal or Communal - its PHOTOGRAPHS are, and many
+    straddle - so the test is whether Communal outnumbers Personal within it.
+    Ties go to Krish: a cluster half his own photographs is worth his answer.
+
+    A module-level function rather than three lines inside main(), so a test can
+    call the SAME code the sheet calls. Inline, the only ways to test it were a
+    fixture with a database and three CSVs, or a reimplementation of the rule in
+    the test - and a test that reimplements its subject agrees with itself
+    rather than with the code (learning 54).
+    """
+    comm = sum(1 for h in hashes if sides.get(h) == "Communal")
+    pers = sum(1 for h in hashes if sides.get(h) == "Personal")
+    return comm > pers
+
+
 def crop(path, bbox, size=104):
     """The face itself, not the photograph it is in."""
     from PIL import Image
@@ -227,6 +275,21 @@ def main() -> int:
     ap.add_argument("--out", default=OUT)
     ap.add_argument("--top", type=int, default=60)
     ap.add_argument("--per-row", type=int, default=12)
+    # Krish, 2026-09-17, at the end of round 14's answers: "Do not make me
+    # identify any more faces from Communal any more." Communal is Bharti's to
+    # enrich (decided 2026-09-15); this sheet ranked purely by photographs
+    # covered and knew nothing about side, which is how he came to be asked
+    # round after round.
+    #
+    # He was offered the wider reading - exclude the unsided
+    # Pending-Segmentation and NoDate material too, where the scanned old photo
+    # libraries live - and chose true Communal only. So this drops a cluster
+    # whose photographs are MAJORITY Communal and nothing else. Measured when
+    # it was written: 4,054 of 58,033 unnamed clusters, and the next sheet goes
+    # from 639 photographs to 636.
+    ap.add_argument("--include-communal", action="store_true",
+                    help="show clusters that are majority Communal photographs "
+                         "(default: skip them - they are Bharti's)")
     a = ap.parse_args()
 
     # PER-FACE assignments. Not the tag store.
@@ -286,16 +349,57 @@ def main() -> int:
         print("skipping {:,} already answered; {:,} left to name".format(
             before - len(clusters), len(clusters)))
 
-    # when the photographs were taken, so a row can say "2009-2024"
+    # when the photographs were taken, so a row can say "2009-2024", and which
+    # SIDE each one sits on, so Krish is not asked about Bharti's.
     years = {}
+    sides = {}
     try:
         import sqlite3
-        db = sqlite3.connect(r"D:\_PhotoAudit\library.db")
-        for h, y in db.execute("SELECT hash, MIN(year) FROM files "
-                               "WHERE hash IS NOT NULL AND year!='' GROUP BY hash"):
-            years[h] = y
+        db = sqlite3.connect("file:{}?mode=ro".format(
+            r"D:\_PhotoAudit\library.db".replace("\\", "/")), uri=True)
+        try:
+            for h, y in db.execute("SELECT hash, MIN(year) FROM files "
+                                   "WHERE hash IS NOT NULL AND year!='' GROUP BY hash"):
+                years[h] = y
+            # PATH, not files.side. That column holds the top-level tree -
+            # 'Media', 'Archive', '_Review', 'ContentProduction' - so a first
+            # attempt at this filter joined on it, found no cluster with a
+            # Personal photograph, and would have excluded all 58,033
+            # (learning 54). Personal and Communal are one level down.
+            for h, p in db.execute("SELECT hash, path FROM files "
+                                   "WHERE hash IS NOT NULL AND hash!=''"):
+                sides[h] = side_of(p)
+        finally:
+            db.close()
     except Exception:                                            # noqa: BLE001
         pass
+
+    # Krish, 2026-09-17: "Do not make me identify any more faces from Communal
+    # any more." A cluster is not Personal or Communal - its PHOTOGRAPHS are -
+    # so the test is whether Communal outnumbers Personal within it.
+    if not a.include_communal:
+        if not sides:
+            print("STOPPING: no sides could be read from library.db, so every")
+            print("cluster would look non-Communal and Krish would be asked about")
+            print("Bharti's side again. Fix the database path rather than")
+            print("proceeding - an empty filter is worse than no filter.")
+            return 1
+        before = len(clusters)
+        kept = {}
+        dropped_photos = 0
+        for g, faces in clusters.items():
+            hs = {r["hash"] for r in faces}
+            # THE SAME function the test calls. This was three inline lines, so
+            # a test could only have used a fixture with a database and three
+            # CSVs, or reimplemented the rule and agreed with itself.
+            if is_majority_communal(hs, sides):
+                dropped_photos += len(hs)
+            else:
+                kept[g] = faces
+        clusters = kept
+        print("skipping {:,} majority-Communal groups ({:,} photographs) - "
+              "Bharti's side; {:,} left".format(
+                  before - len(clusters), dropped_photos, len(clusters)))
 
     # ranked by PHOTOGRAPHS covered, not faces found: a cluster of 900 faces from
     # one afternoon deserves less attention than 400 across fifteen years

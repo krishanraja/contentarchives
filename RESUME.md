@@ -110,16 +110,41 @@ the 53 learnings are enforced by a named function or test.
 
 ----
 
-## RIGHT NOW: round 14 is with Krish; nothing is running (2026-09-17, 16:27)
+## RIGHT NOW: round 15 is with Krish; nothing is running (2026-09-17, 18:05)
 
 **Nothing is running unattended. The next move is Krish's.**
 
-Round 14 of `PEOPLE.html` was published to `D:\_PhotoAudit\PEOPLE.html` and sent
-to him at 16:27 on 2026-09-17: 60 rows, 652 crops, `verify_people_sheet.py` exit
-0, and `check_repeats.py` proving **0 repeats** against all **606** rows shown in
-rounds 1-13. **Every sheet is crop-verified and repeat-checked before he sees
+Round 15 of `PEOPLE.html` was published to `D:\_PhotoAudit\PEOPLE.html` and sent
+to him at 18:00 on 2026-09-17: 60 rows, 636 crops, `verify_people_sheet.py` exit
+0, and `check_repeats.py` proving **0 repeats** against all **666** rows shown in
+rounds 1-14. **Every sheet is crop-verified and repeat-checked before he sees
 it** - he asked for that after batches he had refused came back a second time.
-Rounds 1-13 are recorded in `D:\_enrichment\answers.csv`.
+Rounds 1-14 are recorded in `D:\_enrichment\answers.csv`.
+
+### NO COMMUNAL FACES IN KRISH'S SHEETS (decided 2026-09-17)
+
+Krish, at the end of round 14's answers: *"Do not make me identify any more
+faces from Communal any more."* Communal is Bharti's to enrich. `people_sheet.py`
+now skips clusters whose photographs are **majority Communal** - 3,283 groups,
+6,460 photographs, excluded from round 15 - and `--include-communal` overrides it
+for anyone who needs the old behaviour.
+
+**Two decisions of his to leave alone.** He was shown that true Communal is only
+7% of what remains (4,054 of 58,033 clusters) while the bulk is 14,642 unsided
+Pending-Segmentation/NoDate clusters - where the scanned old photo libraries sit
+- and chose **true Communal only**, so the unsided material stays in his sheets.
+He also chose to queue **nothing** to Bharti for now: 18,696 clusters would have
+qualified, and nothing is written to the journal on his behalf. Do not widen the
+filter or start queueing without asking him again.
+
+**The side comes from `files.path`, never `files.side`.** That column holds the
+top-level tree - `Media`, `Archive`, `_Review`, `ContentProduction` - so the
+first version of this filter found no Personal photograph anywhere, reported 0
+majority-Personal clusters out of 58,033, and would have excluded his entire
+remaining queue. `side_of()` and `is_majority_communal()` are module-level
+functions in `people_sheet.py` so `tests/test_people_rounds.py` section 7 calls
+the same code the sheet calls, and is watched EXCLUDING a Communal cluster
+rather than only passing.
 
 **Both supervision fixes are confirmed on live data** (round 13's run, the first
 with them in from the start): `-Progress` went 766,259,200 -> 766,443,520 with a
@@ -232,19 +257,18 @@ pwsh -NoProfile -File guards\arm.ps1 -Chain chain_video_faces.ps1 -TaskName cont
 
 ### Where the naming is
 
-- **Fourteen rounds offered, thirteen answered** (2026-09-15 to 17). 782 answers
+- **Fifteen rounds offered, fourteen answered** (2026-09-15 to 17). 842 answers
   in the journal `D:\_enrichment\answers.csv`. After the last rebuild: 82,193
-  files indexed, **24,261** photographs and videos carrying a named person,
-  **233** people, **43,348** person-on-photograph rows, **10,929** group shots
-  with two or more named people. Krish 9,245, Bharti 5,087, Bhasker 2,672,
-  Anya 1,897, Lily 1,737.
+  files indexed, **24,327** photographs and videos carrying a named person,
+  **238** people, **43,576** person-on-photograph rows. Krish 9,245,
+  Bharti 5,087, Bhasker 2,672, Anya 1,897, Lily 1,737.
 - **The photographs each round unlocks is FALLING, and that is expected**: 1,058
   at round 9, then 833, 764, 720, 666. `people_sheet.py --top 60` takes the
   largest unnamed clusters first, so what remains is progressively smaller
   groups. Krish was asked on 2026-09-17 whether to switch to a different cut -
   a size floor, or the clusters that would unlock the most Communal photographs
   for Bharti - and has not answered yet. Do not change the cut without him.
-- **The profile holds 240 personal terms**, seeded from these answers and
+- **The profile holds 245 personal terms**, seeded from these answers and
   extended after each round - every term measured against the library before it
   is added, and every added term then asserted through `is_personal()` on a real
   path rather than inferred from the write succeeding (learning 54).
