@@ -251,14 +251,25 @@ def page(rows, names, who, batch):
             '<img data-face="{}:{}:{}" src="data:image/jpeg;base64,{}">'.format(
                 html.escape(h), html.escape(im), html.escape(str(fi)), b64)
             for h, im, fi, b64 in r["imgs"])
+        # `<div class="row" data-cid=... data-photos=...>`, in that exact
+        # shape, because verify_people_sheet.py's ROW regex needs the two
+        # attributes ADJACENT and terminates each row on a lookahead for
+        # `<div class="row"` or `<p class="sub">`. My first version emitted
+        # `<section class="card">` with a data-i between them, so the gate
+        # parsed ZERO rows and refused the page - correctly.
+        #
+        # The page bends to the gate, never the other way round. That verifier
+        # exists because a sheet once showed six different people in one row,
+        # and loosening a safety check to accommodate a new generator is how a
+        # gate quietly stops checking anything.
         cards.append(
-            '<section class="card" data-cid="{cid}" data-photos="{n}" '
+            '<div class="row" data-cid="{cid}" data-photos="{n}" '
             'data-i="{i}"><div class="faces">{imgs}</div>'
             '<div class="meta"><b>{n:,}</b> photograph{s}{span}</div>'
             '<input type="text" list="names" placeholder="who is this?" '
             'autocomplete="off" autocapitalize="words" spellcheck="false">'
             '<div class="btns"><button class="skip">Not a person / skip</button>'
-            '<button class="next">Next</button></div></section>'.format(
+            '<button class="next">Next</button></div></div>'.format(
                 cid=html.escape(r["cid"]), n=r["photos"],
                 s="" if r["photos"] == 1 else "s",
                 span=(" &middot; " + html.escape(r["span"])) if r["span"] else "",
@@ -279,8 +290,8 @@ TEMPLATE = """<!doctype html><meta charset="utf-8">
       padding:12px 12px 96px}
  h1{font-size:18px;margin:4px 0 2px}
  .sub{color:#999;font-size:13px;margin-bottom:14px}
- .card{display:none;border-top:1px solid #333;padding:14px 0}
- .card.on{display:block}
+ .row{display:none;border-top:1px solid #333;padding:14px 0}
+ .row.on{display:block}
  .faces{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px}
  .faces img{width:104px;height:104px;object-fit:cover;border-radius:8px;
             background:#222}
@@ -308,6 +319,7 @@ Pick a name from the list where you can - it keeps one person from becoming
 three. Skip anything you cannot place; it will not come back.</div>
 <datalist id="names">{{OPTIONS}}</datalist>
 {{CARDS}}
+<p class="sub" id="end">That is the batch. Hit Submit and it is safe to close.</p>
 <div id="bar">
   <span><b id="done">0</b>/<b id="total">{{COUNT}}</b></span>
   <span id="msg"></span>
@@ -320,7 +332,11 @@ three. Skip anything you cannot place; it will not come back.</div>
 // stages/07_people/ingest_game_answers.py when these rows are read back.
 const KEY = 'contentarchives.game.{{WHO}}.{{BATCH}}';
 const saved = JSON.parse(localStorage.getItem(KEY) || '{}');
-const cards = Array.from(document.querySelectorAll('.card'));
+// `.row`, not `.card`: the element is named for verify_people_sheet.py's ROW
+// regex, which needs `<div class="row" data-cid=... data-photos=...>`. Renaming
+// the markup and leaving this selector behind would render an empty page with
+// every gate passing.
+const cards = Array.from(document.querySelectorAll('.row'));
 let at = 0;
 
 function show(i) {
