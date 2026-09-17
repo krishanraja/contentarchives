@@ -67,6 +67,35 @@ OUT = os.path.join(P.AUDIT, "SPLIT-BY-PATH.csv")
 QUEUE = re.compile(r"\\media\\(pending-segmentation|nodate)\\", re.I)
 DEFAULT_COMMUNAL = r"bharti,bhasker,users\raja"
 
+# A DEVICE BELONGS TO A PERSON, NOT TO A YEAR.
+#
+# Krish reviewed the grouped page on 2026-09-18 and named 30 groups as Communal.
+# Five of those devices also appeared in years he had not named - SM-G960F 2019
+# (303 files), FE330,X845,C550 2008 (297), SM-G935F 2018 (250) - and a phone does
+# not change owner between years. Asked, he confirmed: the whole device is
+# Communal, every year. 3,001 files turned on that question, which is why it was
+# asked rather than inferred.
+#
+# Camera models, not people's names: nothing here identifies anybody.
+COMMUNAL_DEVICES = {
+    "lg-k350n", "redmi note 10 lite", "canon eos 550d", "lumia 535",
+    "finepix hs30exr", "fe330,x845,c550", "fe230/x790", "sm-g935f",
+    "sm-g960f", "iphone 16 pro max", "iphone 17 pro max", "hero9 black",
+    "dcr-pc120e",
+}
+# SM-G986B (1,231 files, 2021) is deliberately NOT here. It is a Samsung like
+# two of the models above, and he did not name it - so it stays Personal.
+
+# The scanned family libraries, which name themselves in the filename. He named
+# three years of these and the same device answer applies: all of them.
+SCANNED = "old photo"
+
+# Files with NO camera at all, sitting in Pending-Segmentation. These are year
+# buckets rather than a device, so naming some years and not others is coherent -
+# he judged them on their photographs. Only these three are Communal; the other
+# nine (1,759 files) are a separate page he asked to see.
+COMMUNAL_NOCAM_YEARS = {"2016", "2023", "2024"}
+
 
 def main() -> int:
     ap = argparse.ArgumentParser(
@@ -90,8 +119,13 @@ def main() -> int:
     rows = list(db.execute("select path, hash from files"))
     kinds = {h: k for h, k in db.execute(
         "select hash, kind from v_files where hash is not null")}
+    # make, model and year: the device rule needs them, and the first version of
+    # this script did not read them at all.
+    meta = {h: (mk or "", md or "", yr or "") for h, mk, md, yr in db.execute(
+        "select hash, make, model, year from files where hash is not null")}
     db.close()
     print("files in the index: {:,}".format(len(rows)))
+    print("Communal devices  : {}".format(len(COMMUNAL_DEVICES)))
 
     out, counts, sigs = [], collections.Counter(), collections.Counter()
     nonphoto = 0
@@ -106,7 +140,21 @@ def main() -> int:
             continue
 
         low = p.lower()
+        base = os.path.basename(low)
+        make, model, year = meta.get(h, ("", "", ""))
+        queue_name = QUEUE.search(p).group(1).lower()
+
+        # In order: a path signal, then the device, then the scanned libraries,
+        # then the three no-camera years he named. Everything else is Personal.
         hit = next((s for s in signals if s in low), "")
+        if not hit and model.strip().lower() in COMMUNAL_DEVICES:
+            hit = "device: " + model.strip()
+        if not hit and SCANNED in base:
+            hit = "scanned family photos"
+        if (not hit and not model.strip()
+                and queue_name == "pending-segmentation"
+                and year in COMMUNAL_NOCAM_YEARS):
+            hit = "no camera, " + year
         side = "Communal" if hit else "Personal"
         counts["-> " + side] += 1
         if hit:
@@ -147,13 +195,36 @@ def main() -> int:
         nonphoto))
     print("     documents, memes, posters - sided, and listed for a separate sweep)")
 
-    with io.open(a.out, "w", encoding="utf-8", newline="") as fh:
+    # TMP + RENAME, and never throw the work away on a locked target.
+    #
+    # This run took 164 seconds and then died with PermissionError, because the
+    # CSV was open in Excel - I had opened it myself for Krish to review. The
+    # same shape as the index promote: a reader holding the destination is not a
+    # reason to lose a finished result (learning 55 - a traceback on the last
+    # line of a long job reads as "the work is gone" when the work is right
+    # there).
+    tmp = a.out + ".tmp"
+    with io.open(tmp, "w", encoding="utf-8", newline="") as fh:
         w = csv.DictWriter(fh, fieldnames=["Side", "Signal", "Queue", "Kind",
                                            "Hash", "Source", "Destination"])
         w.writeheader()
         w.writerows(out)
     print()
-    print("wrote {} - {:,} proposed moves".format(a.out, len(out)))
+    try:
+        os.replace(tmp, a.out)
+        print("wrote {} - {:,} proposed moves".format(a.out, len(out)))
+    except PermissionError:
+        alt = a.out.replace(".csv", ".new.csv")
+        try:
+            os.replace(tmp, alt)
+        except PermissionError:
+            alt = tmp
+        print("COULD NOT REPLACE {}".format(a.out))
+        print("  Something holds it open - Excel, most likely, because the")
+        print("  review page and this CSV are both opened for you to look at.")
+        print("  NOTHING IS LOST: the finished proposal is at")
+        print("    {}".format(alt))
+        print("  Close the file and rename it, or re-run.")
     print("NOTHING HAS MOVED. Review it, then apply.")
     return 0
 

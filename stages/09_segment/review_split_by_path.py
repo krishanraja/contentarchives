@@ -152,6 +152,12 @@ def main() -> int:
                     help="thumbnails shown per group")
     ap.add_argument("--max-groups", type=int, default=400,
                     help="groups rendered per side, largest first")
+    ap.add_argument("--only", default="",
+                    help="render only groups whose name matches this regex, so "
+                         "a handful of groups can be judged without scrolling "
+                         "a 155-group page")
+    ap.add_argument("--title", default="",
+                    help="page heading, when --only makes the default wrong")
     a = ap.parse_args()
 
     if not os.path.exists(a.proposal):
@@ -203,9 +209,23 @@ def main() -> int:
         if h and h in assets and len(g["hashes"]) < a.per_group:
             g["hashes"].append(h)
 
+    # --only: judge a handful of groups without scrolling the whole page. The
+    # filter is applied AFTER grouping, so the counts shown are the real ones.
+    only = re.compile(a.only, re.I) if a.only else None
+    if only:
+        groups = {k: v for k, v in groups.items() if only.search(k[1])}
+        kept = sum(v["n"] for v in groups.values())
+        print("--only {!r}: {:,} groups, {:,} files".format(
+            a.only, len(groups), kept))
+        if not groups:
+            print("STOPPING: nothing matched, and an empty page reads as")
+            print("  'nothing to check' rather than 'nothing matched'.")
+            return 1
+
     parts = [HEAD]
-    parts.append("<h1>Proposed split &mdash; {:,} files in {:,} groups</h1>"
-                 .format(len(rows), len(groups)))
+    parts.append("<h1>{}</h1>".format(html.escape(
+        a.title or "Proposed split — {:,} files in {:,} groups".format(
+            sum(v["n"] for v in groups.values()), len(groups)))))
     parts.append('<p class="sub">Nothing has moved. Judge the GROUP: a filename '
                  'batch is one device, so one question answers all of it. '
                  '<b>In Personal, look for anything that is plainly somebody '
