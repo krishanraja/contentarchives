@@ -112,7 +112,59 @@ memory instead of from the run.
 
 ----
 
-## RIGHT NOW: round 23 - THE LAST SHEET - is OPEN in Krish's browser (2026-09-18, 09:42)
+## RIGHT NOW: THE NAMING ROUNDS ARE DONE. Merge siblings are the new work (2026-09-18, 09:55)
+
+Round 23 is recorded and built in, and the next `people_sheet.py --min-photos 8`
+printed exactly what it was built to print:
+
+```
+floor: 0 of 54,233 cluster(s) cover 8+ photographs
+THE NAMING ROUNDS ARE DONE.
+  Nothing left covers 8+ photographs - the largest unnamed cluster covers 7.
+  No sheet written.
+```
+
+**23 rounds. 1,433 answers. 280 people. 25,209 files carry a person.**
+
+`Ashwin` -> `Ashvin` done as Krish asked: ONE cluster carried it (`c75`, and the
+rename went in as a NEW journal row, never an edit). Ashwin now reads **0** on
+the index, Ashvin **151**. Every other "Ash" person is untouched - Asha, Ashish,
+Ashleigh, Ash Wales Brown, Prashila, Adam Washington.
+
+### THE WORK THAT IS LEFT: 844 merge siblings
+
+`people_sheet.py` pools a merge GROUP into one row and prints it under ONE
+cluster id. Krish answers that id. But `build_db`'s `scope_hashes` expands
+`WHERE tag='cluster' AND value=?` - the one cluster, **not the group**. So every
+other cluster in that group stays unnamed.
+
+**844 named clusters have an unanswered sibling, covering 22,763 photographs.**
+This is the same shape as Rishi's `c36`, which was caught by hand and needed its
+own journal row.
+
+**That 22,763 is an upper bound, not a loss.** `merge_clusters.py` refuses to mix
+two differently-named clusters, so siblings are *probably* the same person - but
+"probably" is the embeddings' opinion, and that opinion was wrong twice (the two
+Kirans, the three Rishis). Krish was offered automatic propagation and a
+`scope_hashes` change that would apply every past merge retroactively, and chose
+neither: **"show me the biggest ones first"**. Confirm on faces, batch by batch.
+
+### THE PROFILE'S "0 UNPROTECTED" IS SOFTER THAN IT SOUNDS
+
+`is_personal()` matches SUBSTRINGS by design (learnings 20, 30). So a name can
+read as protected because an unrelated shorter term sits inside it, and
+`profile_coverage` then adds nothing. Found 2026-09-18: **`Steph Plunkett` was
+protected only by the term `'nk'`** - which also sits inside `pankaj` and
+`priyanka`. She has her own term now (289 terms).
+
+Four two-letter terms exist: `'jy'`, `'kj'`, `'nk'`, `'pk'`. **Nothing was
+removed** - a term is grounds to KEEP and never to delete (learning 1) - but a
+two-letter term vouches for any name containing it, so treat every "0
+unprotected" count as approximate until each name has a term of its own.
+
+----
+
+## Round 23 (2026-09-18, 09:42)
 
 **Nothing is running. The next move is his answers.**
 
