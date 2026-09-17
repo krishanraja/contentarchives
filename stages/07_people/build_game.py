@@ -1,0 +1,393 @@
+r"""One batch of the naming game: a phone page that survives the session closing.
+
+    python build_game.py --who krish  --batch 1 --size 40
+    python build_game.py --who bharti --batch 1 --size 40
+
+Writes `D:\_PhotoAudit\GAME-<who>-<batch>.html` and a manifest CSV of exactly
+which clusters and crops went into it.
+
+WHY THIS IS A BUILDER AND NOT A HAND-WRITTEN PAGE
+
+Krish, 2026-09-18: *"you need to account for the fact that this session might be
+closed when I am on my phone doing the classification game"*. A page I write by
+hand cannot be regenerated for batch 2, or for Bharti, and
+`verify_people_sheet.py` could not check that every crop belongs to the row it
+is shown in. The gates exist because a sheet once showed six different people in
+one row.
+
+IT REUSES people_sheet's SELECTION, IT DOES NOT RESTATE IT
+
+Every filter below exists because it failed once:
+
+  - faces from FACE-CLUSTERS.csv, never the tag store: the store says "this
+    photograph contains c14" and cannot say WHICH face is c14
+  - merge groups collapsed, so a person who fragmented into eleven clusters is
+    one question
+  - already answered - person, needs_identifying OR unidentifiable - is never
+    asked again: a refusal is an answer
+  - `is_recordable`: never offer a row the store cannot hold. Five of Krish's
+    round 19 answers were refused as "no such cluster" and the decline pass
+    would have turned them into refusals
+  - `is_subject`: 90% of the queue is people in the BACKGROUND of other
+    photographs, which is what his declines had always been about
+  - `is_majority_communal`: Krish is not asked about Bharti's side, and hers is
+    the inverse
+
+WHAT THE PAGE DOES THAT THE SHEET DOES NOT
+
+  - one cluster per screen, sized for a phone
+  - a datalist of every name already in the journal, so "Lauren" is PICKED and
+    never retyped as "lauren" or "Laurenn". Preventing that at source is the
+    whole defence: the two Kirans and the three Rishis are what happens when it
+    is repaired afterwards
+  - answers held in localStorage AND written to the artifact `db` on submit, so
+    a closed tab loses nothing and a closed session loses nothing
+  - each answer row carries the batch id and cluster id the ingester expects
+"""
+
+from __future__ import annotations
+
+import argparse
+import collections
+import csv
+import html
+import io
+import json
+import os
+import sys
+
+import os as _os, sys as _sys
+_d = _os.path.dirname(_os.path.abspath(__file__))
+while _d != _os.path.dirname(_d) and not _os.path.exists(_os.path.join(_d, 'stagepath.py')):
+    _d = _os.path.dirname(_d)
+_sys.path.insert(0, _d)
+import stagepath  # noqa: E402,F401
+import paths as P                                                # noqa: E402
+import people_sheet as PS                                        # noqa: E402
+from sides import side_of, is_majority_communal                  # noqa: E402
+
+ANSWERS = os.path.join(r"D:\_enrichment", "answers.csv")
+TAGS = os.path.join(r"D:\_enrichment", "content_tags.csv")
+
+
+def known_names(answers: str) -> list:
+    """Every name already given, most-used first - the autocomplete list."""
+    n = collections.Counter()
+    if not os.path.exists(answers):
+        return []
+    for r in csv.DictReader(io.open(answers, encoding="utf-8", newline="")):
+        if r.get("field") == "person" and r.get("value"):
+            v = r["value"].strip()
+            if v and not v.lower().startswith(("for ", "unsure")):
+                n[v] += 1
+    return [name for name, _ in n.most_common()]
+
+
+def main() -> int:
+    ap = argparse.ArgumentParser(
+        description=__doc__,
+        formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("--who", choices=("krish", "bharti"), default="krish")
+    ap.add_argument("--batch", type=int, default=1)
+    ap.add_argument("--size", type=int, default=40)
+    ap.add_argument("--assign", default=PS.ASSIGN)
+    ap.add_argument("--video-assign", default=PS.VIDEO_ASSIGN)
+    ap.add_argument("--merges", default=PS.MERGES)
+    ap.add_argument("--answers", default=ANSWERS)
+    ap.add_argument("--tags", default=TAGS)
+    ap.add_argument("--thumbs", default=PS.THUMBS)
+    ap.add_argument("--frames", default=PS.FRAMES)
+    ap.add_argument("--db", default=os.path.join(P.AUDIT, "library.db"))
+    ap.add_argument("--min-face-share", type=float, default=PS.SUBJECT_SHARE)
+    ap.add_argument("--out", default="")
+    a = ap.parse_args()
+
+    if not os.path.exists(a.assign):
+        print("STOPPING: no {}".format(a.assign))
+        print("  The tag store cannot say WHICH face is who, and guessing is")
+        print("  what produced rows full of strangers.")
+        return 1
+
+    group_of = {}
+    for r in csv.DictReader(io.open(a.merges, encoding="utf-8", newline="")):
+        group_of[r["cluster"]] = r["group"]
+
+    clusters = collections.defaultdict(list)
+    for path in (a.assign, a.video_assign):
+        if not os.path.exists(path):
+            continue
+        for r in csv.DictReader(io.open(path, encoding="utf-8",
+                                        errors="replace", newline="")):
+            if r.get("bbox"):
+                clusters[group_of.get(r["cluster"], r["cluster"])].append(r)
+    print("face groups: {:,}".format(len(clusters)))
+
+    if not os.path.exists(a.answers):
+        print("STOPPING: no answers file at {}".format(a.answers))
+        print("  Proceeding would re-ask every question already answered.")
+        return 1
+    answered = set()
+    for r in csv.DictReader(io.open(a.answers, encoding="utf-8", newline="")):
+        if r.get("field") in ("person", "needs_identifying", "unidentifiable"):
+            answered.add(group_of.get(r["target"], r["target"]))
+    clusters = {g: v for g, v in clusters.items() if g not in answered}
+    print("unanswered: {:,}".format(len(clusters)))
+
+    known = PS.known_clusters(a.tags)
+    if not known:
+        print("STOPPING: no cluster tags in {}".format(a.tags))
+        print("  Every row would be unrecordable, or - worse - look fine and")
+        print("  record nothing. An empty filter is worse than no filter.")
+        return 1
+    clusters = {g: v for g, v in clusters.items() if PS.is_recordable(g, known)}
+    print("recordable: {:,}".format(len(clusters)))
+
+    import sqlite3
+    sides, years = {}, {}
+    db = sqlite3.connect("file:{}?mode=ro".format(a.db.replace("\\", "/")),
+                         uri=True)
+    try:
+        for h, p in db.execute("SELECT hash, path FROM files "
+                               "WHERE hash IS NOT NULL AND hash != ''"):
+            sides[h] = side_of(p)
+        for h, y in db.execute("SELECT hash, MIN(year) FROM files "
+                               "WHERE hash IS NOT NULL AND year != '' "
+                               "GROUP BY hash"):
+            years[h] = y
+    finally:
+        db.close()
+    if not sides:
+        print("STOPPING: no sides could be read from {}".format(a.db))
+        return 1
+
+    # Krish gets everything that is NOT majority Communal; Bharti gets the
+    # inverse. Neither is shown the other's side.
+    want_communal = (a.who == "bharti")
+    picked = {}
+    for g, faces in clusters.items():
+        hs = {r["hash"] for r in faces}
+        if is_majority_communal(hs, sides) == want_communal:
+            picked[g] = faces
+    print("{}'s side: {:,} groups".format(a.who, len(picked)))
+
+    # Largest first, so the earliest batches buy the most.
+    ranked = sorted(picked.items(),
+                    key=lambda kv: -len({r["hash"] for r in kv[1]}))
+    start = (a.batch - 1) * a.size
+    rows, manifest = [], []
+    for g, faces in ranked[start:]:
+        if len(rows) >= a.size:
+            break
+        hs = {r["hash"] for r in faces}
+        ys = sorted(y for y in (years.get(h) for h in hs) if y)
+        span = "{}-{}".format(ys[0], ys[-1]) if ys else ""
+        seen, imgs = set(), []
+        for r in sorted(faces, key=lambda x: -float(x["det_score"])):
+            if len(imgs) >= 9 or r["hash"] in seen:
+                continue
+            h = r["hash"]
+            p = (os.path.join(a.frames, h[:2], r["image"] + ".jpg")
+                 if r.get("image")
+                 else os.path.join(a.thumbs, h[:2], h + ".jpg"))
+            if not os.path.exists(p):
+                continue
+            if a.min_face_share > 0:
+                try:
+                    from PIL import Image
+                    with Image.open(p) as im:
+                        frame = im.size
+                except Exception:                                # noqa: BLE001
+                    frame = None
+                if not PS.is_subject(r["bbox"], frame, a.min_face_share):
+                    continue
+            b64 = PS.crop(p, r["bbox"], h)
+            if not b64:
+                continue
+            seen.add(h)
+            imgs.append((h, r.get("image") or "", r["face_index"], b64))
+        if not imgs:
+            continue
+        rows.append({"cid": g, "photos": len(hs), "span": span, "imgs": imgs})
+        for h, image, fi, _ in imgs:
+            manifest.append({"batch": a.batch, "who": a.who, "cluster": g,
+                             "hash": h, "image": image, "face_index": fi})
+
+    if not rows:
+        print()
+        print("NOTHING LEFT for {} at batch {}.".format(a.who, a.batch))
+        print("  Either the batch is past the end of the queue, or every")
+        print("  remaining group is background faces. Not writing an empty")
+        print("  page: an empty page and a finished job look identical.")
+        return 0
+
+    out = a.out or os.path.join(P.AUDIT, "GAME-{}-{}.html".format(
+        a.who, a.batch))
+    names = known_names(a.answers)
+    io.open(out, "w", encoding="utf-8").write(
+        page(rows, names, a.who, a.batch))
+    man = out.replace(".html", "-manifest.csv")
+    with io.open(man, "w", encoding="utf-8", newline="") as fh:
+        w = csv.DictWriter(fh, fieldnames=["batch", "who", "cluster", "hash",
+                                           "image", "face_index"])
+        w.writeheader()
+        w.writerows(manifest)
+    print()
+    print("wrote {}  ({:.1f} MB)".format(out, os.path.getsize(out) / 1048576))
+    print("      {} - {} crops across {} clusters".format(
+        man, len(manifest), len(rows)))
+    print("{} people in the autocomplete list".format(len(names)))
+    print()
+    print("Gate it before anyone sees it:")
+    print("    python stages/07_people/verify_people_sheet.py --page {}".format(out))
+    return 0
+
+
+def page(rows, names, who, batch):
+    """The phone page. One cluster per screen, answers kept locally AND sent."""
+    opts = "".join('<option value="{}">'.format(html.escape(n)) for n in names)
+    cards = []
+    for i, r in enumerate(rows):
+        imgs = "".join(
+            '<img data-face="{}:{}:{}" src="data:image/jpeg;base64,{}">'.format(
+                html.escape(h), html.escape(im), html.escape(str(fi)), b64)
+            for h, im, fi, b64 in r["imgs"])
+        cards.append(
+            '<section class="card" data-cid="{cid}" data-photos="{n}" '
+            'data-i="{i}"><div class="faces">{imgs}</div>'
+            '<div class="meta"><b>{n:,}</b> photograph{s}{span}</div>'
+            '<input type="text" list="names" placeholder="who is this?" '
+            'autocomplete="off" autocapitalize="words" spellcheck="false">'
+            '<div class="btns"><button class="skip">Not a person / skip</button>'
+            '<button class="next">Next</button></div></section>'.format(
+                cid=html.escape(r["cid"]), n=r["photos"],
+                s="" if r["photos"] == 1 else "s",
+                span=(" &middot; " + html.escape(r["span"])) if r["span"] else "",
+                i=i, imgs=imgs))
+    return TEMPLATE.replace("{{OPTIONS}}", opts) \
+                   .replace("{{CARDS}}", "".join(cards)) \
+                   .replace("{{WHO}}", html.escape(who)) \
+                   .replace("{{BATCH}}", str(batch)) \
+                   .replace("{{COUNT}}", str(len(rows)))
+
+
+TEMPLATE = """<!doctype html><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Who is this?</title>
+<style>
+ :root{color-scheme:dark}
+ body{font:16px/1.5 system-ui,sans-serif;margin:0;background:#111;color:#eee;
+      padding:12px 12px 96px}
+ h1{font-size:18px;margin:4px 0 2px}
+ .sub{color:#999;font-size:13px;margin-bottom:14px}
+ .card{display:none;border-top:1px solid #333;padding:14px 0}
+ .card.on{display:block}
+ .faces{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px}
+ .faces img{width:104px;height:104px;object-fit:cover;border-radius:8px;
+            background:#222}
+ .meta{color:#9ad;font-size:14px;margin-bottom:10px}
+ input[type=text]{width:100%;padding:13px;font-size:17px;border-radius:10px;
+   border:1px solid #444;background:#1c1c1c;color:#fff;box-sizing:border-box}
+ input[type=text]:focus{outline:2px solid #4a8;border-color:#4a8}
+ .btns{display:flex;gap:8px;margin-top:10px}
+ .btns button{flex:1;padding:13px;font-size:15px;border-radius:10px;
+   border:1px solid #444;background:#1c1c1c;color:#ccc}
+ .btns .next{background:#2d7;color:#052;border:0;font-weight:600}
+ #bar{position:fixed;left:0;right:0;bottom:0;background:#000;
+   border-top:1px solid #333;padding:10px 12px;
+   padding-bottom:calc(10px + env(safe-area-inset-bottom,0px));
+   display:flex;gap:10px;align-items:center}
+ #bar b{color:#8f8}
+ #send{margin-left:auto;padding:11px 18px;font-size:15px;border-radius:10px;
+   border:0;background:#2d7;color:#052;font-weight:600}
+ #send[disabled]{opacity:.4}
+ #msg{color:#8f8;font-size:13px}
+</style>
+<h1>Who is this?</h1>
+<div class="sub">Batch {{BATCH}} &middot; {{COUNT}} people &middot; {{WHO}}.
+Pick a name from the list where you can - it keeps one person from becoming
+three. Skip anything you cannot place; it will not come back.</div>
+<datalist id="names">{{OPTIONS}}</datalist>
+{{CARDS}}
+<div id="bar">
+  <span><b id="done">0</b>/<b id="total">{{COUNT}}</b></span>
+  <span id="msg"></span>
+  <button id="send">Submit</button>
+</div>
+<script>
+// Two places, on purpose. localStorage means a closed tab is not a lost hour;
+// the artifact db means a closed SESSION is not a lost hour either - which is
+// the thing Krish asked for. Neither is the record: the journal is, written by
+// stages/07_people/ingest_game_answers.py when these rows are read back.
+const KEY = 'contentarchives.game.{{WHO}}.{{BATCH}}';
+const saved = JSON.parse(localStorage.getItem(KEY) || '{}');
+const cards = Array.from(document.querySelectorAll('.card'));
+let at = 0;
+
+function show(i) {
+  cards.forEach((c, n) => c.classList.toggle('on', n === i));
+  at = Math.max(0, Math.min(i, cards.length - 1));
+  const inp = cards[at] && cards[at].querySelector('input');
+  if (inp) inp.focus({preventScroll: true});
+  window.scrollTo(0, 0);
+}
+
+function save() {
+  const o = {};
+  cards.forEach(c => {
+    const v = (c.querySelector('input').value || '').trim();
+    if (v) o[c.dataset.cid] = v;
+  });
+  localStorage.setItem(KEY, JSON.stringify(o));
+  document.getElementById('done').textContent = Object.keys(o).length;
+}
+
+function rows() {
+  return cards.map(c => {
+    const v = (c.querySelector('input').value || '').trim();
+    return v ? {id: '{{WHO}}-{{BATCH}}-' + c.dataset.cid,
+                cluster: c.dataset.cid, name: v} : null;
+  }).filter(Boolean);
+}
+
+cards.forEach((c, i) => {
+  const inp = c.querySelector('input');
+  if (saved[c.dataset.cid]) inp.value = saved[c.dataset.cid];
+  inp.addEventListener('input', save);
+  inp.addEventListener('keydown', e => {
+    if (e.key === 'Enter') { e.preventDefault(); save(); show(i + 1); }
+  });
+  c.querySelector('.next').addEventListener('click', () => { save(); show(i + 1); });
+  c.querySelector('.skip').addEventListener('click', () => {
+    inp.value = ''; save(); show(i + 1);
+  });
+});
+show(0);
+save();
+
+document.getElementById('send').addEventListener('click', async () => {
+  const msg = document.getElementById('msg');
+  const data = rows();
+  if (!data.length) { msg.textContent = 'nothing named yet'; return; }
+  const btn = document.getElementById('send');
+  btn.disabled = true;
+  msg.textContent = 'sending...';
+  try {
+    const db = await window.claude.use('db');
+    if (!db) throw new Error('no db');
+    // One document per batch, replaced wholesale: re-submitting after adding a
+    // few more names must not create a second, partial record of the same work.
+    await db.doc('answers/{{WHO}}-{{BATCH}}').set(
+      {who: '{{WHO}}', batch: {{BATCH}}, rows: data,
+       at: new Date().toISOString()});
+    msg.textContent = 'sent - ' + data.length + ' names. Safe to close.';
+  } catch (e) {
+    msg.textContent = 'could not send; your answers are still saved here.';
+    btn.disabled = false;
+  }
+});
+</script>
+"""
+
+
+if __name__ == "__main__":
+    sys.exit(main())
