@@ -245,8 +245,18 @@ def main() -> int:
             print("   {:,} of {:,}".format(moved, len(rows)))
     print("moved {:,} of {:,}".format(moved, len(rows)))
     print()
-    print("Now: python stages/08_index/build_db.py   (18,985 paths changed)")
-    print("Then: apply_split_by_path.py --verify")
+    # THE INDEX READS THE INVENTORY, NOT THE DISK. I wrote this warning into
+    # sweep_intimate.py after the 88-file sweep and then did not follow it here:
+    # the inventory was rebuilt at 13:30, this move ran at 13:47, and the index
+    # rebuilt at 13:51 faithfully reproduced a PRE-MOVE inventory. Every count
+    # taken from it afterwards - queue sizes, audience, side totals - was wrong,
+    # while --verify stayed correct precisely because it re-derives from the
+    # FILESYSTEM.
+    print("Now, IN THIS ORDER - the index reads the inventory, not the disk:")
+    print("  1. python stages/04_inventory/build_inventory.py --video")
+    print("     (~55 min; without it the index cannot see these moves)")
+    print("  2. python stages/08_index/build_db.py")
+    print("  3. apply_split_by_path.py --verify")
     print("To undo: apply_split_by_path.py --reverse {}".format(a.journal))
     return 0
 
