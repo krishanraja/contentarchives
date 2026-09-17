@@ -82,6 +82,26 @@ def main() -> int:
     ap.add_argument("--journal", action="append", default=[],
                     help="move journal(s); globs allowed, repeatable")
     ap.add_argument("--out", default=OUT)
+    # THE HASH MAP IS THE INVENTORY'S STALE SIBLING, and it is shaped
+    # differently. load_hash_index() merges MIGRATION-HASHES.csv - headerless,
+    # path in column 0 - with HASH-INDEX.csv, which has a LibraryPath header.
+    # Both were written before today's moves, so after patching the inventory
+    # the index rebuilt with 19,022 files resolving to NO hash, joining none of
+    # content_tags.csv (keyed on hash), and silently dropping `description` from
+    # 96.9% to 74.1%. A path key is only ever as current as the last move.
+    ap.add_argument("--column", default="LibraryPath",
+                    help="the path column: a header name, or an index like 0 "
+                         "for a headerless file")
+    ap.add_argument("--headerless", action="store_true",
+                    help="the first line is data, not a header")
+    # A PARTIAL source legitimately will not hold every moved path:
+    # HASH-INDEX.csv covers 9,440 of 82,193 files. Stopping on that would refuse
+    # every patch it is needed for, so it is reported instead - but only when
+    # asked for, because for the INVENTORY an unmatched move means the two
+    # records disagree and that must still stop the run.
+    ap.add_argument("--partial", action="store_true",
+                    help="the source covers only some files, so unmatched "
+                         "journal moves are reported rather than fatal")
     ap.add_argument("--apply", action="store_true")
     a = ap.parse_args()
 
@@ -101,20 +121,35 @@ def main() -> int:
         return 1
 
     tmp = a.out + ".tmp"
-    patched = missing = rows = 0
+    patched = rows = 0
     seen_sources = set()
     sides = collections.Counter()
     with io.open(a.src, encoding="utf-8", errors="replace", newline="") as fh:
         reader = csv.reader(fh)
-        header = next(reader)
-        try:
-            col = header.index("LibraryPath")
-        except ValueError:
-            print("STOPPING: {} has no LibraryPath column".format(a.src))
-            return 1
+        header = None
+        if a.headerless:
+            # MIGRATION-HASHES.csv's first line is DATA. Consuming it as a
+            # header would drop a real file from the map and look like success.
+            try:
+                col = int(a.column)
+            except ValueError:
+                print("STOPPING: --headerless needs --column as an index, "
+                      "got {!r}".format(a.column))
+                return 1
+        else:
+            header = next(reader)
+            if a.column.isdigit():
+                col = int(a.column)
+            elif a.column in header:
+                col = header.index(a.column)
+            else:
+                print("STOPPING: {} has no {!r} column. It has: {}".format(
+                    a.src, a.column, ", ".join(header[:8])))
+                return 1
         with io.open(tmp, "w", encoding="utf-8", newline="") as out:
             w = csv.writer(out)
-            w.writerow(header)
+            if header is not None:
+                w.writerow(header)
             for row in reader:
                 rows += 1
                 if len(row) > col:
@@ -130,14 +165,22 @@ def main() -> int:
     print("rows read    : {:,}".format(rows))
     print("paths patched: {:,}".format(patched))
 
-    # A journal row whose source is not in the inventory means the two records
-    # disagree. Reported, never skipped quietly.
+    # A journal row whose source is not in this file. For the INVENTORY that
+    # means the two records disagree and is worth alarm; for a PARTIAL source
+    # like HASH-INDEX.csv (9,440 rows of 82,193 files) it is simply expected.
+    # Never skipped quietly either way - a count that reads as an alarm when it
+    # is routine trains the reader to ignore it.
     unmatched = [s for s in moves if s not in seen_sources]
     if unmatched:
-        print("journal moves with NO matching inventory row: {:,}".format(
-            len(unmatched)))
-        for s in unmatched[:6]:
-            print("   {}".format(s[-90:]))
+        if a.partial:
+            print("journal moves not present in this partial source: {:,} of "
+                  "{:,} - expected, it does not cover every file".format(
+                      len(unmatched), len(moves)))
+        else:
+            print("journal moves with NO matching row: {:,} - the two records "
+                  "DISAGREE".format(len(unmatched)))
+            for s in unmatched[:6]:
+                print("   {}".format(s[-90:]))
 
     print()
     print("=== sides in the patched inventory ===")
