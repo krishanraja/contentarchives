@@ -131,18 +131,24 @@ rename went in as a NEW journal row, never an edit). Ashwin now reads **0** on
 the index, Ashvin **151**. Every other "Ash" person is untouched - Asha, Ashish,
 Ashleigh, Ash Wales Brown, Prashila, Adam Washington.
 
-### THE WORK THAT IS LEFT: 844 merge siblings
+### THE WORK THAT IS LEFT: 463 merge siblings
 
 `people_sheet.py` pools a merge GROUP into one row and prints it under ONE
 cluster id. Krish answers that id. But `build_db`'s `scope_hashes` expands
 `WHERE tag='cluster' AND value=?` - the one cluster, **not the group**. So every
 other cluster in that group stays unnamed.
 
-**844 named clusters have an unanswered sibling, covering 22,763 photographs.**
-This is the same shape as Rishi's `c36`, which was caught by hand and needed its
-own journal row.
+**463 unanswered sibling clusters, covering 6,180 photographs.** Same shape as
+Rishi's `c36`, which was caught by hand and needed its own journal row.
 
-**That 22,763 is an upper bound, not a loss.** `merge_clusters.py` refuses to mix
+**I first wrote 844 siblings and 22,763 photographs in this file, and it was
+wrong.** That counted (named cluster, sibling) PAIRS: `c1780` appeared eleven
+times because eleven named clusters share its group, and the photograph figure
+summed the same clusters over and over instead of taking the union. Deduplicated
+on the sibling and unioned on the hash it is 463 and 6,180. Commit 2e12d5b
+carries the inflated pair-count in its message; this paragraph is the correction.
+
+**Even 6,180 is an upper bound, not a loss.** `merge_clusters.py` refuses to mix
 two differently-named clusters, so siblings are *probably* the same person - but
 "probably" is the embeddings' opinion, and that opinion was wrong twice (the two
 Kirans, the three Rishis). Krish was offered automatic propagation and a
