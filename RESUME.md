@@ -112,7 +112,66 @@ memory instead of from the run.
 
 ----
 
-## RIGHT NOW: THE SPLIT IS APPLIED. Next is the two phone games (2026-09-18, 13:55)
+## RIGHT NOW: the split is applied and the records are repaired (2026-09-18, 14:33)
+
+### THREE RECORDS DESCRIBE THE LIBRARY, AND A MOVE STALES ALL OF THEM
+
+This cost most of an afternoon and will cost the next session the same unless it
+is read first. After any mover in stage 09 runs:
+
+| file | keyed on | what happens if it is not patched |
+|---|---|---|
+| `INVENTORY.csv` | path | `build_db` rebuilds from pre-move paths |
+| `MIGRATION-HASHES.csv` | path (HEADERLESS) | moved files resolve to no hash |
+| `HASH-INDEX.csv` | path (`LibraryPath`) | the other half of the same map |
+
+`content_tags.csv` is keyed on **hash**, the inventory on **path**, and the two
+hash maps are the join. So an unpatched hash map does not fail loudly - it
+silently drops the ENRICHMENT of every moved file. Measured: 19,022 files with
+no hash, exactly the 19,022 that moved, and `description` fell from 96.9% to
+74.1% while everything still "worked".
+
+**`stages/04_inventory/patch_inventory_moves.py` patches all three** from a
+mover's journal in seconds, at constant memory, keeping the EXIF and duration a
+fresh walk would recompute. The two hash maps are complementary - MIGRATION
+covers 9,586 of the moves and HASH-INDEX the other 9,436 - so both must be
+patched.
+
+    patch_inventory_moves.py --from <backup> --out INVENTORY.csv --journal ...
+    ... --from MIGRATION-HASHES.csv.premove --column 0 --headerless --partial
+    ... --from HASH-INDEX.csv.premove --partial
+
+Then `build_db.py`. **Verified after: 0 files without a hash, description 97.0%,
+audience 100%.**
+
+### DO NOT REWALK THE LIBRARY TO FIX A MOVE
+
+`build_inventory.py` walks 82,193 files and **truncates INVENTORY.csv as it
+goes**. It was killed twice today by the system running low on memory - once
+with `--video` and once without, so ffprobe was not the cause - turning a
+complete 82,193-row inventory into a 21,076-row corpse. The 12 September copy
+survived only because it had been set aside first. **Copy any record aside
+before a tool rewrites it in place.**
+
+Three background jobs were killed for memory; the same command in the
+FOREGROUND completed in 155s. `build_db.py` fits inside the 600s foreground
+limit with room to spare.
+
+### THE TEST SUITE WAS DESTROYING THE OFF-DISK JOURNAL BACKUP
+
+`record_people.py` held `BACKUP` as a module constant pointing at
+`G:\My Drive\...`, and `test_people_rounds.py` runs it against a temp store - so
+every suite run copied a two-row fixture journal (**256 bytes**) over **1,508
+real answers**. All week. The local journal was never touched, so nothing was
+lost; the safety net for the one irreplaceable file was.
+
+Restored, `--backup` is now an argument, and section 10 of the suite MEASURES
+the live path's size and mtime across a recorder run - an argument nobody checks
+is an argument somebody deletes, and this failure was silent.
+
+----
+
+## The split itself (2026-09-18, 13:55)
 
 **18,934 files moved, verified from the filesystem: 0 not where the approved
 proposal put them.** Krish reviewed it as groups of photographs and said *"split
