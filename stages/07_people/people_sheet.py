@@ -425,6 +425,22 @@ def main() -> int:
     ap.add_argument("--out", default=OUT)
     ap.add_argument("--top", type=int, default=60)
     ap.add_argument("--per-row", type=int, default=12)
+    # SUBJECT OR BACKGROUND. Krish, 2026-09-18, shown the smallest faces in the
+    # clusters he had declined: "All those boxes are just people in the
+    # background, not really important." He chose a "30px" floor from a page of
+    # counts; re-derived as a share of the frame's SHORT edge that is 0.08,
+    # which reproduces the pair he chose from (~19,776 groups, ~72% of what he
+    # had named) within sampling error. A share and not pixels because 30px is
+    # 0.059 of one frame's short edge and 0.316 of another - the same face is a
+    # subject in a portrait and background in a landscape.
+    #
+    # 0 disables it and shows everything, which is what every sheet up to round
+    # 23 did: 90% of that queue was under 60 thumbnail pixels.
+    ap.add_argument("--min-face-share", type=float, default=SUBJECT_SHARE,
+                    metavar="F",
+                    help="skip a face smaller than this share of the frame's "
+                         "short edge - background people rather than subjects "
+                         "(default %(default)s; 0 shows everything)")
     # THE ROUNDS HAVE TO BE ABLE TO END, AND TO SAY SO.
     #
     # Krish, 2026-09-16, asked how round 19 should pick its 60: "add a size floor
@@ -680,9 +696,9 @@ def main() -> int:
         ranked = ranked[:a.top]
     out = [HEAD]
     total = 0
+    shown = 0
     for cid, faces in ranked:
         hashes = {r["hash"] for r in faces}
-        total += len(hashes)
         ys = sorted(y for y in (years.get(h) for h in hashes) if y)
         span = "{}-{}".format(ys[0], ys[-1]) if ys else ""
         # ONLY the faces assigned to this cluster, best-detected first, and one
@@ -708,7 +724,24 @@ def main() -> int:
                 p = os.path.join(a.thumbs, r["hash"][:2], r["hash"] + ".jpg")
             if not os.path.exists(p):
                 continue
-            b64 = crop(p, r["bbox"])
+            # SUBJECT OR BACKGROUND. Krish, 2026-09-18, shown the smallest faces
+            # in his declined clusters: "All those boxes are just people in the
+            # background, not really important." 90% of the queue is under 60
+            # thumbnail pixels, so without this the game is mostly strangers.
+            #
+            # The dimensions come from the image crop() is about to open anyway,
+            # so this costs one extra read rather than a second pass over 54,229
+            # groups.
+            if a.min_face_share > 0:
+                try:
+                    from PIL import Image
+                    with Image.open(p) as _im:
+                        frame = _im.size
+                except Exception:                                # noqa: BLE001
+                    frame = None
+                if not is_subject(r["bbox"], frame, a.min_face_share):
+                    continue
+            b64 = crop(p, r["bbox"], r["hash"])
             if b64:
                 # data-face names WHICH face this crop is, so verify_people_sheet
                 # can check each crop against the assignment files independently
@@ -716,6 +749,14 @@ def main() -> int:
                             .format(r["hash"], r.get("image") or "", r["face_index"], b64))
         if not imgs:
             continue
+        # COUNTED AFTER THE FILTER, NOT BEFORE. With --min-face-share on, a
+        # ranked group can lose every face to the subject test: the first run
+        # rendered 37 rows and still announced "naming all 60 rows would label
+        # 420 photographs", because both figures were accumulated before the
+        # filter ran. A page that misreports itself is the fault this whole
+        # session has been correcting.
+        shown += 1
+        total += len(hashes)
         out.append(
             '<div class="row" data-cid="{cid}" data-photos="{n}">'
             '<div class="meta"><div class="id">{cid}</div>'
@@ -729,12 +770,16 @@ def main() -> int:
         print("  {:<8} {:>6,} photographs  {}".format(cid, len(hashes), span))
 
     out.append('<p class="sub" style="margin-top:24px">{} rows shown, '
-               'covering {:,} photographs.</p>'.format(len(ranked), total))
+               'covering {:,} photographs.</p>'.format(shown, total))
     out.append(TAIL)
     io.open(a.out, "w", encoding="utf-8").write("".join(out))
     print()
     print("wrote {}  ({:.1f} MB)".format(a.out, os.path.getsize(a.out) / 1048576))
-    print("naming all {} rows would label {:,} photographs.".format(len(ranked), total))
+    print("naming all {} rows would label {:,} photographs.".format(shown, total))
+    if shown < len(ranked):
+        print("({} of {} ranked groups had no SUBJECT face and were dropped - "
+              "background people, at --min-face-share {})".format(
+                  len(ranked) - shown, len(ranked), a.min_face_share))
     return 0
 
 
