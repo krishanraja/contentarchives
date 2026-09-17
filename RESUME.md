@@ -120,7 +120,9 @@ The index was rebuilt at 21:02 - **277 seconds**, not the 31 minutes of that
 afternoon, so the memory pressure had eased - and everything here is measured
 from it rather than claimed. Coverage across 82,193 files: `sensitivity` 99.4%,
 `description` 99.3%, `kind` 99.4%, `audience` 100%. 1,609 human answers, 45,814
-person-on-photograph rows. The Python suite is 16 of 16 green.
+person-on-photograph rows. The whole suite is green: 16 of 16 Python files and
+all three under PowerShell, which cover the supervisor, re-arming, and the guard
+that refuses a chain it cannot parse.
 
 **`Personal\Intimate` IS ONE FLAT FOLDER.** Krish: *"lets remove the chronology
 folder structure from Intimate and just have all the media in that one folder"*.
@@ -143,12 +145,24 @@ today, because neither had a thumbnail before:
 | file | broad pass | narrow pass |
 |---|---|---|
 | `Archive\Personal\06-Work\Old Documents\jason7.png` | `intimate` | nudity **none**, sexual yes, "digitally altered image" |
-| `Media\Personal\2019\2019-10\VID-20191028-WA0006.mp4` | `intimate` | nudity **none**, "animated character" - an Among Us cartoon |
+| `Media\Personal\2019\2019-10\VID-20191028-WA0006.mp4` | `intimate` | nudity **none**, "animated character" |
 
 Both are `keep=False`. The two passes DISAGREE and learning 37 is explicit that
 a disagreement goes to a human, never to another model. So the sweep's "0
 classified intimate outside the folder" invariant reads **2 on purpose**. Do not
 close it by moving them.
+
+**And both thumbnails were OPENED before writing this, which changed one of
+them.** `jason7.png` is a wedding photograph of a man in a white shirt and
+fedora with a large pink sex toy crudely pasted over his crotch - a doctored
+joke, so the narrow pass's "digitally altered image" and `sexual=yes` were
+right. The video is a 3D-animated pair of buttocks on an orange radial
+background: a twerking cartoon meme. Its `objects` tag reads "Among Us
+character", which is simply wrong, and the first draft of this handover repeated
+it because a tag was read instead of the picture. Neither file is a photograph
+of a real unclothed person; both are crude jokes from WhatsApp-era sharing. If
+they are moved at all, `_Review` fits them better than `Intimate` - they are
+`keep=False`.
 
 **THE GAP THAT HID FROM EVERY PASS AT ONCE.** `chain_thumbnails.ps1` only ever
 ran `--source D:\ContentLibrary\Media`, and `Archive\`, `_Review\` and
