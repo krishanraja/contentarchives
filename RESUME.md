@@ -121,7 +121,15 @@ forwarding anything. Two batches done, 62 answers in.
 |---|---|
 | batch 1 | https://claude.ai/artifact/KJohLkjv8vdHn8KNvt76ek - finished |
 | batch 2 | https://claude.ai/artifact/3dMThrpFi556maYVNSiPbL - finished |
-| batch 3 | https://claude.ai/artifact/NfWHekaNjSPpmxzyQFW5AW - 40 clusters he has never been shown |
+| batch 3 | https://claude.ai/artifact/NfWHekaNjSPpmxzyQFW5AW - finished |
+| batch 4 | https://claude.ai/artifact/Y4XT9gzhtUkR6Hh9SvrhFC - with him now |
+
+**A REBUILD IS OWED, DELIBERATELY.** 102 game answers are in the journal and
+NOT yet on photographs. `build_game.py` takes answered clusters from the JOURNAL
+and sides from the index, and sides do not move when names are added - so a
+rebuild buys nothing for choosing the next batch, and at 31 minutes under the
+current memory pressure it costs a great deal. Run `build_db.py` once after
+several batches, in the FOREGROUND, not after each one.
 
 **The loop**: `build_game.py --who krish --batch N` -> gate with
 `verify_people_sheet.py` AND `check_repeats.py` -> publish as a private artifact
