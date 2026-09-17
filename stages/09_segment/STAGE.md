@@ -42,7 +42,8 @@ and non-memories moved to `_Review` - moved, never deleted.
 |---|---|
 | `contentarchives/sides.py` | `side_of` and `is_majority_communal` - the ONE definition of whose life a photograph is from, read from the path and never from `files.side` |
 | `stages/09_segment/propose_split.py` | **BROKEN, do not run.** Proposes by origin folder, which 12,901 unsided files do not have, and its `COMMUNAL` pattern is still the retired publisher's pseudonyms (`PERSON-A\|PERSON-B\|PERSON-C`), so it matches nothing real and would propose "personal" or "unclear" for everything |
-| `stages/09_segment/apply_split.py` | apply an approved split, journalled |
+| `stages/09_segment/propose_split_by_path.py` | propose a side per FILE for the `Media\Pending-Segmentation` and `Media\NoDate` queues, by Krish's path rule, for review - writes `SPLIT-BY-PATH.csv` and moves nothing |
+| `stages/09_segment/apply_split.py` | **STALE, do not run.** Applies a split journalled and reversible, but joins `ORIGIN-MAP.csv` to `SPLIT-PROPOSAL.csv` by origin folder and builds destinations from the PRE-MIGRATION layout (`LIBROOT\Library\...`, `LIBROOT\NoDate\...`). `migrate_layout.py` has since restructured the library to `Media\<Side>\...`, so every destination it computes is wrong |
 | `stages/09_segment/classify_screenshots.py` | separate screenshots from photographs, deleting neither |
 | `stages/09_segment/move_to_review.py` | move a named set into _Review |
 | `stages/09_segment/restore_from_review.py` | put back what a rule should never have evicted |
