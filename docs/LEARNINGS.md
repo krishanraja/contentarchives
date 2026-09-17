@@ -1904,3 +1904,44 @@ job that writes in place would have had nothing to promote.
    narrower than the claim made for it. That is luck, not rigour: the same bug
    in a guard whose subject was not already correct at source would have shipped
    the defect it existed to catch.
+
+## 56. A per-path view joined on hash invents rows, and every figure drawn from it
+
+`v_files` is built `FROM files f LEFT JOIN resolved r ON r.hash = f.hash GROUP BY
+f.path` - **one row per PATH**, deliberately, because a path is what the sheets,
+the movers and the review pages address.
+
+The library holds 82,193 paths against 80,957 hashes. 1,205 hashes have more than
+one path; one has 26. So this, which reads as obviously correct:
+
+    SELECT ... FROM files f LEFT JOIN v_files v ON v.hash = f.hash
+
+matches every path against every OTHER path sharing its hash. The 26-path hash
+alone contributes 676 rows. The query returned **85,281 rows for 82,193 files**.
+
+**What it cost.** Asked "are you sure all intimate pictures and videos are in the
+intimate folder?", I answered from that query: 3,124 files never examined, photo
+coverage 97% and video 93%, 745 files labelled `private-family`. Recomputed one
+row per file: **2,426** never examined, and **737 paths / 733 hashes** of
+`private-family`. The figures were not off by a rounding error - they were off by
+a factor that varied per row, so the percentages were wrong in an unknown
+direction, and I had already given them to Krish as measurements.
+
+Nothing errored. 85,281 looks like a library-sized number, which is precisely why
+it survived.
+
+**Four rules.**
+
+1. **A per-path view is joined on PATH.** Join on hash only to something that is
+   itself one row per hash.
+2. **A per-hash question groups.** `SELECT hash, MAX(COALESCE(field,'')) FROM
+   v_files GROUP BY hash` - and say which of the two a number is: "737 files, 733
+   hashes" is one fact, "737" on its own is half of one.
+3. **Any count over the library that exceeds `SELECT COUNT(*) FROM files` is a
+   fan-out, not a finding.** That tell costs one query and is now asserted in
+   `tests/test_build_db.py` section 10.
+4. **Two figures from one query are wrong together.** The second opinion has to
+   come from a different query, or it is not a check. Here the corrected count
+   only surfaced because a separate tool, written against `files` alone, disagreed
+   with it - 1,963 against 2,706 - and the discrepancy had to be explained rather
+   than resolved in favour of the more convenient number.

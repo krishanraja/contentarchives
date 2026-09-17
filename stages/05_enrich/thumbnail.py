@@ -57,6 +57,26 @@ def _pillow(src: str, dst: str, size: int) -> bool:
     except ImportError:
         return False
     try:
+        # HEIC/HEIF is the iPhone default and Pillow cannot open it unaided.
+        # Without this, 111 iPhone photographs in this library had no thumbnail,
+        # so no classifier and no face pass ever saw them - and the failure was
+        # silent, because _pillow returning False just falls through to ffmpeg,
+        # which cannot open HEIC either. register_heif_opener is idempotent.
+        try:
+            import pillow_heif
+            pillow_heif.register_heif_opener()
+        except ImportError:
+            pass
+        # Accept a partially damaged scan rather than refusing the file. 18
+        # photographs here - Samsung panoramas and Single Take shots, up to
+        # 16144x1824 - have intact headers and damaged tails, and both Pillow
+        # ("broken data stream") and ffmpeg ("mjpeg: unsupported coding type")
+        # refused all of them outright. A JPEG decodes top to bottom, so the
+        # undamaged leading portion is recoverable and is still a photograph a
+        # person can recognise and a classifier can judge. Refusing it means
+        # nothing ever looks at the image at all, which is strictly worse.
+        from PIL import ImageFile
+        ImageFile.LOAD_TRUNCATED_IMAGES = True
         from PIL import ImageOps
         with Image.open(lp(src)) as im:
             # Honour the EXIF orientation BEFORE converting. convert("RGB")

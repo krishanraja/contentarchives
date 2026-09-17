@@ -30,7 +30,15 @@ and non-memories moved to `_Review` - moved, never deleted.
   `intimate` sat in `_Review` and that moving them broke this invariant, he chose
   to move them: his instruction was *"ensure 0 intimate photos remain in any
   other folder"*, and `_Review` is another folder
-- **`Media\Personal\Intimate\<year>\` holds everything classified `intimate`**,
+- **`Media\Personal\Intimate\` holds everything classified `intimate`, in ONE
+  FLAT FOLDER** - no year subfolders. Krish, 2026-09-18: *"lets remove the
+  chronology folder structure from Intimate and just have all the media in that
+  one folder"*. A `YYYY\` tree is right for a life being browsed by date and
+  wrong for a drawer whose whole purpose is that nobody browses it; 88 files
+  need no chronology, and 14 year folders holding 1-24 files each were 14 places
+  to look instead of one. `sweep_intimate.py` treats a file as home only when it
+  sits directly in the folder, so the flatten IS the ordinary sweep, journalled
+  and reversible, and emptied year folders are pruned after it,
   swept there by `sweep_intimate.py`. What that guarantees is narrow and must
   not be widened in the retelling: 0 files CLASSIFIED intimate sit outside it.
   3,124 files have no `sensitivity` recorded at all and 745 are
@@ -56,7 +64,7 @@ and non-memories moved to `_Review` - moved, never deleted.
 | `stages/09_segment/review_split_by_path.py` | the proposal as GROUPS of photographs with thumbnails, not rows of paths - because 18,985 CSV rows is a rubber stamp, not a review ("what am i supposed to do in that sheet?") |
 | `stages/09_segment/apply_split.py` | **STALE, do not run.** Applies a split journalled and reversible, but joins `ORIGIN-MAP.csv` to `SPLIT-PROPOSAL.csv` by origin folder and builds destinations from the PRE-MIGRATION layout (`LIBROOT\Library\...`, `LIBROOT\NoDate\...`). `migrate_layout.py` has since restructured the library to `Media\<Side>\...`, so every destination it computes is wrong |
 | `stages/09_segment/apply_split_by_path.py` | apply the approved per-file split - journal written FIRST, a missing source or a destination collision stops the run, `--verify` re-derives every side from disk, `--reverse` puts every file back. Reuses `sweep_intimate.reverse`, which `tests/test_segment_moves.py` already watches |
-| `stages/09_segment/sweep_intimate.py` | move everything classified `intimate` into `Media\Personal\Intimate\<year>\` - journal written FIRST, a destination collision stops the run, `--reverse` puts every file back, `--verify` re-derives the count from disk |
+| `stages/09_segment/sweep_intimate.py` | move everything classified `intimate` into `Media\Personal\Intimate\` - ONE FLAT FOLDER, no year subfolders - journal written FIRST, a destination collision stops the run (two years can share a basename, and flat destinations make that guard load-bearing rather than theoretical), emptied subfolders pruned, `--reverse` puts every file back, `--verify` re-derives the count from disk |
 | `stages/09_segment/classify_screenshots.py` | separate screenshots from photographs, deleting neither |
 | `stages/09_segment/move_to_review.py` | move a named set into _Review |
 | `stages/09_segment/restore_from_review.py` | put back what a rule should never have evicted |

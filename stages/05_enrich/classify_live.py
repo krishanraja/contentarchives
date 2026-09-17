@@ -116,6 +116,65 @@ RICH_FIELDS = ("description", "objects", "activity", "text", "occasion", "mood")
 FIELDS = ("kind", "people", "subject", "keep", "sensitivity",
           "setting", "place", "era")
 
+# The SENSITIVITY pass: one narrow question, asked properly.
+#
+# The main prompt asked twelve things at once, of which `sensitivity` was one
+# field with three lines of definition. It labelled 88 files of 82,193
+# `intimate` - 0.1%. sweep_intimate.py then moved all 88 and verified none
+# remained elsewhere, which proves the sweep executed those LABELS faithfully
+# and says nothing about whether the labels found everything. Recall is the
+# whole question:
+#
+#     "Are you sure all intimate pictures and videos are in the intimate
+#      folder? I'm specifically talking about naked females to be precise.
+#      We need to ensure this is done accurately."
+#
+# Two populations the first pass cannot answer for: files it never saw (no
+# thumbnail existed until backfill_thumbs.py), and the 737 files in
+# `private-family`, the middle tier that exists so a child in a bath is never
+# filed beside adult content - which also means an adult photograph landing
+# there is invisible to a search for `intimate`.
+#
+# It writes its OWN fields and never `sensitivity`. A model's guess and a
+# human's confirmation must stay distinguishable (store.py's provenance rule),
+# and no file may move on a model's say-so: the hits go to a review page, and
+# only a human answer writes `sensitivity`.
+SENS_PROMPT = """This is a private family photo library being filed so that
+sensitive images are stored separately from ordinary ones. Judge ONLY what is
+visible. If several images are shown they are frames from ONE video - judge the
+video as a whole.
+
+Reply with ONLY a JSON object, no prose:
+{"nudity":"none","subject_age":"none","sexual":"no","nudity_note":"",
+ "confidence":0.0}
+
+nudity, exactly one of:
+  none      nobody is unclothed. Ordinary swimwear, beachwear, a bare chest at
+            a pool or beach, underwear worn as outerwear, and a baby in a nappy
+            are all "none".
+  partial   a breast, buttock or genitals are visible or only just covered, or
+            a person is topless
+  full      a person is completely unclothed
+
+subject_age, exactly one of: none, adult, child, both, unclear
+  "child" for anyone who looks under about 13. A toddler in a bath is "child".
+
+sexual, exactly "yes" or "no"
+  "yes" only if sexual activity is depicted, or the image is posed explicitly
+  for sexual effect.
+
+nudity_note  at most 8 words: what it actually is. "toddler in bath",
+             "topless on beach", "adult in bedroom", "statue in museum".
+
+confidence   0.0-1.0
+
+Do not speculate about what is outside the frame or underneath clothing. A
+painting, statue, poster or screen showing an image is that object: say
+"artwork" or "screen" in nudity_note. A photograph of a document is a
+document."""
+
+SENS_FIELDS = ("nudity", "subject_age", "sexual", "nudity_note")
+
 
 def call(paths, key, prompt=PROMPT, max_out=800, timeout=120):
     """The prompt is a PARAMETER, not a global.
@@ -159,6 +218,24 @@ def call(paths, key, prompt=PROMPT, max_out=800, timeout=120):
     for c in d.get("candidates") or []:
         for part in ((c.get("content") or {}).get("parts") or []):
             txt += part.get("text", "")
+    if not txt:
+        # A CANDIDATE-LEVEL FILTER IS INVISIBLE IN promptFeedback.
+        #
+        # Observed 2026-09-18 on the 13 files that survived every run of the
+        # rich pass: `finishReason: RECITATION`, `content: {}`, and
+        # promptFeedback empty - "filtered because it may contain material that
+        # resembles existing copyrighted works". So the check above saw nothing,
+        # txt came back "" - falsy - and the worker's `if not txt: continue`
+        # dropped the file without incrementing ok, fail OR blocked. 1,899
+        # requested reported 1,883 + 3, and nothing said where the other 13
+        # went. That is learning 41's shape: a falsy return read as success.
+        #
+        # Raised as BLOCKED because that is what it is - a content filter - and
+        # the worker already counts and reports that, so the totals add up.
+        reasons = ", ".join(str((c or {}).get("finishReason") or "?")
+                            for c in (d.get("candidates") or []))
+        raise RuntimeError("BLOCKED: no text, finishReason " +
+                           (reasons or "no candidates at all"))
     u = d.get("usageMetadata") or {}
     return txt, u.get("promptTokenCount", 0), u.get("candidatesTokenCount", 0)
 
@@ -188,6 +265,12 @@ def main():
                          "legible text, occasion and mood. Writes new fields "
                          "alongside the existing labels and replaces nothing, "
                          "under its own source id so both survive.")
+    ap.add_argument("--sensitivity", action="store_true",
+                    help="the NUDITY pass: one narrow question, for the files "
+                         "the main pass never saw and for the private-family "
+                         "middle tier. Writes its own fields under its own "
+                         "source id and NEVER writes `sensitivity` - nothing "
+                         "may move on a model's say-so.")
     ap.add_argument("--dry-run", action="store_true")
     ap.add_argument("--only-list", default="",
                     help="file of content hashes, one per line: judge ONLY these, and judge them even if this model already has - for re-doing files whose thumbnail was rebuilt")
@@ -203,11 +286,19 @@ def main():
     prompt, fields, source = PROMPT, FIELDS, SOURCE
     marker = "kind"
     max_out = 800
+    if a.rich and a.sensitivity:
+        sys.exit("--rich and --sensitivity are different passes with different "
+                 "prompts; run one at a time.")
     if a.rich:
         prompt, fields = RICH_PROMPT, RICH_FIELDS
         source = SOURCE + "-rich"
         marker = "description"
         max_out = 1400        # a transcription needs more room than a label
+    elif a.sensitivity:
+        prompt, fields = SENS_PROMPT, SENS_FIELDS
+        source = SOURCE + "-sensitivity"
+        marker = "nudity"     # resumable: a hash already asked is skipped
+        max_out = 200         # five short fields, nothing to transcribe
 
     st = Store(a.store)
     done = set()

@@ -78,12 +78,14 @@ def main():
     d = tempfile.mkdtemp()
     dest = os.path.join(d, "ContentLibrary", "Media", "Personal", "Intimate")
 
-    print("1. only the intimate files are planned, and the year is kept")
+    print("1. only the intimate files are planned, and the destination is FLAT")
     lib, db_path = fixture(d, [
         (r"Media\Personal\2012\2012-08\a.jpg", "intimate", "2012"),
         (r"Media\Personal\2012\2012-09\b.jpg", "none", "2012"),
         (r"_Review\Media\c.jpg", "intimate", "2019"),
-        (r"Media\Personal\Intimate\2020\d.jpg", "intimate", "2020"),
+        # DIRECTLY in Intimate, which is what "home" now means. A file in
+        # Intimate\<year>\ is NOT home any more - section 6 covers that.
+        (r"Media\Personal\Intimate\d.jpg", "intimate", "2020"),
     ])
     rows = S.plan(db_path, dest)
     srcs = sorted(os.path.basename(r["source"]) for r in rows)
@@ -95,10 +97,14 @@ def main():
           any("b.jpg" in r["source"] for r in rows), False)
     check("_Review is included - Krish overrode that invariant knowingly",
           any(r"_Review" in r["source"] for r in rows), True)
-    check("the destination keeps the year",
-          os.path.basename(os.path.dirname(
-              [r for r in rows if "a.jpg" in r["source"]][0]["destination"])),
-          "2012")
+    # The destination used to carry a `<year>\` segment. Krish, 2026-09-18:
+    # "lets remove the chronology folder structure from Intimate and just have
+    # all the media in that one folder". A year segment here is now a
+    # regression, not a feature.
+    check("the destination is the folder itself, with no year segment",
+          os.path.dirname(
+              [r for r in rows if "a.jpg" in r["source"]][0]["destination"]),
+          dest)
 
     print()
     print("2. a real move, then a REVERSAL that puts everything back")
@@ -223,6 +229,47 @@ def main():
          {"source": e2, "destination": target}])
     check("two sources for one destination is REFUSED, not renamed",
           len(un), 1)
+
+    print()
+    print("6. the FLATTEN: a year subfolder is not home, and is pruned after")
+    # Krish, 2026-09-18: "lets remove the chronology folder structure from
+    # Intimate and just have all the media in that one folder".
+    #
+    # There is no --flatten mode. The whole behaviour rests on one comparison
+    # in plan(): home is the folder ITSELF, not the tree beneath it. If that
+    # ever reverts to `startswith(dest + "\\")`, plan() finds nothing to move
+    # and reports success over a folder still full of year folders - a silent
+    # no-op, which is the worst possible failure for a mover.
+    d4 = tempfile.mkdtemp()
+    dest4 = os.path.join(d4, "ContentLibrary", "Media", "Personal", "Intimate")
+    _, db4 = fixture(d4, [
+        (r"Media\Personal\Intimate\2021\x.jpg", "intimate", "2021"),
+        (r"Media\Personal\Intimate\y.jpg", "intimate", "2022"),
+    ])
+    rows6 = S.plan(db4, dest4)
+    check("a file in Intimate\\<year>\\ IS planned",
+          sorted(os.path.basename(r["source"]) for r in rows6), ["x.jpg"])
+    check("and its destination is the flat folder",
+          rows6[0]["destination"], os.path.join(dest4, "x.jpg"))
+    check("a file already sitting directly in Intimate is left alone",
+          any("y.jpg" in r["source"] for r in rows6), False)
+
+    for r in rows6:
+        os.makedirs(os.path.dirname(S.lp(r["destination"])), exist_ok=True)
+        shutil.move(S.lp(r["source"]), S.lp(r["destination"]))
+    pruned = S.prune_empty(dest4)
+    check("the emptied year folder is pruned",
+          [os.path.basename(p) for p in pruned], ["2021"])
+    check("and the Intimate folder itself survives", os.path.isdir(dest4), True)
+    check("both files now sit directly in Intimate",
+          sorted(os.listdir(dest4)), ["x.jpg", "y.jpg"])
+
+    # prune_empty must never remove dest, even when dest is itself empty:
+    # os.rmdir on the folder the sweep targets would delete the drawer.
+    empty = os.path.join(d4, "EmptyIntimate")
+    os.makedirs(empty, exist_ok=True)
+    check("an EMPTY dest is still never removed",
+          (S.prune_empty(empty), os.path.isdir(empty)), ([], True))
 
     print()
     if FAILURES:

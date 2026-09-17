@@ -9,6 +9,24 @@ Krish, 2026-09-18: *"move everything intimate in to a separate folder called
 Intimate inside Personal, and ensure 0 intimate photos remain in any other
 folder"*.
 
+ONE FLAT FOLDER, NO YEARS
+
+Krish, 2026-09-18: *"lets remove the chronology folder structure from Intimate
+and just have all the media in that one folder"*. A `YYYY\` tree is right for a
+life browsed by date and wrong for a drawer whose purpose is that nobody browses
+it - 88 files spread over 14 year folders holding 1 to 24 files each were 14
+places to look instead of one.
+
+The flatten is not a separate mode. `plan()` treats a file as home only when it
+sits DIRECTLY in the folder, so a file in `Intimate\2021\` is planned like any
+other move: journal first, collision refusal, `--reverse` puts the year folders
+back. Emptied subfolders are pruned after a successful sweep, because an empty
+`Intimate\2021\` is still the structure he asked to remove.
+
+That also promotes the collision guard from theoretical to load-bearing: two
+photographs can share a basename across two years, and with flat destinations
+they now aim at the same path. It stops the run, as it always did.
+
 WHAT "0 REMAINING" CAN AND CANNOT MEAN
 
 `sensitivity` is a VISION MODEL's judgement. After this runs, **0 files
@@ -70,23 +88,42 @@ def plan(db_path: str, dest: str) -> list:
     db = sqlite3.connect("file:{}?mode=ro".format(db_path.replace("\\", "/")),
                          uri=True)
     try:
-        rows = db.execute(
-            "select f.path, f.hash, v.sensitivity, v.kind, f.year "
-            "from files f left join v_files v on v.hash = f.hash "
-            "where v.sensitivity = 'intimate'").fetchall()
+        # NOT `files f LEFT JOIN v_files v ON v.hash = f.hash` (learning 56).
+        # v_files is one row per PATH, so that join matches every path against
+        # every other path sharing its hash: a duplicated intimate photograph
+        # would appear in the plan twice, the collision guard would not fire
+        # (same source, not a different one), and the move loop would try to
+        # move a file its own earlier pass had already moved. Two queries, one
+        # row per hash and one row per path, cannot fan out.
+        sens = {}
+        for h, s, k in db.execute(
+                "select hash, max(coalesce(sensitivity,'')), "
+                "max(coalesce(kind,'')) from v_files group by hash"):
+            sens[h] = ((s or "").strip(), k or "")
+        rows = [(p, h, sens[h][0], sens[h][1], y)
+                for p, h, y in db.execute("select path, hash, year from files")
+                if h in sens and sens[h][0] == "intimate"]
     finally:
         db.close()
     out = []
-    for path, h, sens, kind, year in rows:
+    for path, h, sens, kind, _year in rows:
         p = path.replace("/", "\\")
-        if p.lower().startswith(dest.lower() + "\\"):
+        # HOME IS THE FOLDER ITSELF, NOT THE TREE BENEATH IT.
+        #
+        # This one comparison is what makes the flatten an ordinary sweep. The
+        # old test was `startswith(dest + "\\")`, which counts
+        # `Intimate\2021\x.jpg` as already home - so after the destination went
+        # flat, plan() would have found 0 files to move and reported success
+        # over a folder still full of year subfolders.
+        #
+        # `year` is still selected because verify() shares this query; it is no
+        # longer part of any destination.
+        if os.path.dirname(p).lower() == dest.lower():
             continue                      # already home
-        sub = str(year) if year else "NoDate"
         out.append({"when": dt.datetime.now().isoformat(timespec="seconds"),
                     "hash": h or "", "sensitivity": sens or "",
                     "kind": kind or "", "source": path,
-                    "destination": os.path.join(dest, sub,
-                                                os.path.basename(p))})
+                    "destination": os.path.join(dest, os.path.basename(p))})
     return out
 
 
@@ -121,6 +158,32 @@ def reverse(journal: str) -> int:
         back += 1
     print("put back: {:,} of {:,}".format(back, len(rows)))
     return 0 if back == len(rows) else 1
+
+
+def prune_empty(dest: str) -> list:
+    r"""Remove subfolders of `dest` left empty by the sweep, deepest first.
+
+    An empty `Intimate\2021\` is still the chronology Krish asked to remove, so
+    a flatten that leaves 14 empty year folders behind has not done the job.
+
+    Three limits, because this deletes directories: only paths UNDER dest, only
+    when `os.listdir` says empty, and never dest itself. It removes no file
+    under any circumstance - `os.rmdir` refuses a non-empty directory - so the
+    worst case is a directory that should have stayed, which `--reverse`
+    recreates on the way back.
+    """
+    gone = []
+    for dp, dns, fns in os.walk(lp(dest), topdown=False):
+        real = dp.replace("\\\\?\\", "")
+        if real.lower().rstrip("\\") == dest.lower().rstrip("\\"):
+            continue                      # never the folder itself
+        try:
+            if not os.listdir(lp(real)):
+                os.rmdir(lp(real))
+                gone.append(real)
+        except OSError as e:
+            print("   could not remove {}: {}".format(real, e))
+    return gone
 
 
 def main() -> int:
@@ -191,6 +254,16 @@ def main() -> int:
         shutil.move(lp(r["source"]), lp(r["destination"]))
         moved += 1
     print("moved {:,} of {:,}".format(moved, len(rows)))
+
+    pruned = prune_empty(a.dest)
+    if pruned:
+        print("pruned {} emptied subfolder(s): {}".format(
+            len(pruned), ", ".join(sorted(os.path.basename(p)
+                                          for p in pruned))))
+    left = [n for n in os.listdir(lp(a.dest))
+            if os.path.isdir(lp(os.path.join(a.dest, n)))]
+    print("subfolders remaining under {}: {}{}".format(
+        a.dest, len(left), "  " + ", ".join(sorted(left)) if left else ""))
     print()
     # THE INDEX CANNOT LEARN A MOVE ON ITS OWN. build_db.load_files() reads
     # INVENTORY.csv and the hash index; neither walks the disk. After this sweep

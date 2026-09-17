@@ -21,6 +21,8 @@ classification and description, and place names from GPS.
 | `stages/05_enrich/store.py` | the enrichment store, keyed by content hash |
 | `stages/05_enrich/thumbnail.py` | small thumbnails, because image size is the cost |
 | `stages/05_enrich/frames.py` | 2-5 frames per video for the classifier |
+| `stages/05_enrich/backfill_thumbs.py` | thumbnail the trees `--source Media` never visited |
+| `stages/05_enrich/sensitivity_review.py` | a contact sheet of the nudity pass's hits, for eyes not labels |
 | `stages/05_enrich/classify_live.py` | classify with Gemini, live and resumable |
 | `stages/05_enrich/batch_classify.py` | classify through a batch API; also lists thumbnail assets |
 | `stages/05_enrich/classify.py` | the original single-model classifier |
@@ -39,7 +41,15 @@ classification and description, and place names from GPS.
 | `stages/05_enrich/chain_thumbnails.ps1` | build every missing thumbnail, gated |
 
 ## Tests
-- none yet: covered at run time by `verify_rich.py` and `verify_rotation.py` (debt)
+- `tests/test_sensitivity_pass.py` - the nudity pass may propose but never
+  writes `sensitivity`, the field the Intimate sweep acts on. Its fields cannot
+  collide with the main or rich pass, every field it stores is one the prompt
+  asks for, `sexual` is asked for as a string (a JSON `false` would be stored as
+  the string "False" and read as truthy), the innocent cases are named in the
+  prompt because a broad question over-reports, and `--rich --sensitivity`
+  together refuses to run rather than silently storing one pass's answers under
+  the other's source id
+- otherwise covered at run time by `verify_rich.py` and `verify_rotation.py` (debt)
 
 ## Lessons
 | # | what this stage does about it | enforced by |

@@ -391,6 +391,83 @@ def main():
         check("the group-shot query uses an index, not a full scan",
               "photo_people_hash" in plan, True)
         db.close()
+
+        print()
+        print("10. a per-path view is never joined on hash")
+        # v_files is `FROM files f LEFT JOIN resolved r ... GROUP BY f.path` -
+        # one row per PATH, by design, because a path is what the sheets and the
+        # movers address. The library holds 82,193 paths against 80,957 hashes:
+        # 1,205 hashes have more than one path and one has 26. So joining files
+        # back to v_files ON hash matches every path against every other path
+        # sharing its hash - the 26-path hash alone contributes 676 rows - and
+        # returned 85,281 rows for 82,193 files.
+        #
+        # Four figures went to Krish off that query as measurements: 3,124 files
+        # never examined (2,426), photo 97% / video 93% coverage, and 745
+        # private-family files (737 paths, 733 hashes). Nothing errored, and
+        # 85,281 looks like a library-sized number. Learning 56.
+        d3 = tempfile.mkdtemp()
+        try:
+            lib3 = os.path.join(d3, "Library", "Media", "Personal",
+                                "2016", "2016-08")
+            inv3 = os.path.join(d3, "INVENTORY.csv")
+            dup_a = os.path.join(lib3, "dup-a.jpg")
+            dup_b = os.path.join(lib3, "dup-b.jpg")
+            solo = os.path.join(lib3, "solo.jpg")
+            with io.open(inv3, "w", encoding="utf-8", newline="") as fh:
+                w = csv.writer(fh)
+                w.writerow(["LibraryPath", "Side", "Year", "Month", "Bytes",
+                            "Ext", "Kind", "DateTaken", "DateSource", "Make",
+                            "Model", "Width", "Height", "Duration", "Lat",
+                            "Lon", "OriginFolder", "SourceRoot", "OriginPath"])
+                for p, b in ((dup_a, 100), (dup_b, 100), (solo, 200)):
+                    w.writerow([p, "Personal", "2016", "2016-08", b, ".jpg",
+                                "photo", "", "folder", "", "", "", "", "", "",
+                                "", "phone", "", ""])
+            # dup-a and dup-b are the SAME BYTES under two names: one hash, two
+            # paths. This is the ordinary case - 1,236 paths in the real library.
+            idx3 = {dup_a.lower(): (100, "hd"), dup_b.lower(): (100, "hd"),
+                    solo.lower(): (200, "hs")}
+            db = build(d3, inv3, idx3, store)
+
+            n_paths = db.execute("SELECT COUNT(*) FROM files").fetchone()[0]
+            n_hashes = db.execute(
+                "SELECT COUNT(DISTINCT hash) FROM files").fetchone()[0]
+            check("the fixture has more paths than hashes",
+                  (n_paths, n_hashes), (3, 2))
+            check("v_files has one row per PATH",
+                  db.execute("SELECT COUNT(*) FROM v_files").fetchone()[0],
+                  n_paths)
+
+            # The mistake, reproduced: 5 rows out of 3 files.
+            joined = db.execute(
+                "SELECT COUNT(*) FROM files f "
+                "LEFT JOIN v_files v ON v.hash = f.hash").fetchone()[0]
+            check("joining on hash INVENTS rows", joined, 5)
+            check("and the cheap tell is that it exceeds the file count",
+                  joined > n_paths, True)
+
+            # The correct shape for any question about content.
+            per_hash = db.execute(
+                "SELECT COUNT(*) FROM (SELECT hash, "
+                "MAX(COALESCE(sensitivity,'')) FROM v_files GROUP BY hash)"
+            ).fetchone()[0]
+            check("one row per hash, never one row per join",
+                  per_hash, n_hashes)
+
+            # And the same question asked the wrong way, so the gap is visible
+            # rather than asserted: counting `none` over the join double-counts
+            # the duplicated path.
+            by_join = db.execute(
+                "SELECT COUNT(*) FROM files f LEFT JOIN v_files v "
+                "ON v.hash = f.hash WHERE f.hash = 'hd'").fetchone()[0]
+            by_path = db.execute(
+                "SELECT COUNT(*) FROM v_files WHERE hash = 'hd'").fetchone()[0]
+            check("the duplicated hash is counted 4 times, not 2",
+                  (by_join, by_path), (4, 2))
+            db.close()
+        finally:
+            shutil.rmtree(d3, ignore_errors=True)
     finally:
         shutil.rmtree(d, ignore_errors=True)
 
