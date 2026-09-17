@@ -41,6 +41,7 @@ import argparse
 import collections
 import csv
 import datetime as dt
+import hashlib
 import io
 import os
 import shutil
@@ -71,17 +72,72 @@ def load(proposal):
     return rows
 
 
-def collisions(rows):
-    """Two sources wanting one destination, or a destination already on disk."""
-    out, seen = [], {}
+def same_bytes(a, b, chunk=1 << 20):
+    """Identical content, by bytes - not by name, size, or hope."""
+    try:
+        if os.path.getsize(lp(a)) != os.path.getsize(lp(b)):
+            return False
+        ha, hb = hashlib.blake2b(digest_size=16), hashlib.blake2b(digest_size=16)
+        with open(lp(a), "rb") as fa, open(lp(b), "rb") as fb:
+            while True:
+                x, y = fa.read(chunk), fb.read(chunk)
+                if not x and not y:
+                    break
+                ha.update(x)
+                hb.update(y)
+        return ha.hexdigest() == hb.hexdigest()
+    except OSError:
+        return False
+
+
+def free_name(dest):
+    r"""`x.jpg` -> `x__2.jpg`, `x__3.jpg` ... until one is free.
+
+    Probed rather than assumed: a single `__2` would itself collide the second
+    time a name repeats, which is exactly how an overwrite gets introduced by a
+    fix for overwrites.
+    """
+    stem, ext = os.path.splitext(dest)
+    n = 2
+    while os.path.exists(lp("{}__{}{}".format(stem, n, ext))):
+        n += 1
+    return "{}__{}{}".format(stem, n, ext)
+
+
+def resolve_collisions(rows):
+    r"""Skip duplicates, rename different photographs, refuse the rest.
+
+    Krish, 2026-09-18, shown 187 collisions - 49 byte-identical duplicates and
+    138 different photographs sharing a filename: rename with a suffix, skip the
+    duplicates, delete nothing.
+
+    Returns (moves, skipped, renamed, unresolved). `unresolved` keeps the
+    refusal alive for the case this CANNOT settle: two sources wanting one
+    destination. That is 0 today and must never become a silent overwrite.
+    """
+    moves, skipped, renamed, unresolved = [], [], [], []
+    wanted = {}
     for r in rows:
-        d = r["destination"].lower()
-        if d in seen and seen[d] != r["source"]:
-            out.append((seen[d], r["source"], r["destination"]))
-        seen[d] = r["source"]
-        if os.path.exists(lp(r["destination"])):
-            out.append(("(already on disk)", r["source"], r["destination"]))
-    return out
+        key = r["destination"].lower()
+        if key in wanted and wanted[key] != r["source"]:
+            unresolved.append((wanted[key], r["source"], r["destination"]))
+            continue
+        wanted[key] = r["source"]
+
+        if not os.path.exists(lp(r["destination"])):
+            moves.append(r)
+            continue
+        if same_bytes(r["source"], r["destination"]):
+            # An identical copy is already there. Krish chose to leave the
+            # source where it is rather than delete it: nothing in this project
+            # deletes a photograph to tidy a folder.
+            skipped.append(r)
+            continue
+        r = dict(r, destination=free_name(r["destination"]))
+        renamed.append(r)
+        moves.append(r)
+        wanted[r["destination"].lower()] = r["source"]
+    return moves, skipped, renamed, unresolved
 
 
 def verify(proposal):
@@ -145,20 +201,33 @@ def main() -> int:
         print("  applied in full is how a library ends up half-sorted.")
         return 1
 
-    clash = collisions(rows)
-    if clash:
+    moves, skipped, renamed, unresolved = resolve_collisions(rows)
+    if unresolved:
         print()
-        print("STOPPING: {} destination collision(s).".format(len(clash)))
-        for a_, b_, d_ in clash[:8]:
+        print("STOPPING: {} clash(es) this cannot settle - two sources want one "
+              "destination.".format(len(unresolved)))
+        for a_, b_, d_ in unresolved[:8]:
             print("   {}\n   {}\n   both -> {}".format(a_, b_, d_))
-        print("  Nothing moved.")
+        print("  Nothing moved. Renaming one of a pair is a guess about which")
+        print("  photograph matters, and that is not mine to make.")
         return 1
+
+    print()
+    print("  to move        : {:,}".format(len(moves)))
+    print("  skipped, identical copy already at the destination: {:,}".format(
+        len(skipped)))
+    print("  renamed to avoid overwriting a different photograph: {:,}".format(
+        len(renamed)))
+    for r in renamed[:4]:
+        print("     {} -> {}".format(os.path.basename(r["source"])[:52],
+                                     os.path.basename(r["destination"])[:52]))
 
     if not a.apply:
         print()
-        print("no missing sources, no collisions.")
+        print("no missing sources, no unresolvable clashes.")
         print("dry run - nothing moved. Re-run with --apply.")
         return 0
+    rows = moves
 
     with io.open(a.journal, "w", encoding="utf-8", newline="") as fh:
         w = csv.DictWriter(fh, fieldnames=FIELDS)

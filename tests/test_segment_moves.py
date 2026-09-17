@@ -160,6 +160,71 @@ def main():
         os.path.join(d2, "j.csv")), False)
 
     print()
+    print("5. collisions: duplicates skipped, different photographs renamed")
+    # Krish, 2026-09-18, shown 187 collisions in the split - 49 byte-identical
+    # duplicates and 138 different photographs sharing a filename: "rename with
+    # a suffix". Nothing is deleted and nothing is overwritten.
+    #
+    # The rename path has never run on real data, so all three outcomes are
+    # constructed here: a guard nobody has watched is indistinguishable from no
+    # guard (learning 44).
+    import apply_split_by_path as A
+
+    d3 = tempfile.mkdtemp()
+    src = os.path.join(d3, "src")
+    dst = os.path.join(d3, "dst")
+    os.makedirs(src, exist_ok=True)
+    os.makedirs(dst, exist_ok=True)
+
+    def put(p, text):
+        os.makedirs(os.path.dirname(p), exist_ok=True)
+        io.open(p, "w", encoding="utf-8").write(text)
+        return p
+
+    # identical content at the destination
+    a_src = put(os.path.join(src, "same.jpg"), "identical")
+    put(os.path.join(dst, "same.jpg"), "identical")
+    # different content, same name
+    b_src = put(os.path.join(src, "diff.jpg"), "the source photograph")
+    put(os.path.join(dst, "diff.jpg"), "a DIFFERENT photograph")
+    # nothing in the way
+    c_src = put(os.path.join(src, "free.jpg"), "unobstructed")
+
+    rows = [{"source": a_src, "destination": os.path.join(dst, "same.jpg")},
+            {"source": b_src, "destination": os.path.join(dst, "diff.jpg")},
+            {"source": c_src, "destination": os.path.join(dst, "free.jpg")}]
+    moves, skipped, renamed, unresolved = A.resolve_collisions(rows)
+    check("an identical copy is SKIPPED", [r["source"] for r in skipped],
+          [a_src])
+    check("a different photograph is RENAMED", [r["source"] for r in renamed],
+          [b_src])
+    check("the rename gets a __2 suffix",
+          os.path.basename(renamed[0]["destination"]), "diff__2.jpg")
+    check("an unobstructed file moves untouched",
+          sorted(os.path.basename(r["destination"]) for r in moves),
+          ["diff__2.jpg", "free.jpg"])
+    check("nothing is unresolvable here", unresolved, [])
+    check("the file already at the destination is untouched",
+          io.open(os.path.join(dst, "diff.jpg"), encoding="utf-8").read(),
+          "a DIFFERENT photograph")
+
+    # __2 already taken: probe on, never overwrite the fix's own output
+    put(os.path.join(dst, "diff__2.jpg"), "an earlier rename")
+    _, _, renamed2, _ = A.resolve_collisions([rows[1]])
+    check("a taken __2 probes on to __3",
+          os.path.basename(renamed2[0]["destination"]), "diff__3.jpg")
+
+    # two sources wanting ONE destination: still refused
+    e1 = put(os.path.join(src, "a", "clash.jpg"), "one")
+    e2 = put(os.path.join(src, "b", "clash.jpg"), "two")
+    target = os.path.join(dst, "clash.jpg")
+    _, _, _, un = A.resolve_collisions(
+        [{"source": e1, "destination": target},
+         {"source": e2, "destination": target}])
+    check("two sources for one destination is REFUSED, not renamed",
+          len(un), 1)
+
+    print()
     if FAILURES:
         print("{} FAILED: {}".format(len(FAILURES), ", ".join(FAILURES)))
         return 1
