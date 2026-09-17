@@ -131,7 +131,29 @@ rename went in as a NEW journal row, never an edit). Ashwin now reads **0** on
 the index, Ashvin **151**. Every other "Ash" person is untouched - Asha, Ashish,
 Ashleigh, Ash Wales Brown, Prashila, Adam Washington.
 
-### THE WORK THAT IS LEFT: 463 merge siblings
+### THE MERGE-SIBLING SEAM IS EXHAUSTED. It was worth 39 photographs.
+
+**Do not build another sibling page without reading this.** Measured
+2026-09-18 after batch 1: the 438 remaining siblings cover 4,366 photographs, of
+which **4,327 already carry a name**. True gain: **39 photographs**, and only
+**17 of the 438** would add anything at all.
+
+Batch 1's 25 siblings covered 2,206 photographs - **every one already named via
+its partner cluster**. Krish judged 25 pairs and the coverage figure went from
+25,209 files to 25,207 (down two, because `Naren` -> `Narendra` correctly dropped
+69 stale tag rows). His answers were right; the question was not worth asking.
+
+**Why the premise was wrong.** Clusters in one merge group nearly always appear
+in the SAME photographs - one person detected again and again across a shoot -
+so a sibling's reach is already covered by its partner. I quoted **reach** as if
+it were **incremental gain**. Those are different measures, and the whole file
+warns about exactly that.
+
+Offered the evidence of 25/25 correct merges, Krish chose to keep reviewing pages
+rather than propagate. That choice was sound on the information he had; the
+information was mine to measure first and I did not.
+
+#### the original finding, for the record
 
 `people_sheet.py` pools a merge GROUP into one row and prints it under ONE
 cluster id. Krish answers that id. But `build_db`'s `scope_hashes` expands
@@ -148,7 +170,8 @@ summed the same clusters over and over instead of taking the union. Deduplicated
 on the sibling and unioned on the hash it is 463 and 6,180. Commit 2e12d5b
 carries the inflated pair-count in its message; this paragraph is the correction.
 
-**Even 6,180 is an upper bound, not a loss.** `merge_clusters.py` refuses to mix
+**6,180 was reach, not gain - see above. The real figure is 39 photographs.**
+`merge_clusters.py` refuses to mix
 two differently-named clusters, so siblings are *probably* the same person - but
 "probably" is the embeddings' opinion, and that opinion was wrong twice (the two
 Kirans, the three Rishis). Krish was offered automatic propagation and a
