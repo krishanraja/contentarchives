@@ -109,6 +109,13 @@ def build(d, inv, idx, store):
     B.load_answers(db, store)
     B.apply_answers(db)
     B.resolve_people(db)
+    # MIRROR main()'s ORDER, or this helper lies about what a build does.
+    # Section 9's four audience checks all returned None and I began diagnosing
+    # resolve_audience() - which was correct all along. The step simply was not
+    # here: I had added it to build_db.main() and not to the test's private
+    # rebuild of the same pipeline, so `resolved` held no audience rows and
+    # v_files.audience was NULL for every path.
+    B.resolve_audience(db)
     B.build_views(db)
     db.commit()
     return db
@@ -302,6 +309,62 @@ def main():
                          (f2,)).fetchone()[0]
         check("an uncontradicted tag name still names its photograph",
               got, "Nanna")
+        db.close()
+
+        print()
+        print("9. audience: who may SEE this, derived every build")
+        # Krish, 2026-09-18: "If I classify a personal photo as someone who also
+        # belongs in Communal, it automatically becomes available by others
+        # later down the track." So the rule runs continuously and there is no
+        # default to decide - an unnamed photograph is not a policy, it is just
+        # not named yet.
+        #
+        # AUDIENCE IS NOT SIDE. Stage 09 holds that a photograph merely
+        # CONTAINING Bharti does not belong in Communal. Audience inverts that
+        # deliberately: containing her is exactly what she should see. The two
+        # rules must never be merged, so both directions are pinned here.
+        d2 = tempfile.mkdtemp()
+        lib = os.path.join(d2, "Library", "Media")
+        inv2 = os.path.join(d2, "INVENTORY.csv")
+        f_com = os.path.join(lib, "Communal", "2016", "2016-05", "c.jpg")
+        f_both = os.path.join(lib, "Personal", "2016", "2016-05", "p1.jpg")
+        f_mine = os.path.join(lib, "Personal", "2016", "2016-05", "p2.jpg")
+        f_int = os.path.join(lib, "Personal", "Intimate", "2016", "p3.jpg")
+        with io.open(inv2, "w", encoding="utf-8", newline="") as fh:
+            w = csv.writer(fh)
+            w.writerow(["LibraryPath", "Side", "Year", "Month", "Bytes", "Ext",
+                        "Kind", "DateTaken", "DateSource", "Make", "Model",
+                        "Width", "Height", "Duration", "Lat", "Lon",
+                        "OriginFolder", "SourceRoot", "OriginPath"])
+            for p in (f_com, f_both, f_mine, f_int):
+                w.writerow([p, "Media", "2016", "2016-05", 10, ".jpg", "photo",
+                            "", "folder", "", "", "", "", "", "", "", "x", "", ""])
+        idx2 = {f_com.lower(): (10, "hc"), f_both.lower(): (10, "hb"),
+                f_mine.lower(): (10, "hm"), f_int.lower(): (10, "hi")}
+        store2 = os.path.join(d2, "store")
+        os.makedirs(store2, exist_ok=True)
+        with io.open(os.path.join(store2, "content_tags.csv"), "w",
+                     encoding="utf-8", newline="") as fh:
+            w = csv.writer(fh)
+            w.writerow(["hash", "tag", "value", "source", "confidence", "when"])
+            # Mum is in a Communal photograph, so Mum is family
+            w.writerow(["hc", "cluster", "c1", "faces", "1.0", "x"])
+            w.writerow(["hb", "cluster", "c1", "faces", "1.0", "x"])
+            w.writerow(["hi", "cluster", "c1", "faces", "1.0", "x"])
+            w.writerow(["hm", "cluster", "c2", "faces", "1.0", "x"])
+        j2 = Journal(store2, who="test")
+        j2.record("cluster", "c1", "person", "Mum")
+        j2.record("cluster", "c2", "person", "Krish")
+        db = build(d2, inv2, idx2, store2)
+        got = dict(db.execute("SELECT path, audience FROM v_files"))
+        check("a Communal photograph is family by definition",
+              got.get(f_com), "family")
+        check("Personal + someone who appears in Communal is family",
+              got.get(f_both), "family")
+        check("Personal with only Krish stays private",
+              got.get(f_mine), "private")
+        check("Personal\\Intimate is private EVEN holding a family member",
+              got.get(f_int), "private")
         db.close()
 
         print()

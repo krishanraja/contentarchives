@@ -15,6 +15,16 @@ every opinion kept and human answers always winning.
 - the build writes a temporary database and renames it into place
 - a field that can hold several true values (person) holds all of them
 - a name a later answer replaced never comes back through the derived tag layer
+- **`audience` is DERIVED on every build and never asserted.** `family` when a
+  photograph holds someone who also appears in Communal, `private` otherwise,
+  and always `private` inside `Media\Personal\Intimate`. Krish, 2026-09-18:
+  *"If I classify a personal photo as someone who also belongs in Communal, it
+  automatically becomes available by others later down the track"* - so there is
+  no default to decide for the 41,124 Personal files with nobody named in them.
+  They are not a policy, they are simply not named yet, and naming on a phone
+  opens access by itself. **Audience is not side**: stage 09 holds that a
+  photograph merely CONTAINING Bharti does not belong in Communal, and audience
+  inverts that on purpose - containing her is exactly what she should see
 
 ## Code
 | file | role |

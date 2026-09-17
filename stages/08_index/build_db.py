@@ -82,12 +82,19 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 
 from answers import Journal                        # noqa: E402
 import master_sheet as MS                          # noqa: E402
+from sides import side_of                          # noqa: E402  - resolve_audience
 
 OUT = os.path.join(MS.AUDIT, "library.db")
 
 # Fields a human or a geocoder may override, resolved into one value per file.
 RESOLVED = ["kind", "people", "subject", "keep", "sensitivity", "setting",
             "place", "region", "country", "era", "person", "event",
+            # DERIVED, never asserted: who may see this photograph. `family`
+            # when it holds someone who also appears in Communal, `private`
+            # otherwise, and always `private` inside Personal\Intimate. See
+            # resolve_audience() - it is recomputed every build, so naming a
+            # face on a phone opens access without anyone deciding again.
+            "audience",
             # from the description pass - the sentence, the things in it, and
             # any text legible in the image, which is what makes a photograph
             # findable by a word nobody ever typed
@@ -419,6 +426,69 @@ def resolve_people(db: sqlite3.Connection) -> int:
     return db.execute("SELECT COUNT(*) FROM photo_people").fetchone()[0]
 
 
+def resolve_audience(db: sqlite3.Connection) -> int:
+    r"""Who may see this photograph: `family` or `private`. DERIVED, every build.
+
+    Krish, 2026-09-18: *"I have a lot of family in my personal content which
+    should be accessible searchable by people other than me alongside Communal,
+    but people other than me should not be able to access the rest of my
+    Personal content"*. And, when I asked him to choose a default for the 41,124
+    Personal files with nobody named in them: *"If I classify a personal photo
+    as someone who also belongs in Communal, it automatically becomes available
+    by others later down the track the same as the current personal media which
+    contains people also in communal"*.
+
+    So there is no default to decide. The rule RUNS CONTINUOUSLY: a photograph
+    becomes visible the moment it contains someone who also appears in Communal,
+    and an unnamed photograph is not a policy decision - it is simply not named
+    yet. Naming on his phone opens access by itself.
+
+    SIDE AND AUDIENCE ARE DIFFERENT QUESTIONS, and the rules are opposites.
+    Stage 09 records that "all 'for Bharti' photos belong in Communal, but all
+    photos OF Bharti do not" - that is SIDE, about whose life it is. Audience
+    inverts it: a photograph CONTAINING Bharti is exactly what she should be
+    able to see. Sharing one rule between them would move a large slice of his
+    chronology to the wrong side.
+
+    Two exclusions, both already settled:
+      - `Media\Personal\Intimate` is ALWAYS private, whoever is in it. He swept
+        88 files there on 2026-09-18 precisely so this could be true by where a
+        file lives rather than by a model's judgement at query time.
+      - Communal is `family` by definition: it is the shared side.
+    """
+    people_of = collections.defaultdict(set)
+    for h, person in db.execute("SELECT hash, person FROM photo_people"):
+        people_of[h].add(person)
+
+    family = set()
+    for h, path in db.execute(
+            "SELECT hash, path FROM files WHERE hash IS NOT NULL"):
+        if side_of(path) == "Communal":
+            family |= people_of.get(h, set())
+
+    rows, counts = [], collections.Counter()
+    for h, path in db.execute(
+            "SELECT DISTINCT hash, path FROM files WHERE hash IS NOT NULL"):
+        s = side_of(path)
+        if "\\personal\\intimate\\" in path.replace("/", "\\").lower():
+            verdict = "private"
+        elif s == "Communal":
+            verdict = "family"
+        elif people_of.get(h, set()) & family:
+            verdict = "family"
+        else:
+            verdict = "private"
+        counts[verdict] += 1
+        rows.append((h, "audience", verdict, "derived", 1.0))
+
+    db.execute("DELETE FROM resolved WHERE field = 'audience'")
+    db.executemany("INSERT OR REPLACE INTO resolved VALUES (?,?,?,?,?)", rows)
+    print("   family set: {:,} people who appear in Communal".format(len(family)))
+    print("   family {:,} / private {:,}".format(
+        counts["family"], counts["private"]))
+    return len(rows)
+
+
 def build_views(db: sqlite3.Connection) -> None:
     cols = ",\n      ".join(
         "MAX(CASE WHEN r.field='{0}' THEN r.value END) AS {0}".format(f)
@@ -550,6 +620,9 @@ def main() -> None:
         load_answers(db, a.store)))
     print("applied  : {:,} file-fields set by a human".format(apply_answers(db)))
     print("people   : {:,} person-on-photograph rows".format(resolve_people(db)))
+    # After resolve_people (it reads photo_people), before build_views (which
+    # pivots RESOLVED into v_files).
+    print("audience : {:,} files given a visibility".format(resolve_audience(db)))
     build_views(db)
     db.commit()
     db.execute("PRAGMA wal_checkpoint(TRUNCATE)")
