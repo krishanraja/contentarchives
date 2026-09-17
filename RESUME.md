@@ -150,12 +150,20 @@ ending; it does NOT survive a reboot. If the state is not `Running`, re-arm:
 
 | | |
 |---|---|
-| to mirror | **824.2 GB / 82,111 files** (excludes the 101 GB null-byte `.jpg`) |
-| H: account | 2 TB, and after the clear ~1,972 GB free - it fits twice over |
+| to mirror | **~824 GB / 82,110 files** - the 101 GB null-byte `.jpg` is now DELETED rather than merely excluded, so this is the library's true size |
+| H: account | **2,048 GB limit, 1,463.6 GB free** (read from the Drive API, not guessed) |
 | write rate to cache | **44.7 MB/s** measured (3.01 GB / 69 s, quiet queue) |
 | cache fills in | ~5.2 h at that rate |
 | **DriveFS upload drain** | **18.7 operations/minute** measured over 273 s |
 | **honest ETA** | **~70 hours**, bounded by Drive's upload, not by us |
+
+Progress at 00:40 on 2026-09-19: **8,579 files journalled**, task `Running`,
+writer pid alive, C: ~81 GB free, H: ~77 GB. It is working through the 33,743
+sub-1MB files first because the index is size-ordered, so "GB sent" stays near
+zero for the first few thousand files. That is expected, not a stall.
+
+**A rebuild is running** after the null-file deletion, so `INVENTORY.csv`,
+`MIGRATION-HASHES.csv` and `library.db` still each name it until that finishes.
 
 The write rate is NOT the ETA. Bytes land in a local cache on **C:** and upload
 behind it; the queue draining is the real signal, and it drains in steps.
@@ -173,20 +181,43 @@ behind it; the queue draining is the real signal, and it drains in steps.
   it had been failing silently since 15 September, leaving `state/` two days
   stale.
 
-### WHAT NEEDS KRISH
+### SETTLED BY KRISH, 2026-09-19 (all four of the old open items)
 
-1. **A Drive-scoped `gcloud` login.** The current token returns
-   `invalid_grant`. Without it the mirror is *uploaded*, never *verified* -
-   Drive's server-side `md5Checksum` is the only evidence it offers, and
-   `mirror_to_h.py` already records an md5 per file ready to compare.
-2. **Two files await a ruling**: `jason7.png` (a doctored wedding photo) and
-   `VID-20191028-WA0006.mp4` (a cartoon). Both `keep=False`, both classified
-   `intimate` by the broad pass and `none` by the narrow one, so `--verify`
-   reports 2 outside the folder on purpose.
-3. **The 101 GB `1000002434.jpg`** in `Media\Personal\NoDate` is all zeros at
-   every offset sampled. It is excluded from the mirror and named on every run.
-   It should be deleted, but only he can say so.
-4. **The 2,798 unproven H: files** above.
+1. **Drive API WORKS.** The login was fine; gcloud's ACTIVE account was
+   `krishanraja@gmail.com` (the G: account) while the mirror targets
+   `krish@themindmaker.ai` (H:). One command fixed it:
+
+       gcloud config set account krish@themindmaker.ai
+
+   The real quota, read from `drive/v3/about` at last: **2,048.0 GB limit,
+   584.4 GB used, 463.5 GB in trash, 1,463.6 GB free.** Krish's 2 TB was exact.
+   **Emptying that 463.5 GB of trash is his to do** - it is tonight's clear, and
+   it is also what still pins an 81 GB DriveFS cache entry.
+
+2. **The 101 GB null-byte file is DELETED, permanently, from everywhere.**
+   `1000002434.jpg` - verified all-zeros in its first 1 MB and last 64 KB at the
+   instant of deletion - removed from `D:\ContentLibrary\Media\Personal\NoDate`
+   AND from `E:\ContentLibrary\Media\NoDate`. **202.2 GB freed.** The H: copy
+   went with the source clear. Journalled to `user-directed-deletions.csv`.
+
+3. **The 2 disputed files STAY** (`jason7.png`, `VID-20191028-WA0006.mp4`).
+   Krish's decision. So `sweep_intimate.py --verify` will keep reporting **2
+   classified intimate outside the folder, on purpose, forever.** Do not
+   "fix" it.
+
+4. **The 283 protected videos are checked.** 278 have a byte-size twin in the
+   library, and the `__v0`/`__v2` suffixes turned out to be WhatsApp variant
+   copies of files already held under their clean names. A hash verification of
+   all 278 is in `D:\_PhotoAudit\H-VIDEOS-HASHED.csv` - **read its verdict
+   column before deleting any of them**, because equal size is not equal
+   content (learnings 22 and 36).
+
+   **THE FIVE THAT MUST BE KEPT.** Five DJI `.MP4` files of 1,241 bytes each -
+   `ftypisom` headers with no media, each a DIFFERENT hash - and clips 0121,
+   0100, 0083, 0079 and 0058 exist NOWHERE among the 180 DJI files in the
+   library. Those five headers are all that survives of five drone clips from
+   the Cannes wedding. They are evidence that part of that shoot never
+   transferred, not junk.
 
 ### KNOWN TRAPS, PAID FOR TONIGHT
 
