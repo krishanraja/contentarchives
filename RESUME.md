@@ -112,25 +112,38 @@ memory instead of from the run.
 
 ----
 
-## RIGHT NOW: round 20 is OPEN in Krish's browser (2026-09-18, 09:20)
+## RIGHT NOW: round 21 is OPEN in Krish's browser (2026-09-18, 09:28)
 
 **Nothing is running. The next move is his answers.**
 
-`D:\_PhotoAudit\PEOPLE.html` - 60 rows, 529 crops, both gates passed, and
+`D:\_PhotoAudit\PEOPLE.html` - 60 rows, 478 crops, both gates passed, and
 **opened with `Start-Process`**. Krish, 2026-09-17: *"you are not opening these
 pages for me ever, you need to open them."* Sending a file card is not opening a
 page. Build it, gate it, open it, in the same turn.
 
-Round 19 is recorded and built in: 22 names, 19 `for Bharti` questions, 19
-declines, and the journal is at **1,199 answers**.
+### THE NAMING ROUNDS END IN ABOUT TWO MORE
+
+**173 clusters clear the 8+ floor**, and round 21 takes 60 of them. So two more
+rounds after this one and nothing clears it - at which point `people_sheet.py`
+prints **THE NAMING ROUNDS ARE DONE** and writes no sheet. That is by design
+(learning 44: an empty page and a finished job look identical), but it should not
+arrive as a surprise. What is left below the floor: 54,406 unnamed non-Communal
+groups, most of them one or two photographs - swipe-game work, not sheet work.
+
+Rounds 19 and 20 are recorded and built in. Round 20: 33 names, 2 `for Bharti`,
+25 declines - reconciling exactly against a 60-row sheet.
 
 | | | measure |
 |---|---|---|
-| human answers | **1,199** | rows in `answers.csv` |
-| people named | **266** | `count(distinct person)` in `photo_people` |
-| files with a person | **24,926** | `v_files.person` not null - the coverage line |
-| photographs with a person | **24,676** | `count(distinct hash)` in `photo_people` |
-| person rows | **44,666** | `count(*)` in `photo_people` |
+| human answers | **1,259** | rows in `answers.csv` |
+| people named | **269** | named in the journal (`profile_coverage`) |
+| files with a person | **25,009** | `v_files.person` not null - the coverage line |
+| person rows | **44,899** | `count(*)` in `photo_people` |
+| profile terms | **279** | 0 of 269 named people unprotected |
+
+**Sheets are archived now** - `PEOPLE-round19.html`, `PEOPLE-round20.html` - so
+`check_repeats.py` has an on-disk baseline again as well as the journal. Round 21
+was gated against 1,113 groups from both.
 
 `c13501` = Kiran Nathwani, asked on a page rather than inferred. **Kiran Nathwani
 186, Kiran Patel 11, bare `Kiran` gone**, and all 9 of `c13501`'s photographs
