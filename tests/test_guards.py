@@ -104,6 +104,38 @@ def main():
         check("an aligned cache passes", check_alignment(rows, E, src), [])
         check("a drifted cache is caught", bool(check_alignment(rows, np.roll(E, 1, axis=0), src)), True)
         check("a count mismatch is caught", bool(check_alignment(rows, E[:5], src)), True)
+
+        # A PURGED FACE IS NOT A DRIFTED ONE.
+        #
+        # Krish, 2026-09-18: "purge all intimate content forever". A purged
+        # face's embedding is overwritten with zeros IN PLACE, so the row keeps
+        # its position and therefore the frozen cluster id his 1,609 answers
+        # point at. But cosine is undefined for a zero vector - np.dot returns
+        # 0.0, which fails the 0.99 test and reads as the loudest alarm this
+        # project has. Measured on a fixture before the real purge ran: a
+        # zeroed row reported "cosine 0.000 with its source".
+        #
+        # So both-zero must pass, and exactly-one-zero must still be caught:
+        # a purge that reached the source but not the cache, or the reverse,
+        # is genuine disagreement and hides a real face behind a blank row.
+        zsrc = os.path.join(d, "faces_purged.csv")
+        zvecs = [v.copy() for v in vecs]
+        zvecs[3] = np.zeros(512, dtype=np.float32)
+        with io.open(zsrc, "w", encoding="utf-8", newline="") as f:
+            w = csv.writer(f)
+            w.writerow(["hash", "face_index", "emb"])
+            for i, v in enumerate(zvecs):
+                w.writerow([str(i) * 64, 0,
+                            base64.b64encode(v.astype(np.float16).tobytes()).decode()])
+        check("a purged row passes when source AND cache are zeroed",
+              check_alignment(rows, np.stack(zvecs), zsrc), [])
+        check("zeroed in the source but not the cache is CAUGHT",
+              bool(check_alignment(rows, E, zsrc)), True)
+        check("zeroed in the cache but not the source is CAUGHT",
+              bool(check_alignment(rows, np.stack(zvecs), src)), True)
+        check("and the message says a purge reached one and not the other",
+              any("not the other" in p
+                  for p in check_alignment(rows, E, zsrc)), True)
     finally:
         shutil.rmtree(d, ignore_errors=True)
 

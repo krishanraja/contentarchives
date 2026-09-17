@@ -23,6 +23,8 @@ The only stage that destroys data, so the most guarded.
 | `stages/10_reclaim/reclaim_duplicates.py` | remove duplicates, keeping the settled copy |
 | `stages/10_reclaim/reclaim_d_originals.py` | redundant, hardlinked, or ONLY - by inode |
 | `stages/10_reclaim/purge_redundant.py` | delete byte-identical copies, re-verified |
+| `stages/10_reclaim/build_purge_list.py` | name every file a purge may destroy, individually, and refuse a count that has drifted |
+| `stages/10_reclaim/purge_content.py` | destroy chosen content and its traces - the one deletion with NO surviving copy, so it cannot use `guarded_delete` and must not weaken it |
 | `stages/10_reclaim/purge_downgrades.py` | delete re-encodes worse than what is held |
 | `stages/10_reclaim/free_wins.py` | the reclaim that needs no judgement |
 | `stages/10_reclaim/audit_deletions.py` | every journalled deletion carries its evidence |
@@ -35,6 +37,13 @@ The only stage that destroys data, so the most guarded.
 
 ## Tests
 - `tests/test_safety_and_dedupe.py`
+- `tests/test_purge_content.py` - the one tool here that destroys unique content
+  on purpose, so the one that must never be trusted untested: a stale list stops
+  the WHOLE run and not just the bad row, `--also` refuses by hash a path that is
+  not a target, a purged face row keeps its position and its frozen cluster id
+  while its embedding is zeroed, and the zero vector still decodes to 512
+  float16s because an empty field would drop the row out of
+  `cluster_faces.load()`'s filter and shift every position after it
 
 ## Edge cases
 

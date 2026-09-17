@@ -124,19 +124,48 @@ person-on-photograph rows. The whole suite is green: 16 of 16 Python files and
 all three under PowerShell, which cover the supervisor, re-arming, and the guard
 that refuses a chain it cannot parse.
 
-**`Personal\Intimate` IS ONE FLAT FOLDER.** Krish: *"lets remove the chronology
-folder structure from Intimate and just have all the media in that one folder"*.
-88 files moved, 14 year folders pruned, `INVENTORY.csv` and
-`MIGRATION-HASHES.csv` patched from the journal (`HASH-INDEX.csv` held none of
-these paths), index rebuilt, and the flat shape verified from the filesystem.
-Reversible in one command:
+**THE INTIMATE CONTENT IS DESTROYED. THERE IS NOTHING TO RESTORE.** Krish,
+2026-09-18: *"purge all intimate content forever"*, scoped by him to the folder
+only - not the 2 classified intimate that sit outside it, and not the
+private-family hits.
 
-    python stages/09_segment/sweep_intimate.py --reverse D:\_PhotoAudit\intimate-sweep-20260917T205630.csv
+It was flattened into one folder first (*"lets remove the chronology folder
+structure from Intimate"*), 88 files, 14 year folders pruned. Then **81 were
+purged**; he had already deleted the other 7 himself. `Media\Personal\Intimate`
+now exists and is empty.
 
-There is no `--flatten` mode: `plan()` treats a file as home only when it sits
-DIRECTLY in the folder. If that ever reverts to `startswith(dest + "\")`, the
-sweep finds nothing to move and reports success over a folder full of year
-folders. `tests/test_segment_moves.py` section 6 holds it.
+    python stages/10_reclaim/build_purge_list.py --scope intimate-folder --expect N
+    python stages/10_reclaim/purge_content.py --list ... --also ... --blocklist-also ... --apply
+
+Verified afterwards from the filesystem, not from the tool's own report: 0 files
+in the folder, 0 thumbnails for any of the 88 hashes, 0 tag rows, 0 face vectors
+carrying a real embedding, 0 bounding boxes. `INVENTORY.csv` 82,112 rows,
+`MIGRATION-HASHES.csv` 73,117, index rebuilt in 141 s, `lib-index.pickle`
+deleted so the dedup path cache cannot resurrect 81 dead paths.
+
+**WHAT SURVIVES, DELIBERATELY.** 88 content hashes in
+`D:\_PhotoAudit\PURGED-HASHES.csv` (he was asked and chose this) and 89 rows in
+`user-directed-deletions.csv`. A hash cannot reconstruct an image; it can stop a
+re-import. **128 face rows are BLANKED, NOT REMOVED** - zeroed in place so the
+row holds its position and therefore the frozen cluster id his 1,609 answers
+point at. `guards/alignment.py` knows a zeroed pair is a purge, not drift
+(`tests/test_guards.py`).
+
+**TWO THINGS ARE STILL OWED ON "FOREVER":**
+
+1. **Nothing consults `PURGED-HASHES.csv` yet.** `autopilot.ingest_folder`
+   admits a file unless `(name, size)` is known or a size+signature matches -
+   there is no content-hash gate, so a re-import from H:, a phone backup or a
+   Takeout would re-admit these 88. The hook belongs after the `size == 0`
+   guard, hashing only when the size matches a blocklisted one.
+2. **`purge_content.py` has no `--traces-only` mode.** It needs a file it can
+   re-hash at the moment of deletion, so it cannot sweep a hash whose file is
+   already gone. That gap left 7 thumbnails, 5 face vectors, 5 bboxes and 117
+   tag rows behind after the first run; a one-off script finished the job. The
+   tool now sweeps `targets | block_only`, but the traces-only path is unbuilt.
+
+**Google Drive's trash still holds the one H: copy for 30 days**, and I cannot
+reach it. Nor Google Photos, nor any phone or card.
 
 **TWO FILES AWAIT KRISH AND MUST NOT MOVE WITHOUT HIM.** `--verify` reports 90
 files classified intimate: 88 in the folder, 2 outside. Both were first judged
@@ -220,6 +249,27 @@ ingested - and they ARE now on photographs, because this rebuild applied them.
 | batch 2 | https://claude.ai/artifact/3dMThrpFi556maYVNSiPbL - finished |
 | batch 3 | https://claude.ai/artifact/NfWHekaNjSPpmxzyQFW5AW - finished |
 | batch 4 | https://claude.ai/artifact/Y4XT9gzhtUkR6Hh9SvrhFC - finished |
+
+**THE FACE PASS OWES 556 PHOTOGRAPHS, AND IT MUST RUN IN THE FOREGROUND.**
+Closing the thumbnail gap gave 603 never-scanned hashes a `people >= 1` count -
+a work photo shoot, a HEIC, identity documents. 47 were done before the job was
+killed for memory; 556 remain, ~15 minutes of local CPU and no API cost:
+
+    python stages/06_faces/faces_embed.py --thumbs D:\_thumbs \
+        --store D:\_enrichment --shard 0/1 --limit 190
+
+It resumes from `faces.0.csv`, so repeat until the outstanding count is 0. New
+faces then join the FROZEN clusters through `assign_video_faces.py`;
+`cluster_faces.py --apply` must never be re-run.
+
+**NEVER PIPE A LONG JOB THROUGH `Select-Object -Last N`.** That is how the kill
+above was misread. `Select-Object -Last N` cannot emit anything until the stream
+ends, so a killed job leaves an EMPTY log however much work it did - and I
+reported "0 images processed, nothing lost" while `faces.0.csv` had quietly
+gained 162 real rows across 47 photographs. Use `Out-String -Stream` with
+`Select-String`, or redirect to a file and tail it. A progress signal that
+disappears on failure is worse than none, because the silence reads as
+innocence (learning 46's cousin).
 
 Still owed: Bharti's game (~31 batches at the 0.12 floor, her answers carry
 `who=bharti`), the fortnightly ingest armed via `guards/arm.ps1`, and the
