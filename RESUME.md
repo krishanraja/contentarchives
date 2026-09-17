@@ -112,7 +112,74 @@ memory instead of from the run.
 
 ----
 
-## RIGHT NOW: the queue was 90% BACKGROUND STRANGERS (2026-09-18, 11:55)
+## RIGHT NOW: THE SPLIT IS APPLIED. Next is the two phone games (2026-09-18, 13:55)
+
+**18,934 files moved, verified from the filesystem: 0 not where the approved
+proposal put them.** Krish reviewed it as groups of photographs and said *"split
+review doc looks good to me"*.
+
+| | before | after |
+|---|---|---|
+| `Media\Personal` | 57,336 | **62,178** |
+| `Media\Communal` | 3,830 | **12,145** |
+| `Media\Pending-Segmentation` | 12,471 | **11** |
+| `Media\NoDate` | 6,514 | **38** |
+
+**The 49 left in the queues are not a failure.** They are byte-identical
+duplicates of files already at their destination, and Krish chose to skip them
+rather than delete: nothing here deletes a photograph to tidy a folder. 138
+different photographs sharing a filename were renamed `__2` instead of
+overwriting anything.
+
+To undo the whole move: `apply_split_by_path.py --reverse
+D:\_PhotoAudit\split-apply-20260917T134723.csv`
+
+### ALSO DONE TODAY
+
+- **88 intimate files** swept to `Media\Personal\Intimate\<year>\`, verified: 0
+  files CLASSIFIED intimate remain elsewhere. That claim is narrow on purpose -
+  3,124 files have no `sensitivity` recorded at all.
+- **`audience`, a derived field on every build**: `family` when a photograph
+  holds someone who also appears in Communal, `private` otherwise, always
+  `private` inside `Intimate`. 82,105 files (99.9%) carry one. Krish's rule,
+  which he had to tell me twice: *"If I classify a personal photo as someone who
+  also belongs in Communal, it automatically becomes available by others later
+  down the track"*. There is no default to decide for unnamed files - they are
+  simply not named yet.
+- **`is_subject()`**, 0.08 of the frame's short edge. 90% of the naming queue was
+  people in the BACKGROUND of other photographs, which is what his declines had
+  been about all along.
+- **Stage 09 has tests** for the first time: journalled moves reverse, a
+  collision stops rather than overwrites, duplicates skip, different photographs
+  rename.
+
+### NEXT: the two games, and they must survive this session closing
+
+Krish, 2026-09-18: *"you need to account for the fact that this session might be
+closed when I am on my phone doing the classification game, and that there are
+likely to be a lot of repeated names. make it antifragile, perhaps on a biweekly
+basis you can auto check for new data and integrate it safely"*.
+
+**CronCreate cannot do this** - its jobs live only in the session that made them,
+and expire after 7 days. `guards/arm.ps1` can: a Windows scheduled task is owned
+by the Task Scheduler service and *"survives the session ending, the terminal
+closing, and logging out"*. `claude.cmd` exists at
+`C:\Users\krish\AppData\Roaming\npm\`, so a chain can wake Claude headlessly to
+read the artifact database - which is a tool call, not a CLI, and therefore the
+one part a plain script cannot do.
+
+Design constraints, none of them optional:
+- **idempotent**: a cursor of already-ingested rows, so re-reading the artifact
+  db never double-records. The journal is append-only and a repeat is harmless
+  but noisy.
+- **repeated names prevented at SOURCE**: the game autocompletes from the 286
+  names already in the journal. Repairing "Lauren"/"lauren"/"Laurenn" afterwards
+  is the Kiran problem again, at scale, across two people's vocabularies.
+- **`who=bharti` provenance** on her answers, since both games write one journal.
+
+----
+
+## The naming queue was 90% BACKGROUND STRANGERS (2026-09-18, 11:55)
 
 **Krish's declines were right, and my diagnosis of them was wrong.** He said he
 usually declined because the thumbnail was poor. Measured: in the 485 clusters he
