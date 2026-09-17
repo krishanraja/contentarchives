@@ -43,9 +43,27 @@ def check(name, got, want):
         FAILURES.append(name)
 
 
+# WHERE THE TEST'S BACKUPS GO. Not the real one.
+#
+# On 2026-09-17 at 13:55:31 this suite copied its own two-row fixture journal
+# (`c1 = Krish`, `c2 = Mum`, 256 bytes) over
+# G:\...\Photo library - answers backup\answers.csv, which held 1,508 real
+# answers. record_people.py had BACKUP as a module constant, so every run of
+# these tests destroyed the off-disk copy of the ONE file in this project that
+# money and compute cannot reproduce. The local journal was untouched, so
+# nothing was lost - the safety net was.
+#
+# Every invocation goes through run(), so the argument belongs here: one choke
+# point, not five call sites to remember.
+TEST_BACKUP = os.path.join(tempfile.gettempdir(), "contentarchives-test-backup")
+
+
 def run(*args, store=None):
     env = dict(os.environ, PYTHONIOENCODING="utf-8")
-    r = subprocess.run([sys.executable, RECORD] + list(args), capture_output=True,
+    argv = list(args)
+    if "--backup" not in argv:
+        argv += ["--backup", TEST_BACKUP]
+    r = subprocess.run([sys.executable, RECORD] + argv, capture_output=True,
                        text=True, env=env, cwd=ROOT)
     return r.returncode, r.stdout + r.stderr
 
@@ -416,6 +434,32 @@ def main():
         print()
         print("9. a background face is never offered, and the rule is a SHARE")
         test_subject_vs_background()
+
+        print()
+        print("10. the SUITE never touches the live off-disk backup")
+        # 2026-09-17 13:55:31: it did. record_people.py held BACKUP as a module
+        # constant, so this suite copied its two-row fixture journal over
+        # G:\...\Photo library - answers backup\answers.csv - 1,508 real answers
+        # replaced by 256 bytes. The local journal was fine; the safety net for
+        # the one irreplaceable file was destroyed, and every run could do it.
+        #
+        # run() now passes --backup, but an argument that nobody checks is an
+        # argument somebody deletes. So this MEASURES the real path across a
+        # recorder run rather than trusting the helper.
+        live = os.path.join(r"G:\My Drive\Personal\Family",
+                            "Photo library - answers backup", "answers.csv")
+        before = ((os.path.getsize(live), os.path.getmtime(live))
+                  if os.path.exists(live) else None)
+        store9, sheet9 = fixture(os.path.join(d, "backup-probe"))
+        code, _ = run("--from-text", "c1 = Mum", "--store", store9,
+                      "--tags", os.path.join(store9, "content_tags.csv"),
+                      "--apply")
+        check("the recorder still works", code, 0)
+        after = ((os.path.getsize(live), os.path.getmtime(live))
+                 if os.path.exists(live) else None)
+        check("the live backup is byte-for-byte untouched", after, before)
+        check("and the test's backup went somewhere harmless",
+              os.path.exists(os.path.join(TEST_BACKUP, "answers.csv")), True)
     finally:
         shutil.rmtree(d, ignore_errors=True)
 

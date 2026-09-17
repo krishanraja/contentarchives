@@ -77,6 +77,20 @@ def main() -> int:
                          "that is not named here is recorded as declined, so it is "
                          "never shown again")
     ap.add_argument("--apply", action="store_true")
+    # THE TEST SUITE CLOBBERED THE LIVE BACKUP, 2026-09-17 13:55:31.
+    #
+    # BACKUP was a module constant, so `test_people_rounds.py` - which runs
+    # record_people against a TEMP store - copied its two-row fixture journal
+    # (`c1 = Krish`, `c2 = Mum`, 256 bytes) over
+    # G:\...\Photo library - answers backup\answers.csv, which held 1,508 real
+    # answers. The local journal was untouched, so nothing was lost; the SAFETY
+    # NET for the one file compute cannot reproduce was destroyed instead, and
+    # every suite run had been able to do it.
+    #
+    # An argument, so a test can point it somewhere harmless and the default
+    # stays the real thing.
+    ap.add_argument("--backup", default=BACKUP,
+                    help="off-disk copy of the journal, refreshed on --apply")
     a = ap.parse_args()
 
     raw = a.from_text
@@ -285,9 +299,9 @@ def main() -> int:
     print("recorded {} names, {} questions, {} unidentifiable, {} declined to {}".format(
         len(pairs), len(unknown), len(unreadable), len(declined), j.path))
     try:
-        os.makedirs(BACKUP, exist_ok=True)
-        shutil.copyfile(j.path, os.path.join(BACKUP, "answers.csv"))
-        print("backed up the journal to {}".format(BACKUP))
+        os.makedirs(a.backup, exist_ok=True)
+        shutil.copyfile(j.path, os.path.join(a.backup, "answers.csv"))
+        print("backed up the journal to {}".format(a.backup))
     except OSError as e:
         # loud, not fatal: the answer IS recorded, it just has one copy
         print("WARNING: journal NOT backed up to {}: {}".format(BACKUP, e))
