@@ -112,7 +112,97 @@ memory instead of from the run.
 
 ----
 
-## RIGHT NOW: round 19 is with Krish; two guards were fixed getting it out (2026-09-17, 22:20)
+## RIGHT NOW: round 20 is OPEN in Krish's browser (2026-09-18, 09:20)
+
+**Nothing is running. The next move is his answers.**
+
+`D:\_PhotoAudit\PEOPLE.html` - 60 rows, 529 crops, both gates passed, and
+**opened with `Start-Process`**. Krish, 2026-09-17: *"you are not opening these
+pages for me ever, you need to open them."* Sending a file card is not opening a
+page. Build it, gate it, open it, in the same turn.
+
+Round 19 is recorded and built in: 22 names, 19 `for Bharti` questions, 19
+declines, and the journal is at **1,199 answers**.
+
+| | | measure |
+|---|---|---|
+| human answers | **1,199** | rows in `answers.csv` |
+| people named | **266** | `count(distinct person)` in `photo_people` |
+| files with a person | **24,926** | `v_files.person` not null - the coverage line |
+| photographs with a person | **24,676** | `count(distinct hash)` in `photo_people` |
+| person rows | **44,666** | `count(*)` in `photo_people` |
+
+`c13501` = Kiran Nathwani, asked on a page rather than inferred. **Kiran Nathwani
+186, Kiran Patel 11, bare `Kiran` gone**, and all 9 of `c13501`'s photographs
+carry the name - the answer reached the photographs, not just the journal.
+
+### THE SINGLETON HOLE: five answers with nowhere to land
+
+Five rows Krish answered came back **"no such cluster"**. `cluster_faces.py`
+tags a cluster only at two or more faces - *"a cluster of one is not yet a
+person"* - but `people_sheet.py` ranked from `FACE-CLUSTERS.csv`, which holds
+every face including **40,006 singletons**. Three readers, two sources:
+
+| reads | source | count |
+|---|---|---|
+| `people_sheet.py` ranks | the assignment files | 59,610 groups |
+| `record_people.py` validates | the tag store | 19,604 clusters |
+| `build_db.py` `scope_hashes` expands | the tag store | same |
+
+So a sheet could offer a row that could not be recorded and would have labelled
+nothing anyway - and the `--sheet` decline pass would then have written his
+answers down as **refusals**, hiding them for ever. That is the precise failure
+he asked me to stop.
+
+**Krish: *"we should try to classify everything, but dont ask me again if I skip
+once."*** So `stages/06_faces/backfill_cluster_tags.py` published a cluster tag
+for every assigned face - **40,587 tags, 40,006 clusters now nameable, every one
+a singleton**; no cluster with 2+ faces was ever missing. It never touches
+`FACE-CLUSTERS.csv` (the ids are FROZEN) and marks its rows
+`source='faces-backfill'`.
+
+Two guards came out of it, and both stay as nets that should now never fire:
+
+- `people_sheet.py` will not offer a row the store cannot hold. `is_recordable()`
+  is module-level so the test calls the same function the sheet calls, and an
+  **empty tag store STOPS** rather than passing everything.
+- `record_people.py` no longer declines a blank row for an unknown cluster. A
+  name and a decline must clear the same bar, or an answer becomes a refusal.
+
+**The test for the first guard was defined and never called.** `main()` ran
+sections 1-7, the suite went green, and section 8 proved nothing. Third guard in
+one day that would have sat there proving nothing. **A green suite is not
+evidence that a particular check ran.**
+
+### THE REPEAT GUARD WAS BLESSING AN EMPTY BASELINE
+
+`check_repeats.py` matched `PEOPLE-round\d+\.html` in `D:\_PhotoAudit`. There
+were no such files - every round had overwritten one `PEOPLE.html`. For round 19
+it read **0 earlier sheets**, compared 60 rows against an empty set, and printed
+"CLEAN - every row is new". I nearly sent the sheet on that.
+
+The baseline is **the journal** now, which holds every row ever offered - named,
+`declined`, or `needs_identifying` - and cannot be lost to an overwrite. An empty
+baseline **refuses with exit 2**. Round 20 was gated against 1,053 groups.
+Sheets are also kept now (`PEOPLE-round19.html`) instead of being overwritten
+away, so the on-disk baseline rebuilds from here.
+
+### FIVE THINGS I GOT WRONG, AND HOW EACH WAS CAUGHT
+
+| claim | truth | caught by |
+|---|---|---|
+| "250 photographs lost a name" | **29** - I compared a hash count to a FILES coverage line | re-deriving both measures side by side |
+| "`Kiran` was in the tag layer after all" | it never was; I believed my own misleading log line over the evidence | `tags` holds no `Kiran` row |
+| "largest unnamed cluster covers 9" | **10** - I measured a pool already truncated by `--top 3` | the full distribution |
+| "the sheet is gated, both checks pass" | gate 2 had read nothing; and I called both gates on flags neither accepts | reading their argument lists |
+| "the five are video-only clusters" | all five are in `FACE-CLUSTERS.csv`; they are singletons | grepping both assignment files |
+
+Every figure in this file now names its measure, because comparing a hash count
+to a files count is what produced the first one.
+
+----
+
+## Round 19 and the Rishis (2026-09-17)
 
 **Round 19 is sent** - `D:\_PhotoAudit\PEOPLE.html`, 60 rows, 371 crops, both
 gates passed. It is the first sheet built to Krish's two new decisions:
