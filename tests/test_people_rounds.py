@@ -259,11 +259,22 @@ def test_subject_vs_background():
     check("an 8px face is background whatever the frame",
           PS.is_subject("10,10,18,18", (288, 512)), False)
 
-    # exactly on the line, and just under it
+    # Exactly on the line, and just under it - with the share passed EXPLICITLY.
+    # These first hardcoded a bbox computed for the then-default 0.08
+    # (23.04/288), so raising the default to 0.12 failed a test of the
+    # FUNCTION's boundary behaviour, which had not changed at all. A test that
+    # silently depends on a tunable constant breaks when the constant is tuned,
+    # and says nothing useful when it does.
     check("exactly at the threshold is kept",
-          PS.is_subject("0,0,23.04,23.04", (512, 288)), True)
+          PS.is_subject("0,0,23.04,23.04", (512, 288), 0.08), True)
     check("just under the threshold is dropped",
-          PS.is_subject("0,0,22,22", (512, 288)), False)
+          PS.is_subject("0,0,22,22", (512, 288), 0.08), False)
+    check("and the same holds at a different share",
+          (PS.is_subject("0,0,34.56,34.56", (512, 288), 0.12),
+           PS.is_subject("0,0,34,34", (512, 288), 0.12)), (True, False))
+    # The DEFAULT is a separate claim from the function's behaviour, so it gets
+    # its own check: Krish chose 0.12 on 2026-09-18 from a measured sweep.
+    check("the default is the floor Krish chose", PS.SUBJECT_SHARE, 0.12)
 
     # no dimensions: keep it. Being asked about a background face costs a
     # glance; dropping a subject loses a person for good.

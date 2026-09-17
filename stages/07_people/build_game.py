@@ -100,6 +100,12 @@ def main() -> int:
     ap.add_argument("--db", default=os.path.join(P.AUDIT, "library.db"))
     ap.add_argument("--min-face-share", type=float, default=PS.SUBJECT_SHARE)
     ap.add_argument("--out", default="")
+    # A published artifact is wrapped in the platform's own <head>, so the page
+    # must start at <title> with no doctype or meta. A LOCAL file needs both, or
+    # the browser renders it in quirks mode and the layout shifts under me.
+    # Same page, two envelopes.
+    ap.add_argument("--artifact", action="store_true",
+                    help="omit the doctype/meta prologue, for publishing")
     a = ap.parse_args()
 
     if not os.path.exists(a.assign):
@@ -224,7 +230,7 @@ def main() -> int:
         a.who, a.batch))
     names = known_names(a.answers)
     io.open(out, "w", encoding="utf-8").write(
-        page(rows, names, a.who, a.batch))
+        page(rows, names, a.who, a.batch, a.artifact))
     man = out.replace(".html", "-manifest.csv")
     with io.open(man, "w", encoding="utf-8", newline="") as fh:
         w = csv.DictWriter(fh, fieldnames=["batch", "who", "cluster", "hash",
@@ -242,8 +248,13 @@ def main() -> int:
     return 0
 
 
-def page(rows, names, who, batch):
-    """The phone page. One cluster per screen, answers kept locally AND sent."""
+def page(rows, names, who, batch, artifact=False):
+    """The phone page. One cluster per screen, answers kept locally AND sent.
+
+    `artifact` omits the doctype/meta prologue, because a published artifact is
+    wrapped in the platform's own <head> and a stray doctype inside the body is
+    invalid. A local file keeps it, or the browser drops into quirks mode.
+    """
     opts = "".join('<option value="{}">'.format(html.escape(n)) for n in names)
     cards = []
     for i, r in enumerate(rows):
@@ -274,54 +285,101 @@ def page(rows, names, who, batch):
                 s="" if r["photos"] == 1 else "s",
                 span=(" &middot; " + html.escape(r["span"])) if r["span"] else "",
                 i=i, imgs=imgs))
-    return TEMPLATE.replace("{{OPTIONS}}", opts) \
+    body = TEMPLATE.replace("{{OPTIONS}}", opts) \
                    .replace("{{CARDS}}", "".join(cards)) \
                    .replace("{{WHO}}", html.escape(who)) \
                    .replace("{{BATCH}}", str(batch)) \
                    .replace("{{COUNT}}", str(len(rows)))
+    return body if artifact else PROLOGUE + body
 
 
-TEMPLATE = """<!doctype html><meta charset="utf-8">
+PROLOGUE = """<!doctype html><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>Who is this?</title>
+"""
+
+# The palette is the subject's own: a darkroom under a safelight. Amber is what
+# you can leave on while paper is exposed, which is also why it is the only warm
+# thing in the room. Committed to a single dark theme on purpose - a face is
+# judged against a dark ground, not a bright one - so every colour is painted
+# explicitly rather than inherited from a host theme.
+TEMPLATE = """<title>Who Is This?</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,600;1,6..72,400&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
 <style>
- :root{color-scheme:dark}
- body{font:16px/1.5 system-ui,sans-serif;margin:0;background:#111;color:#eee;
-      padding:12px 12px 96px}
- h1{font-size:18px;margin:4px 0 2px}
- .sub{color:#999;font-size:13px;margin-bottom:14px}
- .row{display:none;border-top:1px solid #333;padding:14px 0}
+ :root{
+   --ground:#16130f; --surface:#211c16; --edge:#332b22;
+   --ink:#f2ece2; --muted:#a2937d; --safelight:#e8a33d; --named:#8fbf6a;
+   color-scheme:dark;
+ }
+ *{box-sizing:border-box}
+ html,body{height:100%}
+ body{margin:0;background:var(--ground);color:var(--ink);
+      font:400 16px/1.55 "IBM Plex Sans",system-ui,sans-serif;
+      padding:0 16px 104px}
+ header{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;
+        padding-block:18px 10px}
+ h1{font:600 26px/1.1 "Newsreader",Georgia,serif;margin:0;
+    letter-spacing:-.01em;text-wrap:balance}
+ .who{font:500 11px/1 "IBM Plex Mono",ui-monospace,monospace;
+      text-transform:uppercase;letter-spacing:.14em;color:var(--safelight)}
+ .sub{color:var(--muted);font-size:14px;margin:0 0 16px;max-width:60ch}
+ /* the rail encodes position in the batch - it is information, not decoration */
+ #rail{height:2px;background:var(--edge);margin-bottom:18px}
+ #railfill{height:2px;background:var(--safelight);width:0;transition:width .2s}
+ .row{display:none}
  .row.on{display:block}
- .faces{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px}
- .faces img{width:104px;height:104px;object-fit:cover;border-radius:8px;
-            background:#222}
- .meta{color:#9ad;font-size:14px;margin-bottom:10px}
- input[type=text]{width:100%;padding:13px;font-size:17px;border-radius:10px;
-   border:1px solid #444;background:#1c1c1c;color:#fff;box-sizing:border-box}
- input[type=text]:focus{outline:2px solid #4a8;border-color:#4a8}
- .btns{display:flex;gap:8px;margin-top:10px}
- .btns button{flex:1;padding:13px;font-size:15px;border-radius:10px;
-   border:1px solid #444;background:#1c1c1c;color:#ccc}
- .btns .next{background:#2d7;color:#052;border:0;font-weight:600}
- #bar{position:fixed;left:0;right:0;bottom:0;background:#000;
-   border-top:1px solid #333;padding:10px 12px;
-   padding-bottom:calc(10px + env(safe-area-inset-bottom,0px));
-   display:flex;gap:10px;align-items:center}
- #bar b{color:#8f8}
- #send{margin-left:auto;padding:11px 18px;font-size:15px;border-radius:10px;
-   border:0;background:#2d7;color:#052;font-weight:600}
- #send[disabled]{opacity:.4}
- #msg{color:#8f8;font-size:13px}
+ .faces{display:flex;gap:6px;overflow-x:auto;padding-bottom:6px;
+        margin-bottom:14px;scrollbar-width:thin}
+ .faces img{width:108px;height:108px;flex:0 0 auto;object-fit:cover;
+            border-radius:3px;background:var(--surface);
+            border:1px solid var(--edge)}
+ .meta{font:400 12px/1.4 "IBM Plex Mono",ui-monospace,monospace;
+       color:var(--muted);letter-spacing:.02em;margin-bottom:12px;
+       font-variant-numeric:tabular-nums}
+ .meta b{color:var(--ink);font-weight:500}
+ input[type=text]{width:100%;padding:14px 15px;
+   font:400 18px/1.2 "IBM Plex Sans",system-ui,sans-serif;
+   border-radius:4px;border:1px solid var(--edge);
+   background:var(--surface);color:var(--ink)}
+ input[type=text]::placeholder{color:var(--muted)}
+ input[type=text]:focus{outline:2px solid var(--safelight);outline-offset:1px;
+   border-color:var(--safelight)}
+ .btns{display:flex;gap:8px;margin-top:12px}
+ .btns button{flex:1;padding:14px;font:500 15px/1 "IBM Plex Sans",sans-serif;
+   border-radius:4px;border:1px solid var(--edge);background:transparent;
+   color:var(--muted);cursor:pointer}
+ .btns button:focus-visible{outline:2px solid var(--safelight)}
+ .btns .next{background:var(--safelight);color:#241a08;border-color:var(--safelight);
+   font-weight:600}
+ #end{color:var(--muted);font-size:14px;padding-block:18px}
+ #bar{position:fixed;left:0;right:0;bottom:0;background:var(--surface);
+   border-top:1px solid var(--edge);padding:12px 16px;
+   padding-bottom:calc(12px + env(safe-area-inset-bottom,0px));
+   display:flex;gap:12px;align-items:center}
+ #tally{font:500 13px/1 "IBM Plex Mono",ui-monospace,monospace;
+        color:var(--muted);font-variant-numeric:tabular-nums}
+ #tally b{color:var(--named);font-weight:500}
+ #msg{font-size:13px;color:var(--named)}
+ #send{margin-left:auto;padding:12px 20px;
+   font:600 15px/1 "IBM Plex Sans",sans-serif;border-radius:4px;border:0;
+   background:var(--safelight);color:#241a08;cursor:pointer}
+ #send[disabled]{opacity:.45;cursor:default}
+ @media (prefers-reduced-motion:reduce){*{transition:none!important}}
 </style>
-<h1>Who is this?</h1>
-<div class="sub">Batch {{BATCH}} &middot; {{COUNT}} people &middot; {{WHO}}.
-Pick a name from the list where you can - it keeps one person from becoming
-three. Skip anything you cannot place; it will not come back.</div>
+<header>
+  <h1>Who is this?</h1>
+  <span class="who">{{WHO}} &middot; batch {{BATCH}}</span>
+</header>
+<p class="sub">{{COUNT}} people, most photographed first. Pick a name from the
+list when it offers one &mdash; that is what keeps one person from becoming
+three. Skip anyone you cannot place; they will not come back.</p>
+<div id="rail"><div id="railfill"></div></div>
 <datalist id="names">{{OPTIONS}}</datalist>
 {{CARDS}}
 <p class="sub" id="end">That is the batch. Hit Submit and it is safe to close.</p>
 <div id="bar">
-  <span><b id="done">0</b>/<b id="total">{{COUNT}}</b></span>
+  <span id="tally"><b id="done">0</b> / {{COUNT}} named</span>
   <span id="msg"></span>
   <button id="send">Submit</button>
 </div>
@@ -344,6 +402,11 @@ function show(i) {
   at = Math.max(0, Math.min(i, cards.length - 1));
   const inp = cards[at] && cards[at].querySelector('input');
   if (inp) inp.focus({preventScroll: true});
+  // The rail encodes HOW FAR THROUGH the batch you are. Without this it is a
+  // line that never moves - a structural device decorating rather than saying
+  // anything, which is worse than no rail at all.
+  const fill = document.getElementById('railfill');
+  if (fill) fill.style.width = ((at + 1) / cards.length * 100) + '%';
   window.scrollTo(0, 0);
 }
 
