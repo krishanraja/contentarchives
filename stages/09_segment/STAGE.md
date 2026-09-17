@@ -25,7 +25,17 @@ and non-memories moved to `_Review` - moved, never deleted.
 - `Archive`, `_Review` and `ContentProduction` keep their own trees. Krish,
   2026-09-18: those 1,606 files stay where they are and stay out of both naming
   games - `ContentProduction` is produced work, not memories
-- `_Review` is emptied by Krish, never by a rule
+- `_Review` is emptied by Krish, never by a rule - **except the intimate sweep,
+  which he overrode on 2026-09-18.** Shown that 31 of the 88 files classified
+  `intimate` sat in `_Review` and that moving them broke this invariant, he chose
+  to move them: his instruction was *"ensure 0 intimate photos remain in any
+  other folder"*, and `_Review` is another folder
+- **`Media\Personal\Intimate\<year>\` holds everything classified `intimate`**,
+  swept there by `sweep_intimate.py`. What that guarantees is narrow and must
+  not be widened in the retelling: 0 files CLASSIFIED intimate sit outside it.
+  3,124 files have no `sensitivity` recorded at all and 745 are
+  `private-family`, so whether the vision model caught every intimate
+  photograph is a separate, unanswered question
 - a file's own name outranks a pattern recognised in it
 - **"for Bharti" on a cluster means its photographs belong in Communal. A
   photograph that merely CONTAINS Bharti does not.** Krish, 2026-09-17: *"all
@@ -45,6 +55,7 @@ and non-memories moved to `_Review` - moved, never deleted.
 | `stages/09_segment/propose_split_by_path.py` | propose a side per FILE for the `Media\Pending-Segmentation` and `Media\NoDate` queues, by Krish's path rule, for review - writes `SPLIT-BY-PATH.csv` and moves nothing |
 | `stages/09_segment/review_split_by_path.py` | the proposal as GROUPS of photographs with thumbnails, not rows of paths - because 18,985 CSV rows is a rubber stamp, not a review ("what am i supposed to do in that sheet?") |
 | `stages/09_segment/apply_split.py` | **STALE, do not run.** Applies a split journalled and reversible, but joins `ORIGIN-MAP.csv` to `SPLIT-PROPOSAL.csv` by origin folder and builds destinations from the PRE-MIGRATION layout (`LIBROOT\Library\...`, `LIBROOT\NoDate\...`). `migrate_layout.py` has since restructured the library to `Media\<Side>\...`, so every destination it computes is wrong |
+| `stages/09_segment/sweep_intimate.py` | move everything classified `intimate` into `Media\Personal\Intimate\<year>\` - journal written FIRST, a destination collision stops the run, `--reverse` puts every file back, `--verify` re-derives the count from disk |
 | `stages/09_segment/classify_screenshots.py` | separate screenshots from photographs, deleting neither |
 | `stages/09_segment/move_to_review.py` | move a named set into _Review |
 | `stages/09_segment/restore_from_review.py` | put back what a rule should never have evicted |
@@ -55,7 +66,14 @@ and non-memories moved to `_Review` - moved, never deleted.
 | `tools/audit_split.py` | stress-test a split at the level it was decided - stays in `tools/`, which is where every stage's operator-facing utility lives (04 inventory keeps four there, 12 canon three) |
 
 ## Tests
-- none yet: the split is audited at run time by `audit_split.py` (debt)
+- `tests/test_segment_moves.py` - the stage's first: a journalled move reverses
+  completely, `reverse` refuses when the source name has been taken back, and a
+  destination collision stops the whole run rather than overwriting one
+  photograph with another. The collision guard has never fired on real data (0
+  in 88 files), so it is constructed on a fixture on purpose - a guard nobody
+  has seen fail is indistinguishable from no guard (learning 44)
+- the split itself is still audited at run time by `tools/audit_split.py` and
+  `review_split_by_path.py`, not by a test (remaining debt)
 
 ## Lessons
 | # | what this stage does about it | enforced by |
