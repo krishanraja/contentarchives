@@ -62,10 +62,12 @@ Get-ChildItem tests\test_*.ps1 | ForEach-Object { pwsh -NoProfile -File $_.FullN
 checkpoints, so the full run takes a couple of minutes rather than seconds.
 
 Current debt, printed by the contracts test - **read it from the test, never from
-here**: 13 stages, **114 of 114** code files owned, 55 learnings, 50 enforced by
+here**: 13 stages, **125 of 125** code files owned, 56 learnings, 51 enforced by
 a named function or test, **5 enforced only in prose: 8, 13, 17, 24, 29**. This
 paragraph carried three stale numbers for a week because it was written from
-memory instead of from the run.
+memory instead of from the run - and then carried them again, reading 114/55/50
+on 2026-09-18 while the test printed 125/56/51. Copy them from the run or delete
+the sentence.
 
 **Migration, not finished.** The `STAGE.md` files list code where it lives today.
 
@@ -112,24 +114,102 @@ memory instead of from the run.
 
 ----
 
-## RIGHT NOW: the phone game works end to end (2026-09-18, 16:30)
+## RIGHT NOW: Intimate is flat, and the never-looked-at gap is closed (2026-09-18, 21:20)
 
-Krish names faces on his phone; the answers reach the journal without him
-forwarding anything. Two batches done, 62 answers in.
+The index was rebuilt at 21:02 - **277 seconds**, not the 31 minutes of that
+afternoon, so the memory pressure had eased - and everything here is measured
+from it rather than claimed. Coverage across 82,193 files: `sensitivity` 99.4%,
+`description` 99.3%, `kind` 99.4%, `audience` 100%. 1,609 human answers, 45,814
+person-on-photograph rows. The Python suite is 16 of 16 green.
+
+**`Personal\Intimate` IS ONE FLAT FOLDER.** Krish: *"lets remove the chronology
+folder structure from Intimate and just have all the media in that one folder"*.
+88 files moved, 14 year folders pruned, `INVENTORY.csv` and
+`MIGRATION-HASHES.csv` patched from the journal (`HASH-INDEX.csv` held none of
+these paths), index rebuilt, and the flat shape verified from the filesystem.
+Reversible in one command:
+
+    python stages/09_segment/sweep_intimate.py --reverse D:\_PhotoAudit\intimate-sweep-20260917T205630.csv
+
+There is no `--flatten` mode: `plan()` treats a file as home only when it sits
+DIRECTLY in the folder. If that ever reverts to `startswith(dest + "\")`, the
+sweep finds nothing to move and reports success over a folder full of year
+folders. `tests/test_segment_moves.py` section 6 holds it.
+
+**TWO FILES AWAIT KRISH AND MUST NOT MOVE WITHOUT HIM.** `--verify` reports 90
+files classified intimate: 88 in the folder, 2 outside. Both were first judged
+today, because neither had a thumbnail before:
+
+| file | broad pass | narrow pass |
+|---|---|---|
+| `Archive\Personal\06-Work\Old Documents\jason7.png` | `intimate` | nudity **none**, sexual yes, "digitally altered image" |
+| `Media\Personal\2019\2019-10\VID-20191028-WA0006.mp4` | `intimate` | nudity **none**, "animated character" - an Among Us cartoon |
+
+Both are `keep=False`. The two passes DISAGREE and learning 37 is explicit that
+a disagreement goes to a human, never to another model. So the sweep's "0
+classified intimate outside the folder" invariant reads **2 on purpose**. Do not
+close it by moving them.
+
+**THE GAP THAT HID FROM EVERY PASS AT ONCE.** `chain_thumbnails.ps1` only ever
+ran `--source D:\ContentLibrary\Media`, and `Archive\`, `_Review\` and
+`ContentProduction\` are not under it. Every downstream pass reads `D:\_thumbs`,
+so the classifier, the descriptions, the face pass and the game were blind to
+the same 2,426 files simultaneously. `backfill_thumbs.py` closed it, driving
+from the index's path->hash rather than re-walking 82,193 files: 1,033
+photographs - including 82 HEIC that needed `pillow_heif` registering, and 18
+damaged Samsung panoramas up to 16144x1824 recovered via
+`LOAD_TRUNCATED_IMAGES` - plus 844 video frame-sets.
+
+**502 files can be viewed by nobody**, and that is now known rather than
+suspected: 65 videos with destroyed H.264 bitstreams concentrated in `2022-11`
+and `2023-03` (one bad transfer, not bad luck), 8 whose `moov` index is missing
+including 3.2 GB of GoPro footage - that class is the one worth a recovery
+attempt - 4 stubs, a 101 GB `.jpg` of pure nulls, and ~424 non-media files.
+
+**THE INTIMATE RECALL QUESTION IS ANSWERED, WITH A BOUND.** Krish: *"Are you
+sure all intimate pictures and videos are in the intimate folder? I'm
+specifically talking about naked females."* 4,112 files were asked one narrow
+nudity question for $2.22, none refused by safety filters:
+
+| population | asked | result |
+|---|---|---|
+| 88 labelled `intimate` | all | all 88 in the folder, 0 outside |
+| 737 `private-family` | all | 42 hits, **0 sexual**; both `full` answers were the same child in a luchador mask; the rest a 2019 back-wound series, hospital and newborn photographs, topless men |
+| 1,879 never examined | all | 5 hits, all WhatsApp stickers of topless men |
+| 77,755 labelled `none` | 1,500 seeded sample | **0 hits** -> 95% upper bound 0.23%, at most ~179 files |
+
+The 47 hits are in `D:\_PhotoAudit\sensitivity-review.html` with thumbnails, for
+him to confirm. `classify_live.py --sensitivity` writes `nudity`,
+`subject_age`, `sexual` and `nudity_note` under its own source id and **never
+`sensitivity`** - a model may propose, only a human may move a photograph.
+`tests/test_sensitivity_pass.py` holds that.
+
+**THE FACE PASS IS NOT BEHIND, AND I WAS WRONG TO SAY IT WAS.** It finished:
+47,284 images, 117,866 faces, 24 hours. The 34.6% of hashes it never examined is
+by design - it only opens photographs the classifier said contain people, and
+**0 files with `people >= 1` were skipped**. The `tags` table holds only
+positive `cluster` rows, so "no face record" there conflates "a landscape" with
+"never looked"; the truth is in `faces.0.csv` / `faces.video.csv`, where
+`face_index -1` means examined-and-empty. `sample_missed_faces.py` measured what
+the filter costs: 300 sampled, 4 with any face, 2 confident (0.7%), and both
+were faces on a television or a projector screen - about 156 across all 23,461.
+The shortcut holds. The genuine remainder is **1,536 hashes that had no people
+count when the face pass ran**; they have one now, so `faces_embed.py` should be
+re-run over those with `people >= 1`.
+
+**The phone game, unchanged and still the loop.** Four batches done, 102 answers
+ingested - and they ARE now on photographs, because this rebuild applied them.
 
 | | |
 |---|---|
 | batch 1 | https://claude.ai/artifact/KJohLkjv8vdHn8KNvt76ek - finished |
 | batch 2 | https://claude.ai/artifact/3dMThrpFi556maYVNSiPbL - finished |
 | batch 3 | https://claude.ai/artifact/NfWHekaNjSPpmxzyQFW5AW - finished |
-| batch 4 | https://claude.ai/artifact/Y4XT9gzhtUkR6Hh9SvrhFC - with him now |
+| batch 4 | https://claude.ai/artifact/Y4XT9gzhtUkR6Hh9SvrhFC - finished |
 
-**A REBUILD IS OWED, DELIBERATELY.** 102 game answers are in the journal and
-NOT yet on photographs. `build_game.py` takes answered clusters from the JOURNAL
-and sides from the index, and sides do not move when names are added - so a
-rebuild buys nothing for choosing the next batch, and at 31 minutes under the
-current memory pressure it costs a great deal. Run `build_db.py` once after
-several batches, in the FOREGROUND, not after each one.
+Still owed: Bharti's game (~31 batches at the 0.12 floor, her answers carry
+`who=bharti`), the fortnightly ingest armed via `guards/arm.ps1`, and the
+17 merge siblings worth 39 photographs.
 
 **The loop**: `build_game.py --who krish --batch N` -> gate with
 `verify_people_sheet.py` AND `check_repeats.py` -> publish as a private artifact
