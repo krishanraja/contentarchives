@@ -186,6 +186,33 @@ def test_repeat_guard(d):
           "c2" in dup, True)
 
 
+def test_no_unrecordable_rows():
+    r"""A cluster the store cannot hold is never offered (round 19, 2026-09-17).
+
+    cluster_faces.py tags a cluster only at TWO or more faces - "a cluster of
+    one is not yet a person". people_sheet.py ranked from FACE-CLUSTERS.csv,
+    which holds every face including 40,006 singletons, so it offered rows that
+    record_people.py refuses and build_db's scope_hashes expands onto nothing.
+    Krish answered five of them and the answers had nowhere to land.
+
+    Watched EXCLUDING a singleton, not merely passing: the filter that is never
+    seen firing is the one that quietly stops firing.
+    """
+    import people_sheet as PS
+
+    known = {"c1", "c2"}                       # c3 is a singleton: no tag
+    offered = {"c1": {"h1", "h2"}, "c2": {"h3"}, "c3": {"h4"}}
+    kept = {c for c in offered if PS.is_recordable(c, known)}
+    check("a tagged cluster is offered", "c1" in kept, True)
+    check("an untagged SINGLETON is excluded", "c3" in kept, False)
+    check("only the tagged ones survive", sorted(kept), ["c1", "c2"])
+    # An empty tag store must not silently pass everything: that would restore
+    # the exact bug while reporting a clean sheet (learning 44).
+    none_known = {c for c in offered if PS.is_recordable(c, set())}
+    check("an EMPTY tag store offers nothing, rather than everything",
+          sorted(none_known), [])
+
+
 def test_communal_filter():
     r"""Krish must not be asked about Communal faces, and the rule is measured.
 
@@ -320,6 +347,10 @@ def main():
         print()
         print("7. Communal faces are Bharti's, and the filter is seen EXCLUDING")
         test_communal_filter()
+
+        print()
+        print("8. a row the store cannot hold is never offered")
+        test_no_unrecordable_rows()
     finally:
         shutil.rmtree(d, ignore_errors=True)
 

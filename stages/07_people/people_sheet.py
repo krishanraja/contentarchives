@@ -257,10 +257,56 @@ def crop(path, bbox, size=104):
         return None
 
 
+def known_clusters(tags: str) -> set:
+    """Every cluster the tag store holds - the set a recorded answer can reach."""
+    out = set()
+    if not os.path.exists(tags):
+        return out
+    with io.open(tags, encoding="utf-8", errors="replace", newline="") as fh:
+        for r in csv.DictReader(fh):
+            if r.get("tag") == "cluster" and r.get("value"):
+                out.add(r["value"])
+    return out
+
+
+def is_recordable(cluster: str, known: set) -> bool:
+    """Can an answer about this cluster be recorded AND reach photographs?
+
+    record_people.py refuses a cluster that is not in the tag store, and
+    build_db's scope_hashes expands a cluster answer with
+    `SELECT hash FROM tags WHERE tag='cluster' AND value=?` - so an untagged
+    cluster is both unrecordable and, if forced in, inert.
+
+    Round 19, 2026-09-17: five rows Krish answered came back "no such cluster".
+    They were singletons, which cluster_faces.py leaves out of the store by
+    design. THE SAME function the test calls, so the rule cannot drift between
+    the sheet and its test.
+    """
+    return cluster in known
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(
         description=__doc__,
         formatter_class=argparse.RawDescriptionHelpFormatter)
+    # THE SHEET MUST NOT OFFER A ROW THE STORE CANNOT HOLD.
+    #
+    # Round 19, 2026-09-17: five rows Krish answered came back "no such
+    # cluster". cluster_faces.py writes a tag only for a cluster of TWO or more
+    # faces - "a cluster of one is not yet a person" - but this sheet ranks from
+    # FACE-CLUSTERS.csv, which holds every face including the 40,006 singletons.
+    # So the sheet offered rows that record_people.py refuses and build_db's
+    # scope_hashes (SELECT ... FROM tags WHERE tag='cluster') would expand onto
+    # nothing. His answers had nowhere to land.
+    #
+    # Asked which way to resolve it, he chose: never offer them again, and leave
+    # the >=2 rule alone. So this reads the same tag store the recorder
+    # validates against, and the sheet, the recorder and the expansion now share
+    # ONE notion of a known cluster.
+    ap.add_argument("--tags", default=os.path.join(r"D:\_enrichment",
+                                                   "content_tags.csv"),
+                    help="the tag store; a cluster with no tag here cannot be "
+                         "recorded, so it is never offered")
     ap.add_argument("--faces", default=FACES)
     ap.add_argument("--merges", default=MERGES,
                     help="group clusters that are the same person")
@@ -432,6 +478,23 @@ def main() -> int:
         print("skipping {:,} majority-Communal groups ({:,} photographs) - "
               "Bharti's side; {:,} left".format(
                   before - len(clusters), dropped_photos, len(clusters)))
+
+    # NEVER OFFER A ROW THE STORE CANNOT HOLD (round 19, 2026-09-17).
+    # Five rows Krish answered came back "no such cluster", and the decline pass
+    # would then have recorded his answers as refusals. Same refusal shape as the
+    # Communal guard above: an empty filter is worse than no filter (learning 44).
+    known = known_clusters(a.tags)
+    if not known:
+        print("STOPPING: no cluster tags found in {}".format(a.tags))
+        print("  Every row would then look unrecordable, or - if this check were")
+        print("  skipped - every row would look fine while none could be")
+        print("  recorded. Fix the path rather than proceeding.")
+        return 1
+    before = len(clusters)
+    clusters = {g: v for g, v in clusters.items() if is_recordable(g, known)}
+    if before - len(clusters):
+        print("skipping {:,} groups with no tag in the store (unrecordable); "
+              "{:,} left".format(before - len(clusters), len(clusters)))
 
     if a.clusters:
         # EXACTLY these, in this order. Bypasses the ranking and the

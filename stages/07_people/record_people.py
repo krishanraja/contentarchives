@@ -192,9 +192,34 @@ def main() -> int:
             return 1
         named_here = {c for c, _, _, _ in pairs} | {c for c, _, _, _ in unknown} \
             | {c for c, _, _, _ in unreadable} | {c for c, _, _ in declined}
+        # A DECLINE MUST CLEAR THE SAME BAR AS A NAME.
+        #
+        # Round 19, 2026-09-17: five rows Krish answered were refused as "no
+        # such cluster" - they are singleton clusters, which cluster_faces.py
+        # deliberately leaves out of the tag store. The name was refused; this
+        # loop would then have recorded those same rows as DECLINED, because it
+        # never consulted `known`. His answer would have become a refusal, and
+        # the row would never be shown again: the precise failure he asked me to
+        # stop ("stop resending me batches I have refused").
+        #
+        # Refusing here is not lost work - it is loud, and the sheet should not
+        # have offered a row the store cannot hold.
+        refused_rows = []
         for cid in rows_on_sheet:
-            if cid not in named_here:
-                declined.append((cid, known.get(cid, 0), "shown and not named"))
+            if cid in named_here:
+                continue
+            if cid not in known:
+                refused_rows.append(cid)
+                continue
+            declined.append((cid, known.get(cid, 0), "shown and not named"))
+        if refused_rows:
+            print()
+            print("NOT RECORDING {} blank row(s): no such cluster in the store"
+                  .format(len(refused_rows)))
+            print("   {}".format(", ".join(refused_rows[:12])))
+            print("   A row the store cannot hold must not become a refusal -")
+            print("   that would hide it for ever on the strength of a sheet")
+            print("   that should never have offered it.")
 
     if not (pairs or unknown or unreadable or declined):
         print()

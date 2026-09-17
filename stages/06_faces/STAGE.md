@@ -26,6 +26,7 @@ people, and keep the cluster ids Krish's answers point at stable for ever.
 |---|---|
 | `stages/06_faces/faces_embed.py` | detect and embed faces in thumbnails or video frames |
 | `stages/06_faces/video_face_frames.py` | one frame per 30 s from every video, verified from source |
+| `stages/06_faces/backfill_cluster_tags.py` | publish a cluster tag for every assigned face, so no sheet can offer a row the store cannot hold |
 | `stages/06_faces/cluster_faces.py` | the original clustering; never re-applied |
 | `stages/06_faces/merge_clusters.py` | merge clusters that are one person, tested against names |
 | `stages/06_faces/assign_video_faces.py` | put video faces into the frozen clusters |
