@@ -112,38 +112,51 @@ memory instead of from the run.
 
 ----
 
-## RIGHT NOW: round 21 is OPEN in Krish's browser (2026-09-18, 09:28)
+## RIGHT NOW: round 22 is OPEN in Krish's browser (2026-09-18, 09:36)
 
 **Nothing is running. The next move is his answers.**
 
-`D:\_PhotoAudit\PEOPLE.html` - 60 rows, 478 crops, both gates passed, and
+`D:\_PhotoAudit\PEOPLE.html` - 60 rows, 479 crops, both gates passed, and
 **opened with `Start-Process`**. Krish, 2026-09-17: *"you are not opening these
 pages for me ever, you need to open them."* Sending a file card is not opening a
 page. Build it, gate it, open it, in the same turn.
 
-### THE NAMING ROUNDS END IN ABOUT TWO MORE
+### ROUND 23 IS THE LAST ONE
 
-**173 clusters clear the 8+ floor**, and round 21 takes 60 of them. So two more
-rounds after this one and nothing clears it - at which point `people_sheet.py`
-prints **THE NAMING ROUNDS ARE DONE** and writes no sheet. That is by design
-(learning 44: an empty page and a finished job look identical), but it should not
-arrive as a surprise. What is left below the floor: 54,406 unnamed non-Communal
-groups, most of them one or two photographs - swipe-game work, not sheet work.
+**113 clusters cleared the 8+ floor** and round 22 takes 60, so **53 remain**.
+Round 23 offers those and then nothing clears the floor: `people_sheet.py` prints
+**THE NAMING ROUNDS ARE DONE** and writes no sheet (learning 44 - an empty page
+and a finished job look identical). Do not read that as a failure.
 
-Rounds 19 and 20 are recorded and built in. Round 20: 33 names, 2 `for Bharti`,
-25 declines - reconciling exactly against a 60-row sheet.
+What is left below the floor: **54,346** unnamed non-Communal groups, nearly all
+one or two photographs. That is swipe-game work, not sheet work - and every one
+of them is nameable now that the singletons are tagged.
+
+Two things still waiting on Krish, neither blocked:
+- **Bharti's Communal queue** - 18,696 clusters would qualify; nothing has ever
+  been written on her behalf, by his instruction.
+- **the tail** - `stages/07_people/swipe/server.py` exists and has never been run
+  in anger.
+
+Rounds 19-21 are recorded and built in. Round 21: 20 names, 6 `for Bharti`, 34
+declines - reconciling exactly against a 60-row sheet.
 
 | | | measure |
 |---|---|---|
-| human answers | **1,259** | rows in `answers.csv` |
-| people named | **269** | named in the journal (`profile_coverage`) |
-| files with a person | **25,009** | `v_files.person` not null - the coverage line |
-| person rows | **44,899** | `count(*)` in `photo_people` |
-| profile terms | **279** | 0 of 269 named people unprotected |
+| human answers | **1,319** | rows in `answers.csv` |
+| people named | **273** | named in the journal (`profile_coverage`) |
+| files with a person | **25,075** | `v_files.person` not null - the coverage line |
+| person rows | **45,035** | `count(*)` in `photo_people` |
+| profile terms | **282** | 0 of 273 named people unprotected |
 
-**Sheets are archived now** - `PEOPLE-round19.html`, `PEOPLE-round20.html` - so
-`check_repeats.py` has an on-disk baseline again as well as the journal. Round 21
-was gated against 1,113 groups from both.
+**Sheets are archived per round now** - `PEOPLE-round19.html` through
+`PEOPLE-round21.html` - so `check_repeats.py` has an on-disk baseline as well as
+the journal one. Round 22 was gated against 1,173 groups from both.
+
+**One answer to watch:** `c19921 = Tima`, recorded verbatim, against `Tina` from
+round 19. Two different clusters, and Tima is a real name, so it was NOT
+corrected on my own initiative - but if it was a slip, a later answer supersedes
+it and costs one line.
 
 `c13501` = Kiran Nathwani, asked on a page rather than inferred. **Kiran Nathwani
 186, Kiran Patel 11, bare `Kiran` gone**, and all 9 of `c13501`'s photographs
