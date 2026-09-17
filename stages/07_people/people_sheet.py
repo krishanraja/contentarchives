@@ -194,11 +194,110 @@ document.addEventListener('DOMContentLoaded', () => {
 """
 
 
-def crop(path, bbox, size=104):
-    """The face itself, not the photograph it is in."""
+_FRAMES = {}
+VIDEO_EXT = (".mp4", ".mov", ".avi", ".mts", ".m4v", ".3gp", ".mpg", ".wmv")
+
+
+def frame_for(path, fhash="", thumbs=r"D:\_thumbs"):
+    r"""A sampled frame for a video, or None. PIL cannot open an .mp4.
+
+    Found 2026-09-18 while testing context(): two of the ten worst declined
+    clusters rendered ZERO bytes from crop() AND context(), because their faces
+    are in videos and both called Image.open on the .mp4. Those rows were blank,
+    not low quality.
+
+    Measured before fixing it, because I had just called it a silent hole across
+    the whole round: only 8 of the 472 declined clusters are video-only, and 0
+    of those lack sampled frames on disk. So the gap is narrow and every case is
+    recoverable - the frames were always there, at <hash>_f0..fN.jpg, and
+    nothing looked for them.
+
+    The index is built ONCE and cached: assets_for() walks every subdirectory of
+    D:\_thumbs, and calling that per face would walk it thousands of times.
+    """
+    if not path or not path.lower().endswith(VIDEO_EXT):
+        return None
+    if not _FRAMES:
+        try:
+            from batch_classify import assets_for
+            _FRAMES.update(assets_for(thumbs))
+        except Exception:                                        # noqa: BLE001
+            _FRAMES["__failed__"] = []
+    # assets_for() keys by HASH, not by filename - I wrote that in the comment
+    # above and then looked up by stem anyway, which would have indexed the
+    # whole thumbs tree and returned None every single time: all of the cost and
+    # none of the benefit. The caller holds the hash, so it passes it in.
+    got = _FRAMES.get(fhash or "")
+    return got[0] if got else None
+
+
+def context(path, bbox, fhash="", size=600, quality=80):
+    r"""The PHOTOGRAPH, with the face marked. For faces that have no pixels.
+
+    WHY THIS EXISTS
+
+    Krish, 2026-09-18: *"Usually the reason I decline to identify is because
+    your thumbnail is really low quality."* Measured immediately after: in the
+    485 clusters he declined and never named, the BEST face is a median of **25
+    source pixels**, 91% are under 104px, and only 9% have any face reaching
+    104px at all. So `crop()` was rendering a 4x upscale of 25 pixels and asking
+    who it was. He was not refusing; he was being shown nothing.
+
+    A BIGGER CROP CANNOT FIX THAT - the pixels do not exist. What does is the
+    frame around the face: the setting, the clothes, who they are standing next
+    to. A person is recognisable in a photograph long before their face is
+    legible in isolation.
+
+    530 rows across 485 clusters went into the journal as
+    `unidentifiable = declined` - "never show this again" - on the strength of
+    that thumbnail. Only 10 rows are his actual judgement ("unsure, blurry",
+    typed deliberately). The instrument overrode his intent, and this is the
+    repair.
+
+    Deliberately NOT like crop():
+      - no `return None` for a small box. crop() drops anything under 12px,
+        which silently hides exactly the faces this is for. A tiny face inside a
+        readable photograph is the case being fixed.
+      - the whole frame, scaled on its LONG edge, so the aspect ratio survives
+        and a portrait does not become a square.
+      - one per ROW, never one per crop: a 600px context JPEG is tens of times
+        the bytes of a 104px face, and 60 rows x 12 would be a 40 MB page.
+    """
+    from PIL import Image, ImageDraw
+    try:
+        with Image.open(frame_for(path, fhash) or path) as im:
+            im = im.convert("RGB")
+            W, H = im.size
+            x1, y1, x2, y2 = [float(v) for v in bbox.split(",")]
+            d = ImageDraw.Draw(im)
+            # Two rings, light on dark, so the box reads on any photograph.
+            pen = max(2, int(round(max(W, H) / 320)))
+            d.rectangle([x1, y1, x2, y2], outline=(0, 0, 0), width=pen * 2)
+            d.rectangle([x1, y1, x2, y2], outline=(255, 210, 60), width=pen)
+            scale = min(1.0, float(size) / max(W, H))
+            if scale < 1.0:
+                im = im.resize((max(1, int(W * scale)), max(1, int(H * scale))),
+                               Image.LANCZOS)
+            b = io.BytesIO()
+            im.save(b, "JPEG", quality=quality)
+            return base64.b64encode(b.getvalue()).decode("ascii")
+    except Exception:                                            # noqa: BLE001
+        return None
+
+
+def crop(path, bbox, fhash="", size=104):
+    """The face itself, not the photograph it is in.
+
+    Right when the face HAS pixels: 34% of named clusters carry a face of 104px
+    or more. Useless when it does not - see context() above, and the 25-pixel
+    median that made 485 clusters unanswerable.
+    """
     from PIL import Image
     try:
-        with Image.open(path) as im:
+        # NOT `h`: three lines down, `w, h = x2 - x1, y2 - y1` rebinds h to the
+        # face HEIGHT. Two meanings for one name, two lines apart, is a trap
+        # that survives review by working today.
+        with Image.open(frame_for(path, fhash) or path) as im:
             im = im.convert("RGB")
             W, H = im.size
             x1, y1, x2, y2 = [float(v) for v in bbox.split(",")]
