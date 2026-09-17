@@ -11,7 +11,20 @@ and non-memories moved to `_Review` - moved, never deleted.
   `Archive`, `ContentProduction`, each move journalled and reversible
 
 ## Invariants
-- a split is decided per origin folder, reviewed, then applied
+- a split is decided per origin folder, reviewed, then applied - **except for
+  material that has no origin folder, where Krish decided a PATH rule on
+  2026-09-18**: `bharti`, `bhasker` or `Users\Raja` anywhere in the path means
+  Communal, everything else Personal. 12,901 of the 21,821 unsided files carry
+  no origin folder at all, spanning 1995-2026, so the folder handle that makes
+  this stage tractable simply does not exist for them. This is a deliberate
+  departure from learning 2 ("folder names are a hint for review, never a
+  decision"), taken knowingly and on his instruction, and it applies ONLY to the
+  `Media\Pending-Segmentation` and `Media\NoDate` queues
+- **a file already sitting in a Communal folder is never demoted to Personal.**
+  Somebody put it there; the rule is for material nobody has judged yet
+- `Archive`, `_Review` and `ContentProduction` keep their own trees. Krish,
+  2026-09-18: those 1,606 files stay where they are and stay out of both naming
+  games - `ContentProduction` is produced work, not memories
 - `_Review` is emptied by Krish, never by a rule
 - a file's own name outranks a pattern recognised in it
 - **"for Bharti" on a cluster means its photographs belong in Communal. A
@@ -27,7 +40,8 @@ and non-memories moved to `_Review` - moved, never deleted.
 ## Code
 | file | role |
 |---|---|
-| `stages/09_segment/propose_split.py` | propose Personal/Communal by origin folder, for review |
+| `contentarchives/sides.py` | `side_of` and `is_majority_communal` - the ONE definition of whose life a photograph is from, read from the path and never from `files.side` |
+| `stages/09_segment/propose_split.py` | **BROKEN, do not run.** Proposes by origin folder, which 12,901 unsided files do not have, and its `COMMUNAL` pattern is still the retired publisher's pseudonyms (`PERSON-A\|PERSON-B\|PERSON-C`), so it matches nothing real and would propose "personal" or "unclear" for everything |
 | `stages/09_segment/apply_split.py` | apply an approved split, journalled |
 | `stages/09_segment/classify_screenshots.py` | separate screenshots from photographs, deleting neither |
 | `stages/09_segment/move_to_review.py` | move a named set into _Review |

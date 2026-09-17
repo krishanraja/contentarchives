@@ -61,14 +61,10 @@ ASSIGN = os.path.join(P.AUDIT, "FACE-CLUSTERS.csv")
 VIDEO_ASSIGN = os.path.join(P.AUDIT, "FACE-CLUSTERS-VIDEO.csv")
 
 
-def side_of(path):
-    """Personal, Communal, or neither - from the path, never files.side."""
-    p = (path or "").lower().replace("/", "\\")
-    if "\\media\\personal\\" in p:
-        return "Personal"
-    if "\\media\\communal\\" in p:
-        return "Communal"
-    return "other"
+from sides import side_of                                        # noqa: E402,F401
+# This was a SECOND copy of side_of, and it read only \Media\... - so Archive
+# and _Review material reported "other" here while people_sheet said the same
+# thing in its own words. One rule, one file (2026-09-18).
 
 
 def main() -> int:

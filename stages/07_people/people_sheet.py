@@ -44,6 +44,14 @@ import sys
 import os as _os, sys as _sys
 _sys.path.insert(0, _os.path.dirname(_os.path.dirname(_os.path.dirname(_os.path.abspath(__file__)))))
 import stagepath  # noqa: E402,F401  - puts every stage, guards/ and the package root on sys.path
+# side_of and is_majority_communal were defined HERE and again in
+# name_clusters.py - two copies of the rule that decides whose photographs Krish
+# is asked about. One definition now, in contentarchives/sides.py, which also
+# reads Archive\Personal and _Review\Communal: 1,230 files were unsided purely
+# because this function looked only inside \Media\ (2026-09-18). Imported rather
+# than re-implemented, and re-exported so every caller and test that reaches for
+# `people_sheet.side_of` keeps working.
+from sides import side_of, is_majority_communal                  # noqa: E402,F401
 FACES = r"D:\_enrichment\faces.0.csv"
 THUMBS = r"D:\_thumbs"
 OUT = r"D:\_PhotoAudit\PEOPLE.html"
@@ -184,54 +192,6 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 </script>
 """
-
-
-def side_of(path):
-    r"""Which side of the chronology a library path sits on.
-
-    From the PATH, not from files.side. That column holds the top-level tree -
-    'Media', 'Archive', '_Review', 'ContentProduction' - and Personal and
-    Communal are one level below it:
-
-        D:\ContentLibrary\Media\Personal\2019\2019-05\IMG_1234.jpg
-        D:\ContentLibrary\Media\Communal\2008\2008-10\old photos 238.JPG
-
-    A first attempt at the Communal filter joined on files.side, found no
-    cluster with a Personal photograph, and reported 0 majority-Personal out of
-    58,033 - which would have excluded every cluster there is (learning 54).
-
-    Pending-Segmentation and NoDate are neither: unsided material, and where the
-    scanned old photo libraries sit. Krish was offered the wider exclusion on
-    2026-09-17 and chose true Communal only, so those stay in his sheets.
-    """
-    p = (path or "").lower().replace("/", "\\")
-    if "\\media\\personal\\" in p:
-        return "Personal"
-    if "\\media\\communal\\" in p:
-        return "Communal"
-    if "\\media\\nodate\\" in p:
-        return "NoDate"
-    if "\\media\\pending-segmentation\\" in p:
-        return "Pending"
-    return "other"
-
-
-def is_majority_communal(hashes, sides):
-    r"""Is this cluster more Bharti's than Krish's?
-
-    A cluster is not Personal or Communal - its PHOTOGRAPHS are, and many
-    straddle - so the test is whether Communal outnumbers Personal within it.
-    Ties go to Krish: a cluster half his own photographs is worth his answer.
-
-    A module-level function rather than three lines inside main(), so a test can
-    call the SAME code the sheet calls. Inline, the only ways to test it were a
-    fixture with a database and three CSVs, or a reimplementation of the rule in
-    the test - and a test that reimplements its subject agrees with itself
-    rather than with the code (learning 54).
-    """
-    comm = sum(1 for h in hashes if sides.get(h) == "Communal")
-    pers = sum(1 for h in hashes if sides.get(h) == "Personal")
-    return comm > pers
 
 
 def crop(path, bbox, size=104):

@@ -247,7 +247,26 @@ def test_communal_filter():
     check("a Communal path reads Communal", ps.side_of(C), "Communal")
     check("NoDate is neither", ps.side_of(N), "NoDate")
     check("Pending-Segmentation is neither", ps.side_of(G), "Pending")
-    check("Archive is other", ps.side_of(A), "other")
+    check("Archive\\99-Unsorted is other", ps.side_of(A), "other")
+
+    # A TREE CAN STATE A SIDE ITSELF. Archive\Personal, Archive\Communal and
+    # the _Review equivalents were put there deliberately, and reading only
+    # \Media\... left 1,230 already-sided files reading "other" - they were
+    # about to be dragged across a disk to make up for a function that did not
+    # look at them (2026-09-18).
+    check("Archive\\Personal reads Personal",
+          ps.side_of(r"D:\ContentLibrary\Archive\Personal\2013\x.jpg"), "Personal")
+    check("Archive\\Communal reads Communal",
+          ps.side_of(r"D:\ContentLibrary\Archive\Communal\01-Identity\y.jpg"),
+          "Communal")
+    check("_Review\\Personal reads Personal",
+          ps.side_of(r"D:\ContentLibrary\_Review\Personal\2019\z.jpg"), "Personal")
+    check("_Review\\Communal reads Communal",
+          ps.side_of(r"D:\ContentLibrary\_Review\Communal\2019\2019-07\a.jpg"),
+          "Communal")
+    # ...but a folder merely STARTING with the word is not a side.
+    check("Media\\PersonalStuff is NOT Personal",
+          ps.side_of(r"D:\ContentLibrary\Media\PersonalStuff\a.jpg"), "other")
     check("a forward-slashed path still reads",
           ps.side_of(P.replace("\\", "/")), "Personal")
     check("case does not matter", ps.side_of(P.upper()), "Personal")
