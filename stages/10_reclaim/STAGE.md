@@ -26,6 +26,9 @@ The only stage that destroys data, so the most guarded.
 | `stages/10_reclaim/build_purge_list.py` | name every file a purge may destroy, individually, and refuse a count that has drifted |
 | `stages/10_reclaim/purge_content.py` | destroy chosen content and its traces - the one deletion with NO surviving copy, so it cannot use `guarded_delete` and must not weaken it |
 | `stages/10_reclaim/clear_h_sources.py` | delete the consumed H: sources, protecting every file not traced into the library by `ORIGIN-MAP.csv`. Hashing a Drive placeholder downloads it, so `guarded_delete`'s re-hash is unaffordable here (495 GB through a 131 GB cache); the weaker evidence standard is recorded in the journal rather than hidden, and Drive's 30-day trash is the undo |
+| `stages/10_reclaim/verify_h_source_held.py` | which H: source files the library can prove it holds, by provenance from `ORIGIN-MAP.csv` first and name+size second - the input `clear_h_sources.py` refuses to run without |
+| `stages/10_reclaim/check_h_video_copies.py` | size and name evidence for the videos the clear protected, keeping `__vN` variants and GoPro chapters apart from true duplicates |
+| `stages/10_reclaim/verify_h_video_copies.py` | prove those videos byte-identical before anything is deleted - equal size is not equal content. Appends and fsyncs per file and resumes, because the first version held every verdict in memory, was killed for low memory after downloading several GB, and lost the whole run |
 | `stages/10_reclaim/purge_downgrades.py` | delete re-encodes worse than what is held |
 | `stages/10_reclaim/free_wins.py` | the reclaim that needs no judgement |
 | `stages/10_reclaim/audit_deletions.py` | every journalled deletion carries its evidence |

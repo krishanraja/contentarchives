@@ -180,9 +180,22 @@ and only then will the index agree with the disk:**
 Expect ~82,111 files and ~824 GB. If it still says 925.3 GB, something re-added
 the row.
 
-A hash verification of the 278 size-matched H: videos was also still running at
-handover - its verdict lands in `D:\_PhotoAudit\H-VIDEOS-HASHED.csv`. Read the
-Verdict column before deleting any of them, and never delete the five DJI stubs.
+**THE 278-VIDEO HASH CHECK WAS KILLED AND LOST EVERYTHING.** It was downloading
+10.63 GB from Drive while the mirror ran, the machine ran out of memory, and the
+script emitted its CSV only at the END - so a kill cost the whole run. It has
+since been rewritten to append and fsync per file and to resume from
+`H-VIDEOS-HASHED.csv`, so re-running it is cheap:
+
+    python stages/10_reclaim/verify_h_video_copies.py     # resumes; safe to kill
+
+**Do not run it at the same time as the mirror.** Two jobs both pulling from
+Drive is what triggered the kill. The mirror survived; the verify did not.
+
+Until it has run, `D:\_PhotoAudit\H-VIDEOS-VERDICT.csv` holds only the SIZE
+evidence: 278 of the 283 have a size twin in the library, and the `__v0`/`__v2`
+names are WhatsApp variants of files already held. That is strong but it is not
+proof - equal size is not equal content (learnings 22 and 36) - so **delete none
+of the 278 until the hash verdict exists**, and never the five DJI stubs.
 
 The write rate is NOT the ETA. Bytes land in a local cache on **C:** and upload
 behind it; the queue draining is the real signal, and it drains in steps.
