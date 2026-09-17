@@ -192,8 +192,17 @@ def main() -> int:
         moved += 1
     print("moved {:,} of {:,}".format(moved, len(rows)))
     print()
-    print("Now: python stages/08_index/build_db.py   (the paths have changed)")
-    print("Then: sweep_intimate.py --verify")
+    # THE INDEX CANNOT LEARN A MOVE ON ITS OWN. build_db.load_files() reads
+    # INVENTORY.csv and the hash index; neither walks the disk. After this sweep
+    # I told the operator to rebuild the index, waited 236 seconds for it, and
+    # the 88 moved files were STILL listed under their old paths - 0 index rows
+    # mention Intimate, and the inventory has not been written since
+    # 2026-09-12. apply_split_by_path.py then refused its own approved plan
+    # because two sources no longer existed, which is the refusal working.
+    print("Now, IN THIS ORDER - the index reads the inventory, not the disk:")
+    print("  1. refresh the inventory (stage 04), or the moves are invisible")
+    print("  2. python stages/08_index/build_db.py")
+    print("  3. sweep_intimate.py --verify")
     return 0
 
 
