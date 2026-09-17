@@ -61,12 +61,26 @@ trace swept and verified at 0. See `stages/10_reclaim/purge_content.py`.
 2. **G: and H: are two DIFFERENT Google accounts** - `krishanraja@gmail.com`
    and `krish@themindmaker.ai`. Both hold `_photo-consolidation` *source*
    folders (H: alone: 24,901 files / 501.5 GB). Neither holds a library copy.
-3. **The real cloud quota is still unknown.** The mounts report their local
-   cache volumes (learning 17), DriveFS's `metadata_sqlite_db` has no quota
-   table in either account, and `gcloud auth print-access-token` fails with
-   `invalid_grant: Token has been expired or revoked`. **Krish must
-   re-authenticate with Drive scope before any mirror is planned against a
-   number.**
+3. **The cloud target is H:, it has 2 TB, and the library fits today.** Krish
+   confirmed the quota on 2026-09-18; it is **not locally verifiable** - the
+   mounts report their local cache volumes (learning 17, H: claims 475.6 GB),
+   DriveFS's `metadata_sqlite_db` carries no quota table in either account, and
+   `gcloud auth print-access-token` returns `invalid_grant`. Recorded as his
+   figure, with that caveat, rather than as a measurement.
+
+   Measured here from the mount's metadata (no placeholder hydrated):
+
+   | | GB |
+   |---|---|
+   | quota (Krish, 2026-09-18) | 2,048.0 |
+   | stored now, 32,606 files across 25 folders | 537.6 |
+   | **free** | **1,510.4** |
+   | the library | 925.4 |
+   | spare after upload, clearing nothing | **585.0** |
+   | spare if `_photo-consolidation` is cleared first | 1,086.5 |
+
+   Access is proven in both directions: 24,902 files enumerated, and one file
+   deleted from the mount and confirmed gone.
 
 ---
 
@@ -189,15 +203,28 @@ a zero-mismatch hash report. That is two identical clean libraries, locally.
 
 ## Phase E - the cloud copy, and the one the app streams from  ·  ~30 h  ·  free but slow
 
-**Blocked on Krish** until the quota is known. Nothing here should be attempted
-against an assumed number.
+**Not blocked on space any more.** The target is **H:**
+(`krish@themindmaker.ai`), 2 TB, with 1,510.4 GB free against a 925.4 GB
+library - it fits with 585 GB spare before clearing a single source folder.
+What is still unmeasured is the upload RATE, and that is the one number this
+phase should not assume.
 
-1. **Re-authenticate with Drive scope** and read `storageQuota` from
-   `drive/v3/about`. The library is 925.4 GB. Decide which account carries it -
-   they are different accounts with different quotas.
-2. **Clear the consumed source folders** from that account's
-   `_photo-consolidation` (H: alone holds 501.5 GB) once `verify_takeout_complete.py`
-   and `verify_h_batch.py` confirm every byte is in the library and on E:.
+1. **Measure the upload rate properly, before committing to a window.**
+   Download was 10.5 MB/s; upload has never been measured here and symmetry is
+   learning 10's whole subject. **Timing a copy to H: measures the wrong
+   thing** - that write lands in the local DriveFS cache at disk speed and the
+   upload happens afterwards, asynchronously. The real rate is the
+   `operations` queue draining, which `move_audio_to_h.py:queue_depth` already
+   reads from the account that owns the destination. At 10 MB/s a 925 GB
+   library is ~26 hours; at 2 MB/s it is 5 days, and that difference decides
+   whether this runs overnight or over a week.
+2. **Optionally clear the consumed source folders first**
+   (`_photo-consolidation`, 501.5 GB / 24,901 files) - now an optimisation
+   rather than a gate, and worth doing because it is material already verified
+   into the library. Only after `verify_takeout_complete.py` and
+   `verify_h_batch.py` confirm every byte is in the library **and on the Phase
+   D second copy**. Not "on E:" - E: is the stale predecessor until Phase D
+   rebuilds it.
 3. **Measure the upload rate before committing to a window.** Download was
    10.5 MB/s; upload has never been measured here and symmetry is an assumption.
 4. **Upload computing MD5 in flight.** Drive exposes a server-side

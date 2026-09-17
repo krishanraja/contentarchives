@@ -271,6 +271,18 @@ gained 162 real rows across 47 photographs. Use `Out-String -Stream` with
 disappears on failure is worse than none, because the silence reads as
 innocence (learning 46's cousin).
 
+**THE CLOUD TARGET IS SETTLED, AND IT FITS.** H:
+(`krish@themindmaker.ai`) has **2 TB** - Krish's figure, 2026-09-18, and not
+locally verifiable: the mount reports 475.6 GB because that is the DriveFS cache
+volume (learning 17), DriveFS holds no quota table, and the gcloud token is
+revoked. Measured from the mount's metadata without hydrating a placeholder:
+537.6 GB stored across 32,606 files, so **1,510.4 GB free against a 925.4 GB
+library - 585 GB spare before clearing anything**. Read and write both proven
+(24,902 files enumerated; one file deleted and confirmed gone). The remaining
+unknown is the upload RATE, and timing a copy to H: measures the local cache,
+not the upload - use `move_audio_to_h.py:queue_depth`. See `docs/ROADMAP.md`
+Phase E.
+
 Still owed: Bharti's game (~31 batches at the 0.12 floor, her answers carry
 `who=bharti`), the fortnightly ingest armed via `guards/arm.ps1`, and the
 17 merge siblings worth 39 photographs.
