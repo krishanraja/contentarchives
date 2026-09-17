@@ -328,7 +328,7 @@ def known_clusters(tags: str) -> set:
     return out
 
 
-SUBJECT_SHARE = 0.08
+SUBJECT_SHARE = 0.12
 
 
 def is_subject(bbox, frame, share=SUBJECT_SHARE):
@@ -343,6 +343,30 @@ def is_subject(bbox, frame, share=SUBJECT_SHARE):
     Measured across the 54,229-group queue: median best face 0.062 of the
     frame's short edge, against 0.146 for every cluster he NAMED. Two different
     populations. 90% of the queue is under 60 thumbnail pixels.
+
+    RAISED TO 0.12 ON 2026-09-18, and the cost is written down rather than
+    buried. At 0.08 his queue was ~17,861 clusters - 447 batches of 40, which is
+    a second job and not a game - so he asked for a tighter floor and I swept six
+    candidates before picking one:
+
+        floor   his queue  batches   Bharti   batches   of what he NAMED
+        0.08      15,761      395     2,721       69          71%
+        0.10      11,317      283     1,797       45          60%
+        0.12       8,748      219     1,202       31          52%
+        0.15       5,971      150       784       20          41%
+        0.25       2,846       72       177        5          14%
+
+    That last column is the brake: it is the share of clusters he has ALREADY
+    named that the floor would still have offered him. **At 0.12, 48% of the
+    people he successfully identified would never have been shown.** A floor
+    tight enough to make the game finishable is also tight enough to hide most
+    of his real answers, and there is no setting where that is untrue - only
+    settings where it is worth it. He chose 0.12 with that table in front of
+    him.
+
+    Sampled at n=700 per population, so the counts carry a few percent of error.
+    The shape is reliable; "8,748" is not a precise number and should not be
+    quoted as one.
 
     WHY A SHARE AND NOT PIXELS. He chose "30px" from counts built on absolute
     thumbnail pixels, which leans on thumbnails being <=512px on the long edge.
