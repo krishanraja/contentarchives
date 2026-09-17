@@ -51,7 +51,12 @@ $repo = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 # same frames, writing the same temporary files.
 $workers = @('classify_live', 'faces_embed', 'refix_rotated', 'master_sheet',
              'build_inventory', 'video_face_frames', 'assign_video_faces',
-             'merge_clusters', 'build_db', 'verify_faces')
+             'merge_clusters', 'build_db', 'verify_faces',
+             # mirror_to_h uploads 925 GB over days and WILL be restarted. Two
+             # copies writing the same tree would fight over the same
+             # destination paths and double-journal every file, so an orphan
+             # here is worse than most: it looks like progress.
+             'mirror_to_h')
 $workerPattern = ($workers | ForEach-Object { [regex]::Escape($_) }) -join '|'
 function Stop-ChainWorkers {
     $ours = Get-CimInstance Win32_Process -Filter "Name='python.exe'" -ErrorAction SilentlyContinue |
