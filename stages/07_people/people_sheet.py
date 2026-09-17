@@ -328,6 +328,51 @@ def known_clusters(tags: str) -> set:
     return out
 
 
+SUBJECT_SHARE = 0.08
+
+
+def is_subject(bbox, frame, share=SUBJECT_SHARE):
+    r"""Is this person a SUBJECT of the photograph, or someone in the background?
+
+    Krish, 2026-09-18, shown a page of the smallest faces in his declined
+    clusters: *"All those boxes are just people in the background, not really
+    important"*. A face 8 pixels wide in a 512-pixel thumbnail is 1.6% of the
+    frame - it IS a background person, and he had been right to decline all of
+    them. The repair is not a better rendering; it is not asking.
+
+    Measured across the 54,229-group queue: median best face 0.062 of the
+    frame's short edge, against 0.146 for every cluster he NAMED. Two different
+    populations. 90% of the queue is under 60 thumbnail pixels.
+
+    WHY A SHARE AND NOT PIXELS. He chose "30px" from counts built on absolute
+    thumbnail pixels, which leans on thumbnails being <=512px on the long edge.
+    Approximately true, and wrong in the way that matters: 30px is 0.059 of one
+    frame's short edge and 0.316 of another, so the same face is a subject in a
+    portrait and background in a landscape. Re-derived as a share, 0.08 gives
+    ~19,776 groups keeping ~72% of what he named - his 17,764 / 71% within
+    sampling error, so the choice stands, but it was checked and could have
+    failed (at 0.06 it is 28,127 groups, at 0.12 it is 11,207).
+
+    The SHORT edge, because a face is taller than it is wide and the short edge
+    is what limits how large a person can appear in the frame.
+
+    `frame` is (width, height) of the image the bbox was measured against - the
+    THUMBNAIL, not the library file: 99.2% of bboxes fit thumbnail dimensions
+    and only 0.5% fit the full-resolution image.
+    """
+    try:
+        x1, y1, x2, y2 = [float(v) for v in str(bbox).split(",")]
+    except (ValueError, AttributeError):
+        return False
+    short = min(frame) if frame and min(frame) > 0 else 0
+    if not short:
+        # No dimensions: keep it. Being asked about a background face costs a
+        # glance; dropping a subject because a thumbnail would not open loses a
+        # person for good.
+        return True
+    return (min(x2 - x1, y2 - y1) / float(short)) >= share
+
+
 def is_recordable(cluster: str, known: set) -> bool:
     """Can an answer about this cluster be recorded AND reach photographs?
 

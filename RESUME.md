@@ -112,7 +112,49 @@ memory instead of from the run.
 
 ----
 
-## RIGHT NOW: THE NAMING ROUNDS ARE DONE. Merge siblings are the new work (2026-09-18, 09:55)
+## RIGHT NOW: the queue was 90% BACKGROUND STRANGERS (2026-09-18, 11:55)
+
+**Krish's declines were right, and my diagnosis of them was wrong.** He said he
+usually declined because the thumbnail was poor. Measured: in the 485 clusters he
+declined, the best face is a median of **25 source pixels** - so I concluded the
+instrument had overridden his intent, built `context()` to render the photograph
+with the face marked, and showed him a comparison page.
+
+His answer: *"All those boxes are just people in the background, not really
+important"*. A face 8 pixels wide in a 512-pixel thumbnail is 1.6% of the frame.
+That IS a background person. I had selected the twelve smallest faces as "the
+hard case" and thereby selected precisely for strangers. **He judged them
+correctly; the instrument was showing him exactly what was there.**
+
+So the 485 stay declined, `context()` stays as a renderer for SUBJECTS rather
+than a repair for background faces, and the real fix is not asking about
+background people at all:
+
+| best face | groups in the unanswered queue |
+|---|---|
+| under 30px | **36,465 of 54,229 (67%)** |
+| under 40px | 42,882 (79%) |
+| under 60px | 48,793 (90%) |
+
+Median best face in the queue is **21px**; in everything he NAMED it is **58px**.
+Two different populations. **He chose a 30px floor**: queue 54,229 -> 17,764
+groups over 15,867 photographs, keeping 71% of the clusters he had named.
+
+That also explains the tail nobody could size: 41,618 single-photograph clusters
+are mostly incidental people in the backgrounds of other photographs.
+
+**Before wiring it in, 30px must be re-expressed as a share of the FRAME.** The
+counts he chose from used absolute thumbnail pixels as a proxy, on the grounds
+that thumbnails are <=512px on the long edge - approximately true, but a 288x512
+portrait and a 512x288 landscape give the same face a different share, and
+"subject or background" is a question about share.
+
+Three earlier notes in this file blame the 104px crop for those declines. They
+are wrong in the same way and this paragraph supersedes them.
+
+----
+
+## Merge siblings (2026-09-18, 09:55)
 
 Round 23 is recorded and built in, and the next `people_sheet.py --min-photos 8`
 printed exactly what it was built to print:

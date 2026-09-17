@@ -213,6 +213,48 @@ def test_no_unrecordable_rows():
           sorted(none_known), [])
 
 
+def test_subject_vs_background():
+    r"""A background face is never offered, and the rule is a SHARE not pixels.
+
+    Krish, 2026-09-18: *"All those boxes are just people in the background, not
+    really important"* - said about the twelve smallest faces in the clusters he
+    had declined. He was right, and my diagnosis (a bad thumbnail) was wrong: a
+    face 8px wide in a 512px thumbnail is 1.6% of the frame.
+
+    The asymmetry is the whole reason this is a share: 30 pixels is 0.059 of a
+    512-short-edge frame and 0.104 of a 288-short-edge one. Pinned here, because
+    a future tidy-up to "just use pixels" would quietly re-import the bug.
+
+    Watched EXCLUDING, not only passing (learning 44).
+    """
+    import people_sheet as PS
+
+    # a 40px face: background in a wide frame, a subject in a small one
+    face40 = "100,100,140,140"
+    check("40px in a 512-short frame is BACKGROUND",
+          PS.is_subject(face40, (910, 512)), False)
+    check("the same 40px face in a 288-short frame is a SUBJECT",
+          PS.is_subject(face40, (512, 288)), True)
+
+    check("a face filling a third of the frame is a subject",
+          PS.is_subject("0,0,170,170", (512, 512)), True)
+    check("an 8px face is background whatever the frame",
+          PS.is_subject("10,10,18,18", (288, 512)), False)
+
+    # exactly on the line, and just under it
+    check("exactly at the threshold is kept",
+          PS.is_subject("0,0,23.04,23.04", (512, 288)), True)
+    check("just under the threshold is dropped",
+          PS.is_subject("0,0,22,22", (512, 288)), False)
+
+    # no dimensions: keep it. Being asked about a background face costs a
+    # glance; dropping a subject loses a person for good.
+    check("unreadable frame keeps the face", PS.is_subject(face40, None), True)
+    check("a zero frame keeps the face", PS.is_subject(face40, (0, 0)), True)
+    check("a malformed bbox is not a subject",
+          PS.is_subject("not-a-box", (512, 288)), False)
+
+
 def test_communal_filter():
     r"""Krish must not be asked about Communal faces, and the rule is measured.
 
@@ -370,6 +412,10 @@ def main():
         print()
         print("8. a row the store cannot hold is never offered")
         test_no_unrecordable_rows()
+
+        print()
+        print("9. a background face is never offered, and the rule is a SHARE")
+        test_subject_vs_background()
     finally:
         shutil.rmtree(d, ignore_errors=True)
 
