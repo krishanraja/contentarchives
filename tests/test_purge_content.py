@@ -185,6 +185,29 @@ finally:
     shutil.rmtree(d, ignore_errors=True)
 
 print()
+print("5. a derived copy outlives the original it was made from")
+# The 2026-09-18 run keyed its trace sweep on `targets` - the files it could
+# re-hash and unlink - so for the 7 hashes it could block but not delete it left
+# 7 thumbnails, 5 face vectors, 5 bounding boxes and 117 tag rows, including the
+# written description of each photograph. The originals were unreachable; their
+# likenesses were not.
+#
+# The rule: a purge is keyed on CONTENT, so a hash worth blocking forever is a
+# hash whose every derived copy goes with it.
+deletable = {"a" * 64, "b" * 64}
+blocked = [("c" * 64, 123, "already absent from disk"),
+           ("d" * 64, 456, "already absent from disk")]
+got = PC.sweep_set(deletable, blocked)
+check("the sweep covers blocked hashes, not just deletable ones",
+      got, deletable | {"c" * 64, "d" * 64})
+check("with nothing blocked it is exactly the deletable set",
+      PC.sweep_set(deletable, []), deletable)
+check("a hash that is both deletable and blocked appears once",
+      len(PC.sweep_set({"a" * 64}, [("a" * 64, 1, "dup")])), 1)
+check("and it is a set, so the caller cannot double-sweep",
+      isinstance(got, set), True)
+
+print()
 if FAILURES:
     print("{} FAILED: {}".format(len(FAILURES), ", ".join(FAILURES)))
     sys.exit(1)

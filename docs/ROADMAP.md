@@ -1,299 +1,258 @@
-# Roadmap: from here to two mirrored libraries and a game that fills the sheet
+# Roadmap: from here to two verified libraries and an app that answers a sentence
 
-Specified by Krish on 2026-09-11: two final full libraries mirroring on H: and the
-LaCie, enrichment as far as it can go, segmentation off the back of it, Elements purged
-once everything is in two places, and `MASTER.csv` wired to a front end that can be
-played daily to fill the remaining columns.
+Rewritten 2026-09-18 from measurement, replacing the 2026-09-11 version whose
+phases 1 and 2 were described as "running" a week after they finished. **Every
+figure below was counted tonight, from disk or from the rebuilt index, and the
+command that produced it is named.** Where something is unknown it says so
+rather than estimating.
 
-**The ordering is not arbitrary.** Three dependencies fix it:
-
-- **Enrich before segmenting.** Segmentation decides Personal vs Communal vs
-  not-a-memory, and the enrichment fields are the evidence for that decision.
-- **Segment before mirroring.** Segmentation moves files. A mirror taken first has to
-  be re-synced afterwards, and a cloud re-sync is ~23 hours.
-- **Mirror before purging.** Nothing leaves Elements until the content is verifiably in
-  two other places. Not "copied" — verified.
-
-Phases 1 and 2 are running unattended as of 2026-09-11 21:00.
+Krish's goal, in his words: *"two full identical clean content libraries with
+the richest possible and most accurate knowledge about the content, such that we
+can build a mini app that a user can ask for whoever or whatever they want in
+descriptive form, and the webapp will bring them a carousel of content to enjoy,
+streamed from the cloud library"* - and, immediately ahead of that, **10 old
+communal phones, photographs of old family albums, and VHS conversions** to
+ingest over the coming weeks.
 
 ---
 
-## Phase 1 — Finish the ingest  ·  running  ·  ~2.5 h  ·  free
+## Where this actually is
 
-`from-wd6400`, the last source folder: 100.8 GB to pull, 77.9 GB certainly new.
+**The library.** `D:\ContentLibrary`, **82,106 files / 925.4 GB** on disk;
+82,112 rows in the index (six paths are hardlink siblings). Media 887.1 GB,
+ContentProduction 27.3 GB, Archive 9.6 GB, `_Review` 1.3 GB.
 
-**Done when:** the log shows all 6 batches complete, and `H-COPY-FAILURES.csv` either
-does not exist or is empty. If it has rows, those files never reached the library and
-nothing else will say so.
+**What is known about it.** Rebuilt 2026-09-18 in 141 s:
 
----
+| field | coverage | field | coverage |
+|---|---|---|---|
+| `side`, `audience` | **100%** | `place` | 52.7% |
+| `kind`, `subject`, `sensitivity`, `setting`, `era` | **99.4%** | `date_taken` | 59.8% |
+| `description`, `activity`, `occasion`, `mood` | **99.3%** | `lat` | 42.3% |
+| `objects` | 99.1% | `country` / `region` | 41.5% / 41.3% |
+| `year` | 85.5% | `text` (OCR) | 36.6% |
+| | | `person` | 30.9% |
 
-## Phase 2 — Thumbnails  ·  chained, starts automatically  ·  ~2 h  ·  free
+**Faces.** 48,977 hashes examined, **0 owed**. 119,830 clustered face rows,
+1,609 human answers in the journal, 45,807 person-on-photograph rows. The
+classifier's people-count filter was measured, not assumed: of 300 sampled
+photographs it calls empty, 4 held any face and 2 a confident one (0.7%), and
+both of those were faces on a television screen.
 
-81,364 assets missing: every image at 512px, plus four ffmpeg frames from each of
-10,792 videos. Six shards, because this is CPU-bound and workers genuinely help.
+**Search already exists.** `library.db` carries an FTS5 table over **15
+columns** - `path, subject, place, region, country, person, event, kind, era,
+description, objects, activity, text, occasion, mood` - with a porter stemmer.
+`python stages/08_index/build_db.py --ask "beach"` proves it. A descriptive
+query has real prose to match against, not four-word labels. **This is the app's
+backend, and it is built.**
 
-**Done when:** `thumbs-chain.log` says DONE and the thumbnail count is near 97,000.
-Nothing can be classified without this.
+**The intimate content is destroyed** (2026-09-18, at Krish's instruction): 81
+files purged, 7 he had already removed, 88 hashes blocklisted, every derived
+trace swept and verified at 0. See `stages/10_reclaim/purge_content.py`.
 
----
+### The three things that are NOT what the old roadmap assumed
 
-## Phase 3 — Enrichment  ·  ~4 h  ·  ~$41
-
-Two jobs, in this order:
-
-1. **Rebuild the technical metadata.** `INVENTORY.csv` is 68,042 rows from before the
-   migration, and it feeds eight columns of `MASTER.csv`.
-   `python scripts/build_inventory.py --video` — the `--video` flag is slow and is what
-   fills `Duration`, `Width` and `Height` for 10,792 videos.
-2. **Classify.** `python stages/05_enrich/classify_live.py --thumbs D:\_thumbs --store
-   D:\_enrichment --apply`. Gemini 3.1 Flash-Lite, twelve threads, resumable, with
-   `--max-usd` stopping on measured spend.
-
-**Done when:** `python stages/08_index/master_sheet.py` reports `kind`, `people`, `subject`,
-`keep`, `sensitivity`, `setting` and `era` near 100%. Expect overall coverage to go
-from **59.2% to roughly 88%**. What remains after this is what no model can supply:
-*who* the people are, *which* event a photo belongs to, and dates for undated files.
-That residue is the game's job, and it is Phase 8.
-
----
-
-## Phase 4 — Segmentation  ·  ~1 day, mostly review  ·  free
-
-Now the enrichment exists, the decisions it was blocking can be made. Each one moves
-files and each one is journalled and reversible. **Nothing is deleted in this phase.**
-
-1. **Assign a side** to `Media\Pending-Segmentation\` — 6,215 files, 205.6 GB — with
-   `propose_split.py` then `apply_split.py`. The split is by origin folder, which is
-   the decision already made: a few hundred folder judgements rather than 74,000 file
-   ones.
-2. **Evict the non-memories** the classifier finds: `kind` in screenshot/meme/graphic,
-   or `keep=false`. They go to `_Review\`, never to deletion. Krish empties `_Review`,
-   not a script — that rule was paid for when a rules-based sweep evicted 13,446 files
-   and a vision pass found 10,004 of them were real memories.
-3. **File the five identity documents** out of `Media\NoDate\` into
-   `Archive\Personal\01-Identity\` with `move_identity_docs.py` (machine-only script).
-4. **Quarantine anything marked `sensitivity: intimate`** per the standing instruction.
-   `private-family` stays in the chronology and is never surfaced in the game.
-5. **Resolve the two known duplicate sets**: 51 derived copies in
-   `DERIVED-IN-CHRONOLOGY.csv`, and 14.88 GB of hash-confirmed cross-tree duplicates in
-   `XTREE-DUPLICATES.csv`. Note the fourth pair in that file is NOT a duplicate: same
-   name, same exact byte count, different footage. Learning 36.
-6. **Attack `NoDate\`** — 2,876 files, 109.8 GB, now the second largest tree. The
-   classifier's `era` field is the only date signal these have; it gets them into a
-   decade, not a month. Anything better comes from the game.
-
-**Done when:** `Pending-Segmentation` is empty, `_Review` holds only what Krish has
-seen, and `MASTER.csv` shows every file with a `Side`.
+1. **`E:\ContentLibrary` is not a mirror. It is the stale predecessor.** 73,198
+   files / 844.1 GB, newest write 2026-09-11, and it has **no `Intimate`
+   folder**, so it predates the sweep. It is 8,908 files and 81 GB short of the
+   live library. Treat it as 844 GB of reclaimable space holding one useful
+   thing: a last-resort copy of pre-purge state, which is now a reason to clear
+   it deliberately rather than keep it by accident.
+2. **G: and H: are two DIFFERENT Google accounts** - `krishanraja@gmail.com`
+   and `krish@themindmaker.ai`. Both hold `_photo-consolidation` *source*
+   folders (H: alone: 24,901 files / 501.5 GB). Neither holds a library copy.
+3. **The real cloud quota is still unknown.** The mounts report their local
+   cache volumes (learning 17), DriveFS's `metadata_sqlite_db` has no quota
+   table in either account, and `gcloud auth print-access-token` fails with
+   `invalid_grant: Token has been expired or revoked`. **Krish must
+   re-authenticate with Drive scope before any mirror is planned against a
+   number.**
 
 ---
 
-## Phase 5 — Reclaim, before anything is mirrored  ·  ~2 h  ·  free
+## Phase A - make the engine safe to leave alone  ·  ~1 day  ·  free
 
-Deduplicate now, so the cloud upload does not carry redundant bytes at ~23 hours a
-copy.
+Everything after this is bulk work, and bulk work is where unattended machinery
+either earns its keep or quietly loses things. Ten phones, album photographs and
+VHS captures arriving over weeks is exactly the load that found every bug below.
 
-- Reclaim the hash-confirmed duplicates through `guarded_delete.py` — the only
-  sanctioned path: different inode, equal size, blake2b re-hashed at the instant of the
-  unlink, survivor readable to its last byte.
-- Re-run `reclaim_d_originals.py` against the new layout. Remember learning 28: the
-  figure that matters is inode-distinct bytes, not what a folder listing claims.
+**A1. The blocklist is inert.** `D:\_PhotoAudit\PURGED-HASHES.csv` holds 88
+hashes and **nothing reads it**. `autopilot.ingest_folder` admits a file unless
+`(name, size)` is known or a size+signature matches - there is no content-hash
+gate. A phone carrying one of those 88 re-admits it. The hook belongs after the
+`size == 0` guard in both `ingest_folder` and `ingest_archive`, hashing with the
+existing `full_hash` (already blake2b-256, so it matches the blocklist) and only
+when the candidate's size matches a blocklisted size, so the cost is nil.
+**Needs a test: a blocklisted file refused and logged, an ordinary file of the
+same size still admitted.**
 
-**Done when:** `tools/track.py` shows a library size that will not shrink further, and
-that is the number the mirror is sized against.
+**A2. `purge_content.py` has no `--traces-only` mode.** It requires a file it
+can re-hash at the instant of deletion, so it cannot sweep a hash whose file is
+already gone. That gap left 7 thumbnails, 5 face vectors, 5 bounding boxes and
+117 tag rows behind on the first run.
 
----
+**A3. Arm the fortnightly ingest.** `guards/arm.ps1`. CronCreate is
+session-scoped and expires after 7 days; a scheduled task is not.
 
-## Phase 6 — The cloud mirror  ·  ~30 h  ·  free but slow
+**A4. `refresh.py` was calling a script that moved.** Fixed 2026-09-18; it now
+resolves repo-relative paths and refuses a missing step loudly. Re-run
+`python tools/refresh.py` after any session that moves files - `state/` was two
+days stale because this failed quietly.
 
-This is the phase with the most unknowns and the one where a shortcut would be worst.
-**H: today is the source, not a mirror.** It holds `_photo-consolidation`, the input
-folders. There is no library copy on it.
-
-1. **Clear the consumed source folders** from H: — roughly 371 GB, all of it now
-   ingested and verified on two local disks. This is what makes room.
-2. **Read the real quota from the Drive API.** `Get-Volume` on H: reports the local
-   cache volume, not the account (learning 17). The library will be ~900 GB against a
-   2 TB account; confirm rather than assume.
-3. **Measure the upload rate.** Download measured 10.5 MB/s. Upload has never been
-   measured and symmetry is an assumption, which is learning 10's whole subject.
-4. **Upload, computing MD5 on the way through.** Drive exposes a server-side
-   `md5Checksum` and that is the only verification available; our hashes are blake2b,
-   so an MD5 has to exist locally to compare against. Computing it during the upload
-   avoids a second 844 GB read, exactly as the migration hashed during the copy. Store
-   it as an extra column in `HASH-INDEX.csv`.
-5. **Verify by comparing the server-side checksum to the local one.** Never by reading
-   files back through the mount: it hangs with zero bytes read rather than failing
-   (learning 15), and reading a placeholder hydrates it and fills C: (learning 5).
-   Learning 25 is a run that verified 17,102 of 17,102 files against a cloud mount
-   having compared local bytes with local bytes — this must not be that.
-
-**Done when:** every file in `MASTER.csv` has a matching server-side MD5 recorded, and
-the count of mismatches is zero. **This is the gate for Phase 7 and nothing else is.**
+**A5. Turn on the USN change journal.** `fsutil usn createjournal m=32M a=8M D:`
+On 2026-09-18 seven files vanished from the library and **no record of the
+deletion existed anywhere** - the journal is not active, Defender logged
+nothing, and there is no process attribution on this machine. It turned out to
+be Krish himself, but the next time the answer should come from a log rather
+than from an investigation.
 
 ---
 
-## Phase 7 — Purge Elements  ·  ~1 h  ·  frees ~525 GB
+## Phase B - ingest the new material  ·  weeks, as it arrives  ·  free
 
-Only after Phase 6 verifies. Three things have to be true first, and one of them is
-easy to forget:
+The toolchain for this is the most battle-tested part of the repo. Use it as it
+is; do not write a new importer.
 
-- **The ~39 GB of sole-copy content on Elements must be ingested first.** Those are
-  files in the 20-year folders that exist nowhere else — not in the library, not in the
-  cloud. Purging before ingesting them destroys the only copy. Run `ingest_tree` over
-  each remaining source folder; media joins the chronology, documents route to
-  `Archive\`, and anything already held is recognised and skipped for free.
-- **The arithmetic is not what a folder listing says.** Roughly 319 GB of the library is
-  hardlinked to originals in those folders, so deleting the library tree frees about
-  **525 GB, not 844**. Same illusion as learning 28, pointed the other way.
-- **Deletion goes through `guarded_delete.py`.** Every file, no exceptions, with the
-  surviving copy re-verified at the instant of the unlink.
-
-**Done when:** Elements holds only what Krish chose to keep, and every byte removed had
-two verified survivors at the moment it went.
-
----
-
-## Phase 8 — The game  ·  ongoing  ·  the point of all of it
-
-`MASTER.csv` reaches roughly 88% on models alone. The last stretch is the part only a
-human who was there can supply:
-
-| column | who can fill it |
-|---|---|
-| `person_id` per face | only Krish — a model can cluster faces, only a human names them |
-| event / trip | only Krish |
-| date for `NoDate` files | only Krish, from recognising the occasion |
-| correcting a wrong `kind` or `keep` | Krish, in seconds, one swipe |
-
-There is a prototype already: `stages/07_people/swipe/index.html` and `server.py`, and `stages/05_enrich/store.py`
-already carries `people`, `observations` and a merge-suggestion table with the rule that
-naming is recorded as a new row rather than an edit, so the history of what someone was
-called stays visible.
-
-What it needs to become a daily habit:
-
-1. **Face clustering first**, so the question is "who is this?" once per person rather
-   than once per photo. Cluster locally, present the largest clusters first — naming
-   twenty clusters can label thousands of images.
-2. **A phone-reachable front end.** Krish asked for this in September: *name People by
-   face or point out specific things about photos on my mobile.* The images live on a
-   local disk, so this is a real design decision and it is **open** — a local server on
-   the LAN, or a hosted page with a subset of thumbnails uploaded. ~97,000 thumbnails at
-   ~50 KB is ~4.8 GB, which is too much to publish wholesale; a working set is not.
-3. **Write-back through `stages/07_people/answers.py`**, the append-only journal — *not* into
-   the store or the database. `source: human` already outranks every model in
-   `master_sheet.py`'s `SOURCE_RANK`, and now the journal guarantees a rebuild can
-   never destroy an answer, because `build_db.py` only ever reads it. Corrections
-   append rather than overwrite, so what Krish thought last month stays visible.
-   Answers name a **scope** — `cluster`, `folder`, `origin`, `file`, `all` — so one
-   answer labels thousands of files. Ranking candidate questions by *files labelled
-   per answer* is the scheduler the game should run on.
-4. **Show the number.** The session ends with the coverage figure and how much today's
-   play moved it. That is the whole motivation loop, and it is why `master_sheet.py`
-   prints a score rather than a table.
-
-**Done when:** it is worth playing. That is a product judgement, not a checklist.
-
-### Decided by Krish, 2026-09-15
-
-- **Where it runs: a hosted page on a subdomain of krishraja.com.** krishraja.com is
-  the Vercel project `krish-raja`. That closes the LAN-or-hosted question. What gets
-  uploaded is a working set of thumbnails for the questions being asked, never the
-  whole ~4.8 GB, and because these are family photographs the page needs access
-  control rather than an unguessable URL.
-- **"for Bharti" means Communal. "A photograph of Bharti" does not.** Krish,
-  2026-09-17: *"all 'for Bharti' photos definitely belong in Communal, but all
-  photos of Bharti do not necessarily belong in Communal."* The Communal signal
-  is `needs_identifying = Bharti` - the answer he gave ABOUT a cluster - never
-  `person = Bharti`, the person a detector found in the frame. She is his mother
-  and appears in 5,087 of his own photographs, so building the split on the
-  second would move a large slice of the Personal chronology to the wrong side.
-  It is the obvious heuristic and it is wrong; see `stages/09_segment/STAGE.md`,
-  where it is an invariant.
-- **Bharti plays only the Communal side.** Her queue is questions whose evidence is
-  Communal photographs. A cluster answer still labels the person everywhere they
-  appear; the rule decides what she is *shown*, not how far her answer reaches.
-  Her first questions are already in the journal as `needs_identifying = Bharti`
-  (c847, c118, c283, c431, c167), each mostly Communal photographs.
-- **Communal will grow a lot.** Old photo libraries and digitised VHS home videos are
-  still to come, and all of them are Communal. Anything built for the game or for
-  ingest must assume the Communal side is the one that grows.
-- **Every video gets faces, not only its thumbnail.** Measured the same day: face
-  detection had seen one frame per video, and only for videos the classifier said
-  had people in them, so 4,237 of 12,805 videos had a clustered face. A digitised
-  VHS tape is hours of footage in one file; a fixed five-frame cap would miss most
-  of the people on it, so face sampling scales with duration.
-
----
-
-## Phase 9 — Asking  ·  the reason the sheet exists
-
-Agreed with Krish on 2026-09-12: *"I should in the end be able to ask for whatever I
-want and surface it pretty easily."*
-
-The decision underneath it, which shapes everything above: **folders stay dumb, and
-all context lives in an index.** A folder hierarchy expresses exactly one axis, so
-every fact encoded in the tree — person, place, event, topic — is a fact that cannot
-be cross-cut without duplicating files, and the urge to encode more is precisely what
-produces the twelve-deep nesting nobody can navigate. The library stays chronological
-and four levels deep for ever (87.4% of it already is). Asking is a query layer over
-`library.db`, never a walk of the tree.
-
-Three layers, in this order, because each is worthless without the one before it:
-
-| layer | what it is | status |
+| what | tool | why this one |
 |---|---|---|
-| a. **Structured** | `library.db` — SQLite + FTS5, one row per file, every opinion kept and the winning one resolved | `stages/08_index/build_db.py`, built |
-| b. **Natural language → SQL** | a model writes the query against a small fixed schema. Reliable *because* the schema is small | not started |
-| c. **Semantic** | embed the `subject` sentence already generated for 97,484 files; match "that beach day with the red umbrella" on meaning | not started |
+| a phone, a card, a folder | `stages/02_ingest/ingest_tree.py` | dedupes on content, dates from EXIF then name then folder |
+| a Takeout or a zip | `autopilot.py` | streams members, per-member checkpoint, survives a kill mid-archive |
+| anything unattended | `stages/02_ingest/driver.py` | loops passes and survives the memory watchdog |
+| deciding where it lands | `stages/02_ingest/route_h.py` | chronology / production / archive, vocabulary from the profile |
+| proving a batch landed | `stages/02_ingest/verify_h_batch.py` | by count AND hash |
+| "why is everything new?" | `stages/02_ingest/diagnose_new.py` | the answer is almost always a stale path index |
 
-**Answers surface as a contact sheet, not a list.** This is evidence, not taste: Krish
-has twice caught real classification errors by looking at one — the screenshots that
-two models agreed on and got wrong, and the 442 receipts — and neither would have been
-visible in a table of filenames.
+**Per source, in order:** ingest → `verify_h_batch` → thumbnails
+(`backfill_thumbs.py` drives from the index and does not re-walk 82,000 files) →
+`classify_live.py --apply` → `--rich` → `faces_embed.py` → `build_db.py` →
+`refresh.py`.
 
-**Done when:** a question asked in English returns the right pictures without Krish
-knowing what a column is called.
+**Three things that will bite, all of which already have:**
+
+- **Delete `D:\_PhotoAudit\lib-index.pickle` after anything that moves or
+  removes library files.** 62.9% of its cached paths once pointed at files that
+  no longer existed, and 222 GB of byte-identical duplicates were admitted
+  because a candidate that will not open hashes to `None`, and `None == th` is
+  False.
+- **VHS captures and album photographs have no EXIF.** They will land in
+  `NoDate\` and stay there unless dated by folder name. Name the folders with
+  the year *before* ingesting - it is the cheapest date you will ever get.
+- **A phone's video may be HEVC, and an album photograph may be a 100-megapixel
+  panorama.** `thumbnail.py` now registers `pillow_heif` and sets
+  `LOAD_TRUNCATED_IMAGES`; without those, 82 iPhone photographs and 18 damaged
+  Samsung panoramas were invisible to every pass at once, because the
+  classifier, the descriptions, the face pass and the game all read
+  `D:\_thumbs`.
 
 ---
 
-## Decided by Krish, 2026-09-16: how the conveyor holds personal detail and one-offs
+## Phase C - segment and enrich what arrives  ·  hours per batch  ·  ~$2 / 2,000 files
 
-- **Machine paths and tool locations live in `guards/paths.py`** - the library
-  root, scratch directories, ffprobe, source and watch lists. One definition,
-  imported; a rename is one edit. This is what the published `scripts/` copies
-  could not do, because redaction rewrote those values into pseudonyms and the
-  repo copy stopped being runnable.
-- **Personal terms live in a profile file kept OUTSIDE the repo** and loaded by
-  `guards/`: family names, trip and place names, pet names - everything whose
-  presence in a path means "this matters". `profiles/example.yaml` is the shape;
-  the real one never enters a public repository. So there is ONE runnable copy of
-  every script, and `publish_scripts.py` retires.
-- **One-off investigations are kept as edge-case playbooks, not as core
-  machinery.** Krish: "one off investigations need to be stored not as part of
-  core machinery but how to deal with common edge cases." So a script written to
-  answer one question once - why is the ingest calling everything new, what would
-  a size threshold have discarded, which parts of an export hold new files - is
-  recorded in its stage's `STAGE.md` under **Edge cases**: the question, the
-  finding, and where the script sits. It stays runnable and findable when the
-  same edge case recurs, and nobody has to maintain it as though it were part of
-  the belt.
+`stages/09_segment/propose_split_by_path.py` → `review_split_by_path.py` →
+`apply_split_by_path.py`, then re-run the enrichment chain. Krish's rule stands:
+anything with `bharti`/`bhasker` in the folder name, or from `Users/Raja`, is
+Communal; the rest Personal; **a file already in a Communal folder is never
+demoted**; device ownership is device-level, not year-level.
 
-## Open decisions
+Then the naming game: `stages/07_people/build_game.py --who krish --batch N`,
+gated by `verify_people_sheet.py` **and** `check_repeats.py`, published as a
+private artifact with `capabilities {db:{}}`, answers back via
+`ingest_game_answers.py --apply`. **Bharti's game is still unbuilt** (~31
+batches at the 0.12 face-share floor; her answers must carry `who=bharti`).
 
-| decision | why it is open |
-|---|---|
-| Whether `_Review` is ever emptied, and by what rule | Krish reviews it; a rule already got this wrong once, at 13,446 files |
-| Whether `Archive\` and `ContentProduction\` move inside the media root | decides the root of the mirror (`docs/SEGMENTATION.md` section 3) |
-| Whether the 51 derived copies are memories or clutter | some are edits Krish made, not machine transcodes |
+`person` at 30.9% is the single biggest gap in "richest possible knowledge", and
+it is the one only a human can close.
 
-## What would make this go wrong
+---
 
-- **Mirroring before segmenting.** Costs a second 23-hour upload.
-- **Purging Elements on "it is copied" rather than "it is verified."** One file in
-  73,198 copied to the right size with the wrong bytes on 2026-09-11. Only a hash found
-  it.
-- **Trusting a cloud verification that never left the local disk.** Learning 25.
-- **Letting a rule empty `_Review`.** Learning: 10,004 of 15,689 evicted files were
-  real memories.
+## Phase D - the second identical library  ·  ~6-8 h  ·  free
+
+Disk to disk, and this is the cheap half of the goal.
+
+1. **Prove D: is complete first.** `tools/refresh.py`, then
+   `python tools/check_manifest.py`, then `sweep_intimate.py --verify`. A mirror
+   of an incomplete library is two incomplete libraries.
+2. **Clear `E:\ContentLibrary`** - 844 GB of stale predecessor - through
+   `guarded_delete.py`, which refuses unless a surviving copy is proven at the
+   instant of the unlink. This is what makes room; E: has only 26.9 GB free.
+3. **Copy D: → E: hashing in flight**, the way `migrate_library.py` already
+   does. Record blake2b per file as it lands. Do not verify by re-reading the
+   destination through a filesystem cache.
+4. **Verify by comparing recorded hashes**, file for file, count for count.
+   `postswap_check.py` exists for exactly the "prove this disk is the library"
+   question.
+
+**Done when** both trees have identical file counts, identical total bytes, and
+a zero-mismatch hash report. That is two identical clean libraries, locally.
+
+---
+
+## Phase E - the cloud copy, and the one the app streams from  ·  ~30 h  ·  free but slow
+
+**Blocked on Krish** until the quota is known. Nothing here should be attempted
+against an assumed number.
+
+1. **Re-authenticate with Drive scope** and read `storageQuota` from
+   `drive/v3/about`. The library is 925.4 GB. Decide which account carries it -
+   they are different accounts with different quotas.
+2. **Clear the consumed source folders** from that account's
+   `_photo-consolidation` (H: alone holds 501.5 GB) once `verify_takeout_complete.py`
+   and `verify_h_batch.py` confirm every byte is in the library and on E:.
+3. **Measure the upload rate before committing to a window.** Download was
+   10.5 MB/s; upload has never been measured here and symmetry is an assumption.
+4. **Upload computing MD5 in flight.** Drive exposes a server-side
+   `md5Checksum` and that is the only verification it offers; our hashes are
+   blake2b, so an MD5 must exist locally to compare against. Computing it during
+   the upload avoids a second 925 GB read.
+5. **Verify against the server-side checksum - never by reading back through
+   the mount.** Reading a placeholder hydrates it and fills C: (learning 5); a
+   mount read can hang with zero bytes rather than failing (learning 15); and
+   learning 25 is a run that "verified" 17,102 of 17,102 files by comparing
+   local bytes with local bytes. `move_audio_to_h.py` is the only cloud-verified
+   path built here, and its receipt proof - the DriveFS `operations` queue plus
+   `cloud_has()` - is the pattern to extend.
+
+**Done when** every row in `MASTER.csv` carries a matching server-side MD5 and
+the mismatch count is zero. **Stage 11 currently has no tests and its own
+`STAGE.md` says the H: upload "is not built". This phase is where the remaining
+engineering actually is.**
+
+---
+
+## Phase F - the app  ·  days, not weeks, because the hard part is done
+
+The backend is `library.db`. The FTS5 table already answers a sentence.
+
+1. **A read-only query API** over `search` joined to `v_files`, returning
+   `path, description, date_taken, place, person, audience, hash`. Rank by FTS
+   score; `audience` is already on 100% of files and is the access control -
+   `family` is shareable, `private` is not.
+2. **Serve media from the cloud copy, not from D:** - that is what Phase E is
+   for. The `hash` is the stable key; paths move and have moved repeatedly.
+3. **The carousel** is thumbnails from `D:\_thumbs` (already 512px,
+   content-addressed) with the full file streamed on demand.
+4. **What makes it feel good** is `description` + `objects` + `person`, which is
+   why Phase C's naming game matters more to the app than any front-end choice.
+
+One warning worth carrying into the app: **a derived copy outlives the original
+it came from.** The purge had to sweep thumbnails, sampled frames, face
+embeddings, descriptions and index rows, and a first pass missed seven of each
+because it keyed on deletable files rather than on blocked content. An app that
+caches thumbnails or descriptions anywhere else creates another place a deletion
+has to reach.
+
+---
+
+## The order is not arbitrary
+
+- **Phase A before B.** Unattended ingest with an inert blocklist re-admits
+  purged content, and a stale path index manufactures duplicates.
+- **B before C.** Segmentation decides Personal/Communal from enrichment, and
+  enrichment needs thumbnails, which need the files.
+- **C before D.** Segmentation moves files; a mirror taken first must be
+  re-synced, and a cloud re-sync is ~23 hours.
+- **D before E.** Two local copies, then the slow one.
+- **E before F.** The app streams from the cloud copy.
+- **Nothing is deleted from anywhere until two verified copies exist** - and
+  "verified" means a hash compared against the destination's own evidence, not a
+  copy that returned success.

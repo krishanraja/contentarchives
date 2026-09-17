@@ -1945,3 +1945,52 @@ it survived.
    only surfaced because a separate tool, written against `files` alone, disagreed
    with it - 1,963 against 2,706 - and the discrepancy had to be explained rather
    than resolved in favour of the more convenient number.
+
+## 57. A derived copy outlives the original it was made from
+
+Krish, 2026-09-18: *"purge all intimate content forever"*. 88 hashes, of which 81
+were files on disk and 7 he had already deleted himself.
+
+`purge_content.py` destroyed the 81 and swept their traces. It keyed that sweep
+on `targets` - the files it could re-hash and unlink at the moment of deletion,
+which is exactly the right key for *deleting* and exactly the wrong one for
+*purging*. Measured afterwards, for the other 7:
+
+| survived | what it actually is |
+|---|---|
+| 7 thumbnails | 512px copies of the photographs |
+| 5 rows in `faces.0.csv` | 512-dimension vectors describing the faces in them |
+| 5 rows in `FACE-CLUSTERS.csv` | where in the frame each face was |
+| **117 rows in `content_tags.csv`** | including the written **description** of each |
+
+The last is the worst of them. A description is prose saying what the picture
+showed; it survives the picture and needs no decoder to read.
+
+**The file being unreachable is not the likeness being gone.** "Forever" is a
+claim about content, so the sweep is keyed on content: `sweep_set(targets,
+block_only)` returns the union, and a hash worth blocking is a hash whose every
+derived copy goes with it.
+
+**Enumerate the derived surfaces once, in one place.** For this library they are:
+thumbnails and sampled frames, face embeddings and the positional cache built
+from them, cluster rows, tag and description rows, index rows, the path records,
+the move journals, and any published review page with images embedded as base64.
+A tenth surface added later without being added to that list is the next gap.
+
+**Two corollaries that cost real time here.**
+
+1. **Blank in place where position is load-bearing.** Removing a face row would
+   shift every later position in `face-emb.npy` and move the frozen cluster ids
+   1,609 human answers point at (learning 45). The embedding is overwritten with
+   zeros instead - and `guards/alignment.py` had to learn that a zeroed pair is
+   a purge rather than drift, because cosine against a zero vector is 0.0, which
+   reads as total corruption.
+2. **An empty field is not a blank value.** Setting `emb` to `""` would drop the
+   row out of `cluster_faces.load()`'s filter - the same positional shift by
+   another route. It must decode to 512 zero float16s and stay in the file.
+
+**And the one that generalises past this project:** a flag that half-does its job
+is worse than an absent one, because its name reads as coverage.
+`--blocklist-also` recorded the 7 hashes and swept nothing for them, so the
+blocklist said 88 while the sweep had covered 81 - and the summary a person reads
+before approving a purge said nothing about the difference.

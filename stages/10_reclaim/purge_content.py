@@ -102,6 +102,23 @@ def lp(p: str) -> str:
     return p if p.startswith("\\\\?\\") else "\\\\?\\" + p
 
 
+def sweep_set(targets, block_only) -> set:
+    r"""Every hash whose DERIVED copies must go - not just the deletable ones.
+
+    A file being unreachable is not the same as its likeness being gone. The
+    2026-09-18 run keyed its trace sweep on `targets`, the files it could
+    re-hash and unlink, and so left behind - for the 7 hashes it could block but
+    not delete - seven 512px thumbnails, five 512-dimension face vectors, five
+    bounding boxes and 117 tag rows including the written descriptions of what
+    each photograph showed.
+
+    So the sweep is keyed on CONTENT, and a hash worth blocking forever is a
+    hash whose every derived copy goes with it. This lives at module level so
+    the test asserts the same function the tool uses.
+    """
+    return set(targets) | {h for h, _, _ in block_only}
+
+
 def read_list(path: str) -> list[dict]:
     with io.open(path, encoding="utf-8", newline="") as f:
         rows = [r for r in csv.DictReader(f)
@@ -253,7 +270,7 @@ def main() -> int:
     # and 5 bounding boxes behind - derived copies of content whose originals
     # were already destroyed. The file may be unreachable; its 512px likeness
     # and the vector describing the face in it are not.
-    sweep = set(targets) | {h for h, _, _ in block_only}
+    sweep = sweep_set(targets, block_only)
 
     thumbs = []
     for sub in sorted(os.listdir(THUMBS)):

@@ -22,11 +22,34 @@ import sys
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
+ROOT = HERE.parent
 
 
 def run(script: str, args: list[str]) -> None:
-    print(f"\n=== {script} " + "=" * (60 - len(script)))
-    r = subprocess.run([sys.executable, str(HERE / script), *args])
+    r"""Run one step. A name with a separator is REPO-relative; a bare name
+    lives beside this file in tools/.
+
+    This used to resolve everything against tools/. `master_sheet.py` moved to
+    `stages/08_index/` in the 2026-09-15 stage migration and the call here kept
+    its bare name, so `python tools/refresh.py --check` - the command RESUME.md
+    tells every resuming session to run FIRST, before anything else - failed at
+    exit 2 on a file-not-found and never reached the state/ update. The canon
+    went stale for two days while the front door reported an error nobody read
+    as fatal: state/PROGRESS.md said 73,821 files on 2026-09-16 while the index
+    held 82,112.
+
+    A missing step is fatal on purpose. A refresh that skips one publishes a
+    state that looks complete and is not, which is worse than not refreshing.
+    """
+    target = (ROOT / script) if ("/" in script or "\\" in script) \
+        else (HERE / script)
+    print(f"\n=== {script} " + "=" * max(4, 60 - len(script)))
+    if not target.exists():
+        sys.exit(
+            f"\nSTOPPING: {script} is not at {target}.\n"
+            "  Fix the path rather than dropping the step: a refresh that\n"
+            "  omits one publishes a state that reads as complete.")
+    r = subprocess.run([sys.executable, str(target), *args])
     if r.returncode != 0:
         sys.exit(f"\n{script} failed (exit {r.returncode}). state/ not updated.")
 
@@ -42,7 +65,7 @@ def main() -> None:
     # The one sheet everything lands in. Regenerated last, because it
     # joins the library, the hash index, the inventory, the origin map
     # and the enrichment store - all of which are refreshed above.
-    run("master_sheet.py", [])
+    run("stages/08_index/master_sheet.py", [])
 
     print()
     if check:
