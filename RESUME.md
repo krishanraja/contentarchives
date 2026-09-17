@@ -112,51 +112,60 @@ memory instead of from the run.
 
 ----
 
-## RIGHT NOW: round 22 is OPEN in Krish's browser (2026-09-18, 09:36)
+## RIGHT NOW: round 23 - THE LAST SHEET - is OPEN in Krish's browser (2026-09-18, 09:42)
 
 **Nothing is running. The next move is his answers.**
 
-`D:\_PhotoAudit\PEOPLE.html` - 60 rows, 479 crops, both gates passed, and
-**opened with `Start-Process`**. Krish, 2026-09-17: *"you are not opening these
-pages for me ever, you need to open them."* Sending a file card is not opening a
-page. Build it, gate it, open it, in the same turn.
+`D:\_PhotoAudit\PEOPLE.html` - **53 rows** (not 60: that is the floor running
+out, exactly as designed), 424 crops, both gates passed, and **opened with
+`Start-Process`**. Krish, 2026-09-17: *"you are not opening these pages for me
+ever, you need to open them."* A file card is not an open page. Build it, gate
+it, open it, in the same turn.
 
-### ROUND 23 IS THE LAST ONE
+### WHEN THESE ANSWERS ARE IN, THE SHEET ROUNDS ARE OVER
 
-**113 clusters cleared the 8+ floor** and round 22 takes 60, so **53 remain**.
-Round 23 offers those and then nothing clears the floor: `people_sheet.py` prints
-**THE NAMING ROUNDS ARE DONE** and writes no sheet (learning 44 - an empty page
-and a finished job look identical). Do not read that as a failure.
+Record round 23 the usual way, rebuild, and then **the next `people_sheet.py
+--min-photos 8` will print `THE NAMING ROUNDS ARE DONE` and write no sheet.**
+That is the designed ending (learning 44 - an empty page and a finished job look
+identical), not a failure. Do not lower the floor to manufacture another round
+without asking him.
 
-What is left below the floor: **54,346** unnamed non-Communal groups, nearly all
-one or two photographs. That is swipe-game work, not sheet work - and every one
-of them is nameable now that the singletons are tagged.
+What is left below the floor: **54,286** unnamed non-Communal groups, nearly all
+one or two photographs, every one of them nameable now that the singletons are
+tagged. That is swipe-game work, not sheet work.
 
-Two things still waiting on Krish, neither blocked:
-- **Bharti's Communal queue** - 18,696 clusters would qualify; nothing has ever
-  been written on her behalf, by his instruction.
+**The two open questions to put to him when the rounds end:**
+- **Bharti's Communal queue** - 18,696 clusters would qualify. Nothing has ever
+  been written on her behalf, by his instruction. This is the other half of the
+  library and it has never been started.
 - **the tail** - `stages/07_people/swipe/server.py` exists and has never been run
-  in anger.
+  in anger. 54,286 groups is a swiping job.
 
-Rounds 19-21 are recorded and built in. Round 21: 20 names, 6 `for Bharti`, 34
+Rounds 19-22 are recorded and built in. Round 22: 28 names, 5 `for Bharti`, 27
 declines - reconciling exactly against a 60-row sheet.
 
 | | | measure |
 |---|---|---|
-| human answers | **1,319** | rows in `answers.csv` |
-| people named | **273** | named in the journal (`profile_coverage`) |
-| files with a person | **25,075** | `v_files.person` not null - the coverage line |
-| person rows | **45,035** | `count(*)` in `photo_people` |
-| profile terms | **282** | 0 of 273 named people unprotected |
+| human answers | **1,379** | rows in `answers.csv` |
+| people named | **278** | named in the journal (`profile_coverage`) |
+| files with a person | **25,158** | `v_files.person` not null - the coverage line |
+| person rows | **45,235** | `count(*)` in `photo_people` |
+| profile terms | **287** | 0 of 278 named people unprotected |
 
 **Sheets are archived per round now** - `PEOPLE-round19.html` through
-`PEOPLE-round21.html` - so `check_repeats.py` has an on-disk baseline as well as
-the journal one. Round 22 was gated against 1,173 groups from both.
+`PEOPLE-round22.html` - so `check_repeats.py` has an on-disk baseline as well as
+the journal one. Round 23 was gated against 1,233 groups from both.
 
-**One answer to watch:** `c19921 = Tima`, recorded verbatim, against `Tina` from
-round 19. Two different clusters, and Tima is a real name, so it was NOT
-corrected on my own initiative - but if it was a slip, a later answer supersedes
-it and costs one line.
+**Two things recorded rather than silently fixed:**
+- `c19921 = Tima`, verbatim, against `Tina` from round 19. Different clusters,
+  and Tima is a real name, so it was not corrected on my initiative. A later
+  answer supersedes it if it was a slip - one line.
+- the profile term **`tim`** (38 paths, 0.05%) was added by `profile_coverage`
+  and is a three-letter SUBSTRING: `is_personal()` matches substrings by design,
+  so it also protects *time*, *timestamp*, *optimised*. That errs toward KEEPING
+  files, which is the safe direction (learning 1 - a term is grounds to keep,
+  never to delete), so it stands. Know it is there before reading any protection
+  count as precise.
 
 `c13501` = Kiran Nathwani, asked on a page rather than inferred. **Kiran Nathwani
 186, Kiran Patel 11, bare `Kiran` gone**, and all 9 of `c13501`'s photographs
