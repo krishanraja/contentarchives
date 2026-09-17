@@ -141,10 +141,25 @@ def queue_depth(marker: str = "ContentLibrary") -> int | None:
 
 
 def cache_free_gb() -> float | None:
-    try:
-        return shutil.disk_usage("H:\\").free / (1 << 30)
-    except OSError:
-        return None
+    r"""The REAL constraint, which is C: and not H:.
+
+    H: reports a 475.6 GB volume with some amount free, and that number is the
+    local cache's, not the account's (learning 17). Worse for a writer: DriveFS
+    stages everything through `%LOCALAPPDATA%\Google\DriveFS`, which lives on
+    C:. Measured 2026-09-18: that folder held 107.0 GB - 90.8 GB of it for the
+    H: account - while C: had 81.0 GB free. So writing 824 GB "to H:" writes it
+    through a cache on the system disk.
+
+    Taking the smaller of the two is the only honest headroom, and it is the
+    number that stops a mirror from filling somebody's boot drive.
+    """
+    vals = []
+    for d in ("H:\\", "C:\\"):
+        try:
+            vals.append(shutil.disk_usage(d).free / (1 << 30))
+        except OSError:
+            pass
+    return min(vals) if vals else None
 
 
 def load_done() -> dict:
@@ -312,17 +327,40 @@ def main() -> int:
         print("\nnothing left to send.")
         return 0
 
+    # --band, ACTUALLY IMPLEMENTED.
+    #
+    # It was declared in argparse and never read, so `--limit 40 --band 50-300`
+    # silently fell through to "smallest first" and re-sent the same 40 empty
+    # files, printing "sample too small to project a rate" - the flag's own
+    # name reading as coverage it did not have. Fourth time tonight that a
+    # flag was added without the behaviour behind it (learning 57's last line).
+    how = "smallest first"
+    if a.band:
+        try:
+            lo_mb, hi_mb = (float(x) for x in a.band.split("-", 1))
+        except ValueError:
+            sys.exit("--band wants MIN-MAX in MB, e.g. 50-300")
+        lo, hi = int(lo_mb * (1 << 20)), int(hi_mb * (1 << 20))
+        before = len(todo)
+        todo = [t for t in todo if lo <= t[1] <= hi]
+        how = "{:.0f}-{:.0f} MB band".format(lo_mb, hi_mb)
+        print("\nband {}: {:,} of {:,} outstanding files qualify".format(
+            a.band, len(todo), before))
+        if not todo:
+            print("nothing in that band is outstanding.")
+            return 0
+
     if a.limit:
         if a.largest:
             todo = sorted(todo, key=lambda t: -t[1])[:a.limit]
+            how = "largest first"
         else:
             todo = todo[:a.limit]
         gb = sum(b for _, b, _ in todo) / (1 << 30)
-        print("\nTRIAL: {} file(s), {:.2f} GB ({})".format(
-            len(todo), gb, "largest first" if a.largest else "smallest first"))
-        if not a.largest and gb < 0.5:
+        print("TRIAL: {} file(s), {:.2f} GB ({})".format(len(todo), gb, how))
+        if gb < 0.5:
             print("  WARNING: this sample is too small to measure anything.")
-            print("  Use --largest for a throughput figure.")
+            print("  Use --band 50-300 for a throughput figure.")
 
     os.makedirs(lp(a.dest), exist_ok=True)
     t0 = time.time()

@@ -38,11 +38,34 @@ function Stop-Chain([string] $why) { Say "STOPPED: $why"; exit 1 }
 
 function Journalled { if (Test-Path $journal) { (Get-Content $journal | Measure-Object -Line).Lines } else { 0 } }
 
+# Count what is left WITHOUT launching anything.
+#
+# This used to shell out to `python mirror_to_h.py --status` and parse the
+# output. test_chain_gating.py refused the chain for it, and correctly: every
+# launch inside a chain must sit within Invoke-Step, which forces a preflight, a
+# progress signal and a postcondition. A bare `& python` in a helper called by
+# the Postcondition is work that never proved it works.
+#
+# The two numbers are already on disk: the index says how many files there are,
+# the journal says how many landed. Reading them is a status check, not work.
 function Remaining {
-    $out = & python -u $py --status 2>&1 | Out-String
-    $m = [regex]::Match($out, 'still to send:\s+([\d,]+) files')
-    if ($m.Success) { return [int]($m.Groups[1].Value -replace ',', '') }
-    return -1
+    if (-not (Test-Path $journal)) { return -1 }
+    $written = @(Import-Csv $journal | Where-Object { $_.outcome -eq 'written' -or $_.outcome -eq 'already-present' }).Count
+    # The index is the denominator, minus what mirror_to_h itself excludes as
+    # implausibly large (over 20 GB - the 101 GB null-byte .jpg).
+    # The denominator comes from INVENTORY.csv, not from library.db.
+    #
+    # The first version shelled out to sqlite3.exe, which is NOT on PATH on this
+    # machine - so Remaining would have returned -1 on every call, the
+    # Postcondition would have failed, and the task would have restarted in a
+    # loop forever while reporting "could not read the remaining count". A
+    # dependency that is absent is worse than one that is wrong, because the
+    # failure looks like the job rather than the check.
+    $inv = 'D:\_PhotoAudit\INVENTORY.csv'
+    if (-not (Test-Path $inv)) { return -1 }
+    $total = (@(Get-Content $inv).Count) - 1      # minus the header
+    if ($total -lt 0) { return -1 }
+    return [Math]::Max(0, $total - $written)
 }
 
 Say "mirror to H: starting. journalled so far: $(Journalled) row(s)"

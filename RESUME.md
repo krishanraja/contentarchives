@@ -114,7 +114,102 @@ the sentence.
 
 ----
 
-## RIGHT NOW: Intimate is flat, and the never-looked-at gap is closed (2026-09-18, 21:20)
+## RIGHT NOW: the H: mirror is ARMED AND RUNNING (2026-09-19, 00:15)
+
+**FIRST COMMAND, before anything else:**
+
+    pwsh -NoProfile -File guards\arm.ps1 -Status
+
+`contentarchives-chain` is uploading the library to H:. It survives sessions
+ending; it does NOT survive a reboot. If the state is not `Running`, re-arm:
+
+    pwsh -NoProfile -File guards\arm.ps1 -Chain chain_mirror_h.ps1
+
+**Progress, from disk, never from memory:**
+
+    Import-Csv D:\_PhotoAudit\h-mirror.csv | Where-Object outcome -eq 'written' | Measure-Object
+
+### WHAT KRISH WANTS, IN HIS ORDER
+
+1. **Two identical clean libraries** - D: (done, 824.2 GB / 82,111 files) and
+   the H: cloud copy (in progress). A second LOCAL copy on E: is Phase D of
+   `docs/ROADMAP.md` and is NOT started; E: still holds the stale predecessor.
+2. **The richest, most accurate knowledge** of every file. 99.4% on kind /
+   sensitivity / era, 99.3% descriptions, 100% audience. **`person` is 30.9%
+   and is the real gap** - only the naming game closes it, and Bharti's game is
+   unbuilt.
+3. **A mini app**: describe anyone or anything, get a carousel streamed from the
+   cloud library. The backend largely EXISTS - `library.db` has FTS5 over 15
+   columns including `description`, `objects`, `activity`, `text`. Phase F.
+4. **Ingest, robustly and autonomously**: 10 old communal phones, photographs of
+   family albums, VHS conversions, over the coming weeks. Phase B. **Do Phase A
+   first** - the blocklist is still inert, which means a phone carrying one of
+   the 88 purged hashes re-admits it.
+
+### THE MIRROR: MEASURED NUMBERS, NOT ESTIMATES
+
+| | |
+|---|---|
+| to mirror | **824.2 GB / 82,111 files** (excludes the 101 GB null-byte `.jpg`) |
+| H: account | 2 TB, and after the clear ~1,972 GB free - it fits twice over |
+| write rate to cache | **44.7 MB/s** measured (3.01 GB / 69 s, quiet queue) |
+| cache fills in | ~5.2 h at that rate |
+| **DriveFS upload drain** | **18.7 operations/minute** measured over 273 s |
+| **honest ETA** | **~70 hours**, bounded by Drive's upload, not by us |
+
+The write rate is NOT the ETA. Bytes land in a local cache on **C:** and upload
+behind it; the queue draining is the real signal, and it drains in steps.
+
+### DONE TONIGHT
+
+- **The intimate content is destroyed**: 81 files purged, 7 Krish had already
+  removed, 88 hashes blocklisted, every derived trace swept and verified at 0.
+- **`_photo-consolidation` CLEARED**: 22,103 files / **461.7 GB** deleted from
+  H:, 0 failures, journalled. 2,798 files that could NOT be proven held were
+  kept - see `D:\_PhotoAudit\H-SOURCE-NOT-HELD.csv` (283 `.mp4` including
+  `__v0`/`__v2` variants, and 390 `.lrf`/`.lrv` proxies). **Drive's trash holds
+  all of it for 30 days.**
+- The face pass finished. The index was rebuilt twice. `refresh.py` was fixed -
+  it had been failing silently since 15 September, leaving `state/` two days
+  stale.
+
+### WHAT NEEDS KRISH
+
+1. **A Drive-scoped `gcloud` login.** The current token returns
+   `invalid_grant`. Without it the mirror is *uploaded*, never *verified* -
+   Drive's server-side `md5Checksum` is the only evidence it offers, and
+   `mirror_to_h.py` already records an md5 per file ready to compare.
+2. **Two files await a ruling**: `jason7.png` (a doctored wedding photo) and
+   `VID-20191028-WA0006.mp4` (a cartoon). Both `keep=False`, both classified
+   `intimate` by the broad pass and `none` by the narrow one, so `--verify`
+   reports 2 outside the folder on purpose.
+3. **The 101 GB `1000002434.jpg`** in `Media\Personal\NoDate` is all zeros at
+   every offset sampled. It is excluded from the mirror and named on every run.
+   It should be deleted, but only he can say so.
+4. **The 2,798 unproven H: files** above.
+
+### KNOWN TRAPS, PAID FOR TONIGHT
+
+- **DriveFS stages through `%LOCALAPPDATA%\Google\DriveFS` on C:.** H: free
+  space is meaningless; `cache_free_gb()` takes the **minimum of C: and H:**.
+- **A `--largest` trial picked the 101 GB file** and wrote 81 GB of zeros to
+  Drive before the throttle - which fired every 25 files - could react. Now
+  there is a 20 GB per-file ceiling, a check before every file over 2 GB, and a
+  refusal to write a file bigger than the remaining headroom.
+- **One stale 81 GB `content_cache` entry survives** at
+  `...DriveFS\107741908582439094738\content_cache\d50\d0\80785`. Fully
+  allocated, sparse-flagged, not released by a Drive restart. It is the cache of
+  Krish's own deleted 101 GB source. C: sits at ~88 GB free because of it.
+- **`\\?\` long paths do NOT work on the DriveFS mount.** They work on D:.
+- **PowerShell `Remove-Item` is refused on `H:\My Drive` and `D:\_thumbs`** by a
+  protection rule, and the refusal blocks the WHOLE call it is in. Python's
+  `os.remove` works.
+- **Never pipe a long job through `Select-Object -Last N`** - it buffers, so a
+  killed job leaves an empty log.
+
+----
+
+## The Intimate purge and the enrichment gap (2026-09-18, 21:20)
 
 The index was rebuilt at 21:02 - **277 seconds**, not the 31 minutes of that
 afternoon, so the memory pressure had eased - and everything here is measured
