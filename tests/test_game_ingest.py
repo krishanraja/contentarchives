@@ -132,7 +132,30 @@ def main():
           True)
 
     print()
-    print("6. a corrupt cursor costs duplicates, never a lost answer")
+    print("6. a SKIP is an answer: declined for good, never a person")
+    # Krish, seeing batch 2 return every face he had skipped in batch 1: "If I'm
+    # skipping, I don't care that they never end up classified and you need to
+    # be ok with that." The game had no way to SAY a skip - rows() only sent
+    # clusters with a name - so the journal never learned of it and the
+    # already-answered filter offered it again. record_people.py has read '-'
+    # as declined since round 14; the ingester had not.
+    #
+    # The silent failure this guards against is a skip recorded as a PERSON
+    # called "-", which would be worse than the bug it replaced.
+    store7 = fixture(os.path.join(d, "skips"))
+    cursor7 = os.path.join(d, "skips", "cursor.json")
+    run([{"id": "s1", "cluster": "c2", "name": "-"},
+         {"id": "s2", "cluster": "c3", "name": "skip"}], store7, cursor7)
+    got = persons(store7)
+    check("a dash is recorded as declined",
+          ("c2", "unidentifiable", "declined", "krish") in got, True)
+    check("the word 'skip' is too",
+          ("c3", "unidentifiable", "declined", "krish") in got, True)
+    check("and NEVER as a person called '-'",
+          any(f == "person" and v in ("-", "skip") for _, f, v, _ in got), False)
+
+    print()
+    print("7. a corrupt cursor costs duplicates, never a lost answer")
     io.open(cursor, "w", encoding="utf-8").write("{not json")
     before = len(persons(store))
     check("it exits 0 rather than refusing to run",

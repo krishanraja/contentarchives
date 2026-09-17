@@ -180,6 +180,15 @@ def main() -> int:
             refused.append((rid, cid, raw[:40], "that is a sentence, not a name"))
             continue
         low = raw.lower()
+        # A SKIP IS AN ANSWER, and the most consequential one: it means never
+        # show me this again. record_people.py has read '-' that way since round
+        # 14 ("Stop resending me batches I have refused to identify"), and the
+        # game had no way to say it at all - so every skipped face came back in
+        # the next batch. Krish, on seeing that: "If I'm skipping, I don't care
+        # that they never end up classified and you need to be ok with that."
+        if low in ("-", "--", "skip", "skipped"):
+            fresh.append((rid, cid, "unidentifiable", "declined"))
+            continue
         if low in ("?", "??", "unknown", "unsure") or ASK.match(raw):
             who = ASK.match(raw).group(1).strip() if ASK.match(raw) else "yes"
             fresh.append((rid, cid, "needs_identifying",

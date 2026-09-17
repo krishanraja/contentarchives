@@ -401,7 +401,7 @@ three. Skip anyone you cannot place; they will not come back.</p>
 {{CARDS}}
 <p class="sub" id="end">That is the batch. Hit Submit and it is safe to close.</p>
 <div id="bar">
-  <span id="tally"><b id="done">0</b> / {{COUNT}} named</span>
+  <span id="tally"><b id="done">0</b> / {{COUNT}} named<span id="skipped"></span></span>
   <span id="msg"></span>
   <button id="send">Submit</button>
 </div>
@@ -421,7 +421,11 @@ function suggest(card) {
   const inp = card.querySelector('input');
   const box = card.querySelector('.chips');
   if (!inp || !box) return;
-  const q = (inp.value || '').trim().toLowerCase();
+  // '-' is the skip marker, not something to search for: filtering the name
+  // list by it returns nothing and leaves an empty chip strip on every skipped
+  // card. Treat it as no query at all.
+  let q = (inp.value || '').trim().toLowerCase();
+  if (q === '-') q = '';
   const hits = (q ? NAMES.filter(n => n.toLowerCase().includes(q)) : NAMES)
                  .slice(0, 12);
   box.textContent = '';
@@ -465,12 +469,21 @@ function show(i) {
 
 function save() {
   const o = {};
+  let named = 0, skipped = 0;
   cards.forEach(c => {
     const v = (c.querySelector('input').value || '').trim();
-    if (v) o[c.dataset.cid] = v;
+    if (!v) return;
+    o[c.dataset.cid] = v;
+    if (v === '-') { skipped++; } else { named++; }
   });
   localStorage.setItem(KEY, JSON.stringify(o));
-  document.getElementById('done').textContent = Object.keys(o).length;
+  // NAMED AND SKIPPED ARE COUNTED APART. A skip is stored and sent like any
+  // answer, so counting every non-empty value as "named" would have read
+  // "40 / 40 named" after skipping forty faces - a bar lying about the work
+  // done, which is the same fault as a page misreporting its own row count.
+  document.getElementById('done').textContent = named;
+  const s = document.getElementById('skipped');
+  if (s) s.textContent = skipped ? '  ' + skipped + ' skipped' : '';
 }
 
 // EVERY NEXT SAVES. Krish: "It should also auto-save every single time I click
@@ -540,8 +553,20 @@ cards.forEach((c, i) => {
     if (e.key === 'Enter') { e.preventDefault(); advance(i); }
   });
   c.querySelector('.next').addEventListener('click', () => advance(i));
+  // A SKIP IS AN ANSWER AND MUST TRAVEL. Krish, seeing batch 2: "Batch 2 is the
+  // same as all the skipped ones in batch 1. If I'm skipping, I don't care that
+  // they never end up classified and you need to be ok with that."
+  //
+  // rows() only sent clusters with a name, so a skip never left the phone, the
+  // journal never learned of it, and the already-answered filter offered it
+  // again. The sheets never had this hole - record_people.py writes a blank row
+  // as declined, permanently - and I lost it by building this as a
+  // submit-what-you-named form.
+  //
+  // '-' is the sheets' own skip convention, and both recorders read it as
+  // unidentifiable=declined: never shown again, never a person called "-".
   c.querySelector('.skip').addEventListener('click', () => {
-    inp.value = ''; c.classList.remove('forb-set'); advance(i);
+    inp.value = '-'; c.classList.remove('forb-set'); advance(i);
   });
   // "for Bharti" is one tap. It is a real answer - record_people and
   // ingest_game_answers both read it as needs_identifying=Bharti, never as a
