@@ -162,8 +162,27 @@ writer pid alive, C: ~81 GB free, H: ~77 GB. It is working through the 33,743
 sub-1MB files first because the index is size-ordered, so "GB sent" stays near
 zero for the first few thousand files. That is expected, not a stall.
 
-**A rebuild is running** after the null-file deletion, so `INVENTORY.csv`,
-`MIGRATION-HASHES.csv` and `library.db` still each name it until that finishes.
+**A REBUILD IS STILL OWED, and here is why the first one did not work.**
+
+After deleting the 101 GB file, `build_db.py` ran for 760 s and still reported
+**82,112 files / 925.3 GB** with one row naming `1000002434.jpg`. That is not a
+bug in the rebuild: `load_files()` reads `INVENTORY.csv` and the hash maps, and
+**none of them walks the disk**, so a deletion is invisible to all three. It is
+the same rule as a move - three path-keyed records, and a change stales every
+one - applied to a delete.
+
+Both records have now had the row dropped (`INVENTORY.csv` 82,111 rows,
+`MIGRATION-HASHES.csv` 73,116; `HASH-INDEX.csv` never held it). **So run this,
+and only then will the index agree with the disk:**
+
+    python stages/08_index/build_db.py
+
+Expect ~82,111 files and ~824 GB. If it still says 925.3 GB, something re-added
+the row.
+
+A hash verification of the 278 size-matched H: videos was also still running at
+handover - its verdict lands in `D:\_PhotoAudit\H-VIDEOS-HASHED.csv`. Read the
+Verdict column before deleting any of them, and never delete the five DJI stubs.
 
 The write rate is NOT the ETA. Bytes land in a local cache on **C:** and upload
 behind it; the queue draining is the real signal, and it drains in steps.
