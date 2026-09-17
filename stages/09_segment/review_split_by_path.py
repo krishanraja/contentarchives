@@ -90,12 +90,55 @@ HEAD = """<!doctype html><meta charset="utf-8">
 
 
 def signature(path: str) -> str:
-    """The device batch a filename belongs to: digit runs collapsed to #."""
+    """The device batch a filename belongs to: digit runs collapsed to #.
+
+    KEPT, BUT NO LONGER THE MAIN AXIS. Measured 2026-09-18: on the Communal side
+    this works perfectly - 583 files fall into 4 groups and one of them,
+    `bharti phone upto sept # #`, is 580 of them, which is exactly one question.
+    On the Personal side it collapses: `#` holds 6,376 files, `#_#` holds 3,904,
+    because filenames that are only digits all signature to the same thing. 77%
+    of the side landed in three meaningless buckets.
+    """
     base = os.path.basename(path)
     base = os.path.splitext(base)[0]
     sig = DIGITS.sub("#", base)
     sig = re.sub(r"#+", "#", sig).strip(" _-.")
     return sig or "(no name)"
+
+
+def provenance(row: dict, meta: dict) -> str:
+    r"""What produced this file - the axis a person can actually judge.
+
+    A filename of digits says nothing; a camera and a year say whose it is.
+    "Canon EOS 550D - 2012 - India" is a judgement Krish can make in a second.
+    So the group key is, in order of what is known:
+
+        camera model + year        a device batch, the strongest signal
+        'old photos' + year        the scanned libraries, named in the filename
+        kind + year                screenshots and graphics, which are not
+                                   memories and are listed for a separate sweep
+        queue + year               last resort, so nothing is silently dropped
+
+    Every file lands in exactly one group, and no group is a bucket of "#".
+    """
+    h = row.get("Hash") or ""
+    make, model, year = meta.get(h, ("", "", ""))
+    if not year:
+        m = YEAR.search(row["Source"])
+        year = m.group(1) if m else "no date"
+    base = os.path.basename(row["Source"]).lower()
+
+    if model:
+        return "{} · {}".format(model, year)
+    if "old photo" in base:
+        return "old photos (scanned) · {}".format(year)
+    if make:
+        return "{} · {}".format(make, year)
+    kind = (row.get("Kind") or "").strip()
+    if kind and kind != "photo":
+        return "{} (not a photograph) · {}".format(kind, year)
+    return "no camera recorded · {} · {}".format(
+        row.get("Queue") or "?", year)
 
 
 def main() -> int:
@@ -124,11 +167,30 @@ def main() -> int:
     assets = assets_for(a.thumbs) if os.path.isdir(a.thumbs) else {}
     print("hashes with a thumbnail: {:,}".format(len(assets)))
 
+    # The camera and the year, which is what makes a group judgeable. Filenames
+    # on this side are digits; 77% of Personal collapsed into `#` and `#_#`
+    # when the group key came from the name (measured 2026-09-18).
+    meta: dict = {}
+    import sqlite3
+    dbp = os.path.join(P.AUDIT, "library.db")
+    if os.path.exists(dbp):
+        db = sqlite3.connect("file:{}?mode=ro".format(dbp.replace("\\", "/")),
+                             uri=True)
+        try:
+            for h, mk, md, yr in db.execute(
+                    "select hash, make, model, year from files "
+                    "where hash is not null"):
+                meta[h] = (mk or "", md or "", yr or "")
+        finally:
+            db.close()
+    print("hashes with camera/year: {:,}".format(len(meta)))
+
     groups: dict = collections.defaultdict(lambda: {
         "n": 0, "hashes": [], "years": set(), "kinds": collections.Counter(),
         "queues": collections.Counter(), "signals": collections.Counter()})
     for r in rows:
-        key = (r["Side"], signature(r["Source"]))
+        key = (r["Side"], provenance(r, meta) if r["Side"] == "Personal"
+               else signature(r["Source"]))
         g = groups[key]
         g["n"] += 1
         g["kinds"][r.get("Kind") or "?"] += 1
