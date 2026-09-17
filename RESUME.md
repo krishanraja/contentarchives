@@ -112,7 +112,52 @@ memory instead of from the run.
 
 ----
 
-## RIGHT NOW: the split is applied and the records are repaired (2026-09-18, 14:33)
+## RIGHT NOW: the phone game works end to end (2026-09-18, 16:30)
+
+Krish names faces on his phone; the answers reach the journal without him
+forwarding anything. Two batches done, 62 answers in.
+
+| | |
+|---|---|
+| batch 1 | https://claude.ai/artifact/KJohLkjv8vdHn8KNvt76ek - finished |
+| batch 2 | https://claude.ai/artifact/3dMThrpFi556maYVNSiPbL - finished |
+| batch 3 | https://claude.ai/artifact/NfWHekaNjSPpmxzyQFW5AW - 40 clusters he has never been shown |
+
+**The loop**: `build_game.py --who krish --batch N` -> gate with
+`verify_people_sheet.py` AND `check_repeats.py` -> publish as a private artifact
+with `capabilities {db:{}}` -> he plays -> `Artifact read_db` -> rows to JSON ->
+`ingest_game_answers.py --apply` -> `profile_coverage.py --apply` ->
+`build_db.py`. From the game: **30 declines, 27 names, 5 for-Bharti.**
+
+**A SKIP IS AN ANSWER AND MUST TRAVEL.** Batch 2 was identical to batch 1's
+skips, because `rows()` only sent clusters with a NAME in them - so a skip never
+left the phone, the journal never learned of it, and the already-answered filter
+offered it again. The sheets never had this hole (`record_people.py` writes a
+blank row as declined). Skip now writes `-`, which both recorders read as
+`unidentifiable=declined`. Krish: *"If I'm skipping, I don't care that they
+never end up classified and you need to be ok with that."*
+
+**Three phone faults worth not repeating.** A `<datalist>` of 290 names renders
+FULL-SCREEN on Android and covered the Skip button - he could not get past a
+face without naming it; chips in a strip replaced it. Auto-focus on arrival
+threw that list open every time. And on Android the keyboard shrinks
+`visualViewport` rather than resizing the window, so `scrollIntoView` at focus
+fires too early - it has to run again on the viewport resize.
+
+### THE MACHINE IS SHORT OF MEMORY, AND IT CHANGES WHAT IS SAFE
+
+Three background jobs were killed for low memory today; the same commands in the
+FOREGROUND survive. And a rebuild that took 300s this morning took **31 minutes**
+at 16:26 - it is swapping, not failing. The honest progress signal is
+`library.db.tmp-wal` growing; `library.db` itself is untouched until the promote,
+which is the design working.
+
+Do not start a second heavy job while one runs. That is what turns slow into
+killed.
+
+----
+
+## The split and the records (2026-09-18, 14:33)
 
 ### THREE RECORDS DESCRIBE THE LIBRARY, AND A MOVE STALES ALL OF THEM
 
