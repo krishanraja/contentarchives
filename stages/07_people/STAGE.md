@@ -35,11 +35,17 @@ nothing can ever overwrite it.
 | `stages/07_people/check_repeats.py` | no sheet re-shows a row already offered, compared by merge group; the baseline is the JOURNAL (every round overwrote one `PEOPLE.html`, so sheets on disk are not one), and an empty baseline refuses with exit 2 rather than reporting clean |
 | `stages/07_people/profile_coverage.py` | every person named in the journal is protected by the profile; measures a term before adding it |
 | `stages/07_people/name_clusters.py` | every cluster labelled with one name, with merge groups and reach - for when one name turns out to be two people |
+| `stages/07_people/ingest_game_answers.py` | take answers from the phone games into the journal, unattended and safe to re-run: a cursor of ingested ids, name folding onto spellings already in the journal (never on similarity), and the same refusals `record_people.py` makes |
 | `stages/07_people/chain_rounds.ps1` | one round: record, merge, rebuild (supervised), then build and gate the next sheet |
 
 ## Tests
 - `tests/test_build_db.py`
 - `tests/test_people_rounds.py`
+- `tests/test_game_ingest.py` - the phone games write to the journal unattended,
+  so: running the same rows twice records nothing, `lauren ` folds onto the
+  `Lauren` already there while `Laurenn` does not, an unknown cluster is
+  refused, Bharti's answers carry her own provenance in the same journal, and a
+  corrupt cursor costs duplicates rather than a lost answer
 
 ## Lessons
 | # | what this stage does about it | enforced by |
