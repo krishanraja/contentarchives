@@ -255,7 +255,10 @@ def page(rows, names, who, batch, artifact=False):
     wrapped in the platform's own <head> and a stray doctype inside the body is
     invalid. A local file keeps it, or the browser drops into quirks mode.
     """
-    opts = "".join('<option value="{}">'.format(html.escape(n)) for n in names)
+    # A JS array, not <option> elements: the datalist this replaced was rendered
+    # by Android as a full-screen list of all 290 names, covering the Skip
+    # button. json.dumps escapes quotes and non-ASCII for a <script> context.
+    names_js = json.dumps(names, ensure_ascii=True)
     cards = []
     for i, r in enumerate(rows):
         imgs = "".join(
@@ -277,15 +280,16 @@ def page(rows, names, who, batch, artifact=False):
             '<div class="row" data-cid="{cid}" data-photos="{n}" '
             'data-i="{i}"><div class="faces">{imgs}</div>'
             '<div class="meta"><b>{n:,}</b> photograph{s}{span}</div>'
-            '<input type="text" list="names" placeholder="who is this?" '
+            '<input type="text" id="n{i}" placeholder="who is this?" '
             'autocomplete="off" autocapitalize="words" spellcheck="false">'
-            '<div class="btns"><button class="skip">Not a person / skip</button>'
-            '<button class="next">Next</button></div></div>'.format(
+            '<div class="chips"></div>'
+            '<div class="btns"><button type="button" class="skip">Skip</button>'
+            '<button type="button" class="next">Next</button></div></div>'.format(
                 cid=html.escape(r["cid"]), n=r["photos"],
                 s="" if r["photos"] == 1 else "s",
                 span=(" &middot; " + html.escape(r["span"])) if r["span"] else "",
                 i=i, imgs=imgs))
-    body = TEMPLATE.replace("{{OPTIONS}}", opts) \
+    body = TEMPLATE.replace("{{NAMES}}", names_js) \
                    .replace("{{CARDS}}", "".join(cards)) \
                    .replace("{{WHO}}", html.escape(who)) \
                    .replace("{{BATCH}}", str(batch)) \
@@ -345,6 +349,18 @@ TEMPLATE = """<title>Who Is This?</title>
  input[type=text]::placeholder{color:var(--muted)}
  input[type=text]:focus{outline:2px solid var(--safelight);outline-offset:1px;
    border-color:var(--safelight)}
+ /* A phone cannot use a 290-entry <datalist>: Android renders it as a
+    full-screen list that covered the Skip button entirely. These are the same
+    names as tappable chips - most-used first, filtered as you type - in a strip
+    that never covers anything. */
+ .chips{display:flex;gap:6px;overflow-x:auto;padding:10px 0 2px;
+        scrollbar-width:thin}
+ .chip{flex:0 0 auto;padding:9px 13px;border-radius:999px;
+   border:1px solid var(--edge);background:var(--surface);color:var(--ink);
+   font:400 15px/1 "IBM Plex Sans",system-ui,sans-serif;cursor:pointer;
+   white-space:nowrap}
+ .chip:focus-visible{outline:2px solid var(--safelight)}
+ .chip.pick{border-color:var(--safelight);color:var(--safelight)}
  .btns{display:flex;gap:8px;margin-top:12px}
  .btns button{flex:1;padding:14px;font:500 15px/1 "IBM Plex Sans",sans-serif;
    border-radius:4px;border:1px solid var(--edge);background:transparent;
@@ -375,7 +391,6 @@ TEMPLATE = """<title>Who Is This?</title>
 list when it offers one &mdash; that is what keeps one person from becoming
 three. Skip anyone you cannot place; they will not come back.</p>
 <div id="rail"><div id="railfill"></div></div>
-<datalist id="names">{{OPTIONS}}</datalist>
 {{CARDS}}
 <p class="sub" id="end">That is the batch. Hit Submit and it is safe to close.</p>
 <div id="bar">
@@ -390,6 +405,32 @@ three. Skip anyone you cannot place; they will not come back.</p>
 // stages/07_people/ingest_game_answers.py when these rows are read back.
 const KEY = 'contentarchives.game.{{WHO}}.{{BATCH}}';
 const saved = JSON.parse(localStorage.getItem(KEY) || '{}');
+// Every name already in the journal, most-used first. Picking one is what keeps
+// one person from becoming three, so they are offered as chips rather than
+// buried in a control the phone renders full-screen.
+const NAMES = {{NAMES}};
+
+function suggest(card) {
+  const inp = card.querySelector('input');
+  const box = card.querySelector('.chips');
+  if (!inp || !box) return;
+  const q = (inp.value || '').trim().toLowerCase();
+  const hits = (q ? NAMES.filter(n => n.toLowerCase().includes(q)) : NAMES)
+                 .slice(0, 12);
+  box.textContent = '';
+  hits.forEach(n => {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'chip' + (n.toLowerCase() === q ? ' pick' : '');
+    b.textContent = n;               // textContent, so a name is never markup
+    b.addEventListener('click', () => {
+      inp.value = n;
+      save();
+      suggest(card);
+    });
+    box.appendChild(b);
+  });
+}
 // `.row`, not `.card`: the element is named for verify_people_sheet.py's ROW
 // regex, which needs `<div class="row" data-cid=... data-photos=...>`. Renaming
 // the markup and leaving this selector behind would render an empty page with
@@ -400,8 +441,13 @@ let at = 0;
 function show(i) {
   cards.forEach((c, n) => c.classList.toggle('on', n === i));
   at = Math.max(0, Math.min(i, cards.length - 1));
-  const inp = cards[at] && cards[at].querySelector('input');
-  if (inp) inp.focus({preventScroll: true});
+  // NO AUTOFOCUS. Krish, on a phone: "Trying to skip completely ruins the
+  // experience and tries to force me to pick someone and doesn't let me
+  // continue." Focusing the input on arrival opened the keyboard AND - while
+  // this used a <datalist> - a full-screen list of all 290 names that covered
+  // the Skip button. He could not get past a face without naming it. The field
+  // is tapped when he wants it, not thrust at him.
+  if (cards[at]) suggest(cards[at]);
   // The rail encodes HOW FAR THROUGH the batch you are. Without this it is a
   // line that never moves - a structural device decorating rather than saying
   // anything, which is worse than no rail at all.
@@ -431,7 +477,7 @@ function rows() {
 cards.forEach((c, i) => {
   const inp = c.querySelector('input');
   if (saved[c.dataset.cid]) inp.value = saved[c.dataset.cid];
-  inp.addEventListener('input', save);
+  inp.addEventListener('input', () => { save(); suggest(c); });
   inp.addEventListener('keydown', e => {
     if (e.key === 'Enter') { e.preventDefault(); save(); show(i + 1); }
   });
