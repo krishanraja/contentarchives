@@ -284,6 +284,7 @@ def page(rows, names, who, batch, artifact=False):
             'autocomplete="off" autocapitalize="words" spellcheck="false">'
             '<div class="chips"></div>'
             '<div class="btns"><button type="button" class="skip">Skip</button>'
+            '<button type="button" class="forb">For Bharti</button>'
             '<button type="button" class="next">Next</button></div></div>'.format(
                 cid=html.escape(r["cid"]), n=r["photos"],
                 s="" if r["photos"] == 1 else "s",
@@ -320,7 +321,9 @@ TEMPLATE = """<title>Who Is This?</title>
  html,body{height:100%}
  body{margin:0;background:var(--ground);color:var(--ink);
       font:400 16px/1.55 "IBM Plex Sans",system-ui,sans-serif;
-      padding:0 16px 104px}
+      /* Clearance for the fixed bar. At 104px the metadata line sat UNDER it -
+         "7 photographs - 2023-2023" was clipped in Krish's screenshot. */
+      padding:0 16px 168px}
  header{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;
         padding-block:18px 10px}
  h1{font:600 26px/1.1 "Newsreader",Georgia,serif;margin:0;
@@ -368,6 +371,10 @@ TEMPLATE = """<title>Who Is This?</title>
  .btns button:focus-visible{outline:2px solid var(--safelight)}
  .btns .next{background:var(--safelight);color:#241a08;border-color:var(--safelight);
    font-weight:600}
+ /* "for Bharti" is a real answer, not a skip: it says whose question this is.
+    record_people and ingest_game_answers both read it as needs_identifying. */
+ .btns .forb{color:var(--ink)}
+ .row.forb-set .forb{border-color:var(--safelight);color:var(--safelight)}
  #end{color:var(--muted);font-size:14px;padding-block:18px}
  #bar{position:fixed;left:0;right:0;bottom:0;background:var(--surface);
    border-top:1px solid var(--edge);padding:12px 16px;
@@ -466,6 +473,43 @@ function save() {
   document.getElementById('done').textContent = Object.keys(o).length;
 }
 
+// EVERY NEXT SAVES. Krish: "It should also auto-save every single time I click
+// Next so that I shouldn't be required to complete this and press Submit."
+// Submit is now a confirmation, not a requirement - closing the tab at face 12
+// loses nothing. The whole batch document is rewritten each time rather than
+// appended to: last-writer-wins on one document is exactly right here, and
+// ingest_game_answers dedupes by row id anyway.
+let sending = false, pending = false;
+
+async function push(quiet) {
+  const data = rows();
+  if (!data.length) return;
+  if (sending) { pending = true; return; }     // never two writes in flight
+  sending = true;
+  const msg = document.getElementById('msg');
+  try {
+    const db = await window.claude.use('db');
+    if (!db) throw new Error('no db');
+    await db.doc('answers/{{WHO}}-{{BATCH}}').set(
+      {who: '{{WHO}}', batch: {{BATCH}}, rows: data,
+       at: new Date().toISOString()});
+    if (msg) msg.textContent = quiet ? 'saved ' + data.length
+                                     : 'sent - ' + data.length + ' names. Safe to close.';
+  } catch (e) {
+    if (msg) msg.textContent = quiet ? 'saved on this phone only'
+                                     : 'could not send; your answers are still saved here.';
+  } finally {
+    sending = false;
+    if (pending) { pending = false; push(true); }
+  }
+}
+
+function advance(i) {
+  save();
+  push(true);            // fire and forget: the answer is already in localStorage
+  show(i + 1);
+}
+
 function rows() {
   return cards.map(c => {
     const v = (c.querySelector('input').value || '').trim();
@@ -478,37 +522,49 @@ cards.forEach((c, i) => {
   const inp = c.querySelector('input');
   if (saved[c.dataset.cid]) inp.value = saved[c.dataset.cid];
   inp.addEventListener('input', () => { save(); suggest(c); });
+  // KEEP THE FIELD AND CHIPS ABOVE THE KEYBOARD. On Android the keyboard does
+  // not resize the window - it shrinks visualViewport - so scrollIntoView at
+  // focus time lands before the viewport has changed. Doing it again on the
+  // resize is what actually works.
+  const keepInView = () => {
+    if (!c.classList.contains('on')) return;
+    inp.scrollIntoView({block: 'center', behavior: 'smooth'});
+  };
+  inp.addEventListener('focus', () => setTimeout(keepInView, 60));
+  if (window.visualViewport) {
+    window.visualViewport.addEventListener('resize', () => {
+      if (document.activeElement === inp) setTimeout(keepInView, 60);
+    });
+  }
   inp.addEventListener('keydown', e => {
-    if (e.key === 'Enter') { e.preventDefault(); save(); show(i + 1); }
+    if (e.key === 'Enter') { e.preventDefault(); advance(i); }
   });
-  c.querySelector('.next').addEventListener('click', () => { save(); show(i + 1); });
+  c.querySelector('.next').addEventListener('click', () => advance(i));
   c.querySelector('.skip').addEventListener('click', () => {
-    inp.value = ''; save(); show(i + 1);
+    inp.value = ''; c.classList.remove('forb-set'); advance(i);
+  });
+  // "for Bharti" is one tap. It is a real answer - record_people and
+  // ingest_game_answers both read it as needs_identifying=Bharti, never as a
+  // person called "for Bharti" - and it is how a photograph reaches her queue
+  // without Krish having to name anyone in it.
+  c.querySelector('.forb').addEventListener('click', () => {
+    inp.value = 'for Bharti';
+    c.classList.add('forb-set');
+    advance(i);
   });
 });
 show(0);
 save();
 
+// Submit is a CONFIRMATION now, not the only way answers leave the phone - every
+// Next has already pushed. It goes through the same push() as everything else:
+// two copies of a database write is how they drift, and only one of them would
+// have kept the in-flight guard.
 document.getElementById('send').addEventListener('click', async () => {
   const msg = document.getElementById('msg');
-  const data = rows();
-  if (!data.length) { msg.textContent = 'nothing named yet'; return; }
-  const btn = document.getElementById('send');
-  btn.disabled = true;
+  if (!rows().length) { msg.textContent = 'nothing named yet'; return; }
   msg.textContent = 'sending...';
-  try {
-    const db = await window.claude.use('db');
-    if (!db) throw new Error('no db');
-    // One document per batch, replaced wholesale: re-submitting after adding a
-    // few more names must not create a second, partial record of the same work.
-    await db.doc('answers/{{WHO}}-{{BATCH}}').set(
-      {who: '{{WHO}}', batch: {{BATCH}}, rows: data,
-       at: new Date().toISOString()});
-    msg.textContent = 'sent - ' + data.length + ' names. Safe to close.';
-  } catch (e) {
-    msg.textContent = 'could not send; your answers are still saved here.';
-    btn.disabled = false;
-  }
+  await push(false);
 });
 </script>
 """
