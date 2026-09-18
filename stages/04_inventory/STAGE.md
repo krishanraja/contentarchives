@@ -20,7 +20,8 @@ disk and reconciled against the records.
 |---|---|
 | `stages/04_inventory/build_inventory.py` | one row per library file, with every signal about it |
 | `stages/04_inventory/patch_inventory_moves.py` | rewrite moved paths from a mover's journal instead of rewalking the library - seconds at constant memory, and it keeps the EXIF and duration a fresh walk would recompute or discard. Writes a temp file and promotes only after checking every destination against the FILESYSTEM |
-| `stages/04_inventory/reconcile_disk.py` | find what the records missed |
+| `stages/04_inventory/reconcile_disk.py` | find what the records missed - output is always ADDITIVE, never a removal |
+| `stages/04_inventory/drop_removed_rows.py` | drop rows for files a HUMAN deliberately removed, from a NAMED list - absence is a precondition, never the reason. A listed path that still exists stops the whole run. `--block` adds the hash to the no-reingest list, because dropping the row without it means the next phone ingest restores the file |
 | `stages/04_inventory/enrich_origin_status.py` | whether an origin still exists, and what deleting it frees |
 | `stages/04_inventory/big_files.py` | the largest files, surfaced for review |
 | `tools/check_manifest.py` | every manifest row still points at a file, or is explained |

@@ -51,6 +51,28 @@
 # behaves - including chains written before the rule existed, mid-run, at night.
 # A safety helper must not alter the semantics of the thing it is helping.
 
+# A gate's answer is the LAST thing its block emits, never the whole stream.
+#
+# Every chain logs inside these blocks, and a Say that writes to the OUTPUT
+# stream - `... | Tee-Object -FilePath $log -Append` does exactly that - puts its
+# own text into the block's return value. `[bool]` of a non-empty array is
+# $true, so on 2026-09-18 the mirror chain's Postcondition said "partial upload
+# - failing on purpose so the task restarts", returned $false, and was read as
+# success: the chain exited 0 with 172.5 GB unsent and the task sat Ready all
+# night. The same shape had made that chain's -Verify gate - the correctness
+# check this whole file exists to make mandatory - inert from the day it was
+# written, which is worse than the stall it caused.
+#
+# Fixing the two chains that used Tee-Object was not enough. The next chain
+# would have done it again, and a gate that cannot fail is indistinguishable
+# from a gate that passes. So the RUNNER takes the last value and cannot be
+# fooled by a block that talks.
+function script:Gate([scriptblock] $block) {
+    $out = @(& $block)
+    if ($out.Count -eq 0) { return $false }   # a gate that answers nothing is a no
+    return [bool]($out[-1])
+}
+
 function Invoke-Step {
     [CmdletBinding()]
     param(
@@ -119,7 +141,7 @@ function Invoke-Step {
     # ---- 1. preflight --------------------------------------------------------
     Say "[$Name] preflight"
     $ok = $false
-    try { $ok = [bool](& $Preflight) }
+    try { $ok = Gate $Preflight }
     catch { Stop-Chain "[$Name] preflight threw: $_" }
     if (-not $ok) { Stop-Chain "[$Name] preflight failed - not committing to the full run" }
     Say "[$Name] preflight OK"
@@ -150,7 +172,7 @@ function Invoke-Step {
         # after that so a corruption that starts mid-run is caught mid-run.
         if ($ticks -eq 1 -or ($ticks % $VerifyEvery) -eq 0) {
             $good = $false
-            try { $good = [bool](& $Verify) }
+            try { $good = Gate $Verify }
             catch { Stop-Chain "[$Name] verify threw at checkpoint ${ticks}: $_" }
             if (-not $good) {
                 foreach ($p in $procs) { if (-not $p.HasExited) { Stop-Process -Id $p.Id -Force -ErrorAction SilentlyContinue } }
@@ -196,7 +218,7 @@ function Invoke-Step {
     # the process exited before the next one was due.
     $codes = ($procs | ForEach-Object { $_.ExitCode }) -join ','
     $good = $false
-    try { $good = [bool](& $Verify) }
+    try { $good = Gate $Verify }
     catch { Stop-Chain "[$Name] final verify threw: $_" }
     if (-not $good) {
         Stop-Chain "[$Name] FINAL VERIFY FAILED (exit codes: $codes) - the step finished, and what it produced is wrong."
@@ -204,7 +226,7 @@ function Invoke-Step {
     Say "[$Name] final verify OK"
 
     $ok = $false
-    try { $ok = [bool](& $Postcondition) }
+    try { $ok = Gate $Postcondition }
     catch { Stop-Chain "[$Name] postcondition threw: $_" }
     if (-not $ok) {
         Stop-Chain "[$Name] postcondition FAILED (exit codes: $codes). The step finished without doing what it claims to do."

@@ -4,7 +4,15 @@
 # 0.23 s an image and 1.67 s a video single-threaded: ~8 h for 81,364 assets,
 # roughly 2 h across six shards.
 $log = 'D:\_PhotoAudit\thumbs-chain.log'
-function Say($m) { "$((Get-Date).ToString('HH:mm:ss'))  $m" | Tee-Object -FilePath $log -Append }
+# Add-Content + Write-Host, never Tee-Object: Tee writes the line to the OUTPUT
+# stream too, so a Say inside an Invoke-Step gate lands in that gate's return
+# value and a non-empty array is $true. See chain_mirror_h.ps1 for the night
+# that cost.
+function Say($m) {
+    $line = "$((Get-Date).ToString('HH:mm:ss'))  $m"
+    Add-Content -Path $log -Value $line
+    Write-Host $line
+}
 
 Say 'waiting for the H: ingest to finish'
 while ($true) {

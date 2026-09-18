@@ -117,6 +117,67 @@ Check 'halted on the verify' ($script:HALT -like '*VERIFY FAILED*') $true
 Check 'killed the work rather than letting it continue' ($el -lt 60) $true
 
 Write-Host ''
+Write-Host '7. a gate that LOGS before answering must still be able to say no'
+# The 2026-09-18 failure, exactly. chain_mirror_h.ps1 logged with
+# `... | Tee-Object -FilePath $log -Append`, which writes the line to the OUTPUT
+# stream as well as the file. So a Postcondition that said two things and then
+# returned $false emitted @('...', '...', $false), and [bool] of a non-empty
+# array is $true. The chain exited 0 with 172.5 GB unsent, the scheduled task
+# went Ready instead of restarting, and - worse - the -Verify gate in that chain
+# had never been able to fail at all.
+#
+# These fakes emit to the output stream on purpose. A runner that cannot be
+# lied to by a chatty gate is the thing being tested, not the two chains that
+# were fixed.
+$script:HALT = $null
+try {
+    Invoke-Step -Name 'test-chatty-postcondition' `
+        -Preflight { $true } `
+        -Start { Start-Sleeper 2 } `
+        -Progress { 5 } `
+        -Postcondition { 'files still to send: 52'; 'failing on purpose'; $false } `
+        -Verify { $true } `
+        -CheckpointMin 5
+} catch { }
+Check 'a chatty postcondition still halts' ($script:HALT -like '*postcondition FAILED*') $true
+
+$script:HALT = $null
+$started = $false
+try {
+    Invoke-Step -Name 'test-chatty-preflight' `
+        -Preflight { 'the one-file probe FAILED'; $false } `
+        -Start { $script:started = $true; Start-Sleeper 1 } `
+        -Progress { 1 } -Postcondition { $true } -Verify { $true }
+} catch { }
+Check 'a chatty preflight still halts' ($script:HALT -like '*preflight failed*') $true
+Check 'and the work never started' $started $false
+
+$script:HALT = $null
+$script:m = 0
+try {
+    Invoke-Step -Name 'test-chatty-verify' `
+        -Preflight { $true } `
+        -Start { Start-Sleeper 60 } `
+        -Progress { $script:m += 5; $script:m } `
+        -Postcondition { $true } `
+        -Verify { 're-derived 4 sampled row(s), 3 wrong'; $false } `
+        -CheckpointMin 0.02 -VerifyEvery 1
+} catch { }
+Check 'a chatty verify still halts' ($script:HALT -like '*VERIFY FAILED*') $true
+
+$script:HALT = $null
+try {
+    Invoke-Step -Name 'test-silent-gate' `
+        -Preflight { $true } `
+        -Start { Start-Sleeper 2 } `
+        -Progress { 5 } `
+        -Postcondition { } `
+        -Verify { $true } `
+        -CheckpointMin 5
+} catch { }
+Check 'a gate that answers NOTHING is a no, not a yes' ($script:HALT -like '*postcondition FAILED*') $true
+
+Write-Host ''
 Write-Host '6. a step cannot be added without its guards'
 $missing = $false
 try {

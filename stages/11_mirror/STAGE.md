@@ -24,13 +24,19 @@ destination's own evidence, never by reading back what was just written.
 | `stages/11_mirror/chain_mirror_h.ps1` | run the mirror supervised, and resume after the kills this machine hands out - its Postcondition FAILS while files remain, which is what makes the task restart |
 
 ## Tests
-- none yet for the upload itself: `mirror_to_h.py` is new (2026-09-18) and its
-  guards are watched at run time by `chain_mirror_h.ps1` - a one-file probe
-  before committing to 925 GB, a `-Verify` that re-derives sampled hashes from
-  the SOURCE rather than reading the mount, and a Postcondition that refuses to
-  call a partial upload finished. **Still debt:** nothing yet compares the
-  server-side `md5Checksum`, so the mirror is uploaded and not verified until
-  a Drive-scoped credential exists
+- `tests/test_mirror_to_h.py` - the uploader ran 655 GB with no test at all, and
+  every bug it had was found by watching it run, which is the most expensive way
+  to find any of them. Pins the `\\?\` exemption on the mount (learning 59), that
+  `MOUNT_DRIVE` follows `--dest` rather than a hardcoded `H:`, that
+  `copy_hashing` reports the bytes it WROTE with both digests, and that the
+  journal's column names - which the chain's `-Verify` and `Remaining` parse -
+  do not move
+- run-time guards in `chain_mirror_h.ps1`: a one-file probe before committing to
+  925 GB, a `-Verify` that re-derives sampled hashes from the SOURCE rather than
+  reading the mount, and a Postcondition that refuses to call a partial upload
+  finished. Those gates were inert until learning 58 was fixed
+- **Still debt:** nothing yet compares the server-side `md5Checksum`, so the
+  mirror is uploaded and not verified until a Drive-scoped credential exists
 
 ## Lessons
 | # | what this stage does about it | enforced by |
@@ -38,3 +44,4 @@ destination's own evidence, never by reading back what was just written.
 | 5 | a cloud mount's placeholders and free space are not what they look like | prose-only HERE; enforced in 02 ingest by `code:stages/02_ingest/ingest_from_h.py:learning 5` |
 | 17 | capacity comes from the account, not the mount | prose-only |
 | 25 | receipt is proven by the Drive client's operations queue | `code:stages/11_mirror/move_audio_to_h.py:operations` |
+| 59 | the long-path prefix stops at the mount, whose drive letter comes from `--dest` | `code:stages/11_mirror/mirror_to_h.py:MOUNT_DRIVE`, `test:tests/test_mirror_to_h.py:a mount path is returned unchanged` |

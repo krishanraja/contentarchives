@@ -1994,3 +1994,76 @@ is worse than an absent one, because its name reads as coverage.
 `--blocklist-also` recorded the 7 hashes and swept nothing for them, so the
 blocklist said 88 while the sweep had covered 81 - and the summary a person reads
 before approving a purge said nothing about the difference.
+
+## 58. A logger that writes to the output stream answers the question
+
+`chain_mirror_h.ps1` logged like this:
+
+    function Say($m) { "$(...)  $m" | Tee-Object -FilePath $log -Append }
+
+`Tee-Object` writes to the file *and to the pipeline*. So every `Say` inside an
+`Invoke-Step` gate put its own text into that gate's return value, and the
+runner cast the result with `[bool]`, which is `$true` for any non-empty array.
+
+The Postcondition said, in the log, exactly what it meant:
+
+    files still to send: 52
+    partial upload - failing on purpose so the task restarts and resumes
+
+and returned `$false`. The runner read success. The chain exited 0 with 172.5 GB
+unsent, the scheduled task went `Ready`, and it sat there all night. I had spent
+the preceding hour fixing the writer's exit code so that a throttle stop would
+restart the task - a real bug, correctly fixed - while the reason the task was
+not restarting sat one layer up, in the logging helper.
+
+The stall is the cheap half. The expensive half is that this chain's `-Verify`
+gate - the block whose entire purpose is to stop a run that is producing wrong
+output, the thing `steps.ps1` exists to make mandatory - **could never fail**,
+from the day it was written. It logged its findings before returning, so a
+verdict of "3 of 4 sampled hashes wrong" would have been read as pass. A gate
+that cannot fail is indistinguishable from a gate that passes, and nothing in
+the log looks wrong: the evidence is printed, in full, immediately above the
+line that ignores it.
+
+Two fixes, and only the second one generalises:
+
+  - the two chains that used `Tee-Object` now use `Add-Content` + `Write-Host`,
+    which is what the other four chains already did;
+  - **the runner takes the LAST value a gate emits**, so a block that talks
+    cannot be misread. A gate that emits nothing at all is a no, not a yes.
+
+Fixing only the call sites would have left the next chain free to do it again.
+When a helper can silently change what a guard *returns*, the guard is the thing
+that has to become unfoolable - learning 44's shape (`Invoke-Step` missing is
+indistinguishable from `Invoke-Step` approving), arriving by a new route.
+
+## 59. The prefix that works everywhere else is the one the mount rejects
+
+Two files were journalled `copy failed: [Errno 22] Invalid argument` on every run
+of the mirror, out of 82,111. Their destinations on H: already existed, at
+exactly the right size - so the correct outcome was `already-present`, a skip.
+
+`mirror_to_h.py` prefixed every path with `\?\` to survive long paths, which is
+right on D: and wrong on the Drive mount. DriveFS is a filter driver, not a
+volume, and it depends on the path normalisation that `\?\` exists to skip.
+On the mount:
+
+  - `os.path.exists(r"\?\H:\My Drive\...")` answers False for a file plainly there,
+  - and opening that path for write answers `[Errno 22] Invalid argument`.
+
+So the already-present check could not see the files, and the overwrite it fell
+through to could not happen. The purge hit the same wall from the other side a
+few hours earlier: `\?\H:\...` gave WinError 123 where the plain path worked.
+
+**What made it nearly invisible: 82,055 of the files were new.** Creating a file
+that does not exist yet survives the bad prefix. Only the handful of re-writes
+could fail, which is 0.002% of the run - small enough to read as two corrupt
+files rather than a wrong rule applied to every path.
+
+The prefix now stops at the mount's drive letter, and the letter comes from
+`--dest` rather than a hardcoded `H:`. It costs nothing here: the longest
+destination path in the library is 238 characters and none reaches 255.
+
+Generally: a compatibility shim that is correct on real volumes is not correct
+on a mount that emulates one, and the failure will surface on whichever
+operation you perform least.

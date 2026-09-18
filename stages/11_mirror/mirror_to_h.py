@@ -103,8 +103,38 @@ WAIT_SECONDS = 60
 MAX_WAIT_ROUNDS = 240        # 4 hours of waiting before giving up a batch
 
 
+# The drive the destination lives on. Set from --dest in main(); the default is
+# the drive of DEST_ROOT. lp() refuses to prefix anything on it - see below.
+MOUNT_DRIVE = os.path.splitdrive(DEST_ROOT)[0].lower()
+
+
 def lp(p: str) -> str:
-    return p if p.startswith(LONGPATH) else LONGPATH + p
+    r"""The \\?\ prefix - EXCEPT on the Drive mount, where it does not resolve.
+
+    DriveFS is a filter driver, not a real volume, and it relies on the path
+    normalisation that \\?\ exists to skip. On the mount, that prefix makes
+    os.path.exists answer False for a file that is plainly there, and opening an
+    existing file for write answer [Errno 22] Invalid argument. The purge hit
+    the same wall from the other side: \\?\H:\... gave WinError 123 where the
+    plain path worked.
+
+    Two files were reported "copy failed: [Errno 22] Invalid argument" on every
+    single run because of it. Their destinations were already present at exactly
+    the right size, so the correct outcome was "already-present" - but that
+    check is `os.path.exists(lp(dst))`, which could not see them, and the
+    overwrite it fell through to could not happen either. Mirroring 82,055 NEW
+    files hid the bug completely: CREATING a file that does not exist yet
+    survives the bad prefix, so only the handful of re-writes ever failed.
+
+    Dropping the prefix on the mount costs nothing measurable here: the longest
+    destination path in the library is 238 characters and not one reaches 255.
+    Source paths on D: still get it - that is where the long paths actually are.
+    """
+    if p.startswith(LONGPATH):
+        return p
+    if os.path.splitdrive(p)[0].lower() == MOUNT_DRIVE:
+        return p
+    return LONGPATH + p
 
 
 def _accounts():
@@ -400,6 +430,12 @@ def main() -> int:
         if gb < 0.5:
             print("  WARNING: this sample is too small to measure anything.")
             print("  Use --band 50-300 for a throughput figure.")
+
+    # Before the first lp() call on a destination path: --dest may put the
+    # mirror on a different drive than DEST_ROOT, and lp() has to know which
+    # drive is the mount so it can leave those paths unprefixed.
+    global MOUNT_DRIVE
+    MOUNT_DRIVE = os.path.splitdrive(os.path.abspath(a.dest))[0].lower()
 
     os.makedirs(lp(a.dest), exist_ok=True)
     t0 = time.time()

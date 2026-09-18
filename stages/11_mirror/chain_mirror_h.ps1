@@ -19,7 +19,21 @@
 # upload is not a finished one, and the only honest way to say so is to fail.
 $ErrorActionPreference = 'Stop'
 $log = 'D:\_PhotoAudit\mirror-h-chain.log'
-function Say($m) { "$((Get-Date).ToString('HH:mm:ss'))  $m" | Tee-Object -FilePath $log -Append }
+# Log to the file and the CONSOLE, never to the output stream.
+#
+# This was `| Tee-Object -FilePath $log -Append`, which writes the line to the
+# pipeline as well as the file. Every Say inside a Preflight, Verify or
+# Postcondition block therefore became part of that block's RETURN VALUE, and a
+# non-empty array casts to $true. On 2026-09-18 the Postcondition said "partial
+# upload - failing on purpose so the task restarts" and returned $false, the
+# runner read it as success, the chain exited 0 with 172.5 GB unsent, and the
+# task sat Ready all night instead of restarting. The -Verify gate was inert in
+# this chain for the same reason, from the day it was written.
+function Say($m) {
+    $line = "$((Get-Date).ToString('HH:mm:ss'))  $m"
+    Add-Content -Path $log -Value $line
+    Write-Host $line
+}
 
 $repo = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 $py   = "$repo\stages\11_mirror\mirror_to_h.py"
