@@ -125,9 +125,26 @@ ending; it does NOT survive a reboot. If the state is not `Running`, re-arm:
 
     pwsh -NoProfile -File guards\arm.ps1 -Chain chain_mirror_h.ps1
 
-**Progress, from disk, never from memory:**
+**Progress, from disk, never from memory.** Count BOTH outcomes - a file already
+present on H: at the right size is journalled `already-present`, not `written`,
+and counting only `written` understates the total and reads like files went
+missing:
 
-    Import-Csv D:\_PhotoAudit\h-mirror.csv | Where-Object outcome -eq 'written' | Measure-Object
+    $j = Import-Csv D:\_PhotoAudit\h-mirror.csv
+    @($j | Where-Object { $_.outcome -eq 'written' -or $_.outcome -eq 'already-present' }).Count
+    # denominator: (@(Get-Content D:\_PhotoAudit\INVENTORY.csv).Count) - 1
+
+The journal also holds one row per ATTEMPT, so a file deferred five times has
+five rows. `Measure-Object` on the whole file counts attempts, not files.
+
+**No watcher is running.** Two background waits were killed within minutes by
+this machine's low-memory watchdog (3.6 GB free of 15.8, held by codex, ChatGPT,
+claude and the browser - not by the mirror, which uses 14 MB). Nothing is lost by
+that: the scheduled task has `RestartCount 99` and the writer resumes from the
+journal, so the run continues unobserved. Read the log rather than expecting a
+report:
+
+    Get-Content D:\_PhotoAudit\mirror-h-chain.log -Tail 20
 
 ### WHAT KRISH WANTS, IN HIS ORDER
 
