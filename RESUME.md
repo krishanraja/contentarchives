@@ -221,7 +221,10 @@ of the 278 until the hash verdict exists**, and never the five DJI stubs.
 The write rate is NOT the ETA. Bytes land in a local cache on **C:** and upload
 behind it; the queue draining is the real signal, and it drains in steps.
 
-### FOUR TRAPS FOUND ON 2026-09-18, ALL FIXED, ALL WORTH KNOWING
+### TRAPS FOUND ON 2026-09-18, ALL FIXED, ALL WORTH KNOWING
+
+(No count in this heading. It said FOUR for about an hour, and then there were
+six.)
 
 1. **A gate that logged could never say no** (learning 58). `Say` used
    `| Tee-Object -FilePath $log -Append`, which writes the line to the OUTPUT
@@ -250,6 +253,41 @@ behind it; the queue draining is the real signal, and it drains in steps.
    never by absence, because an unmounted drive makes thousands of files look
    absent and `reconcile_disk.py` is additive by design. Their hashes are on the
    no-reingest list so a phone ingest cannot restore them.
+
+### PHASE A: WHERE IT STANDS (2026-09-18, 23:00)
+
+- **A1 the blocklist - DONE and LIVE.** All four ingest paths covered; use
+  `ingest_tree.py` for a phone, a card or a folder.
+- **A2 `--traces-only` - DONE.** And the bug found while adding it mattered
+  more: the purge SUMMARY was computed over `sweep` while the ACTIONS keyed on
+  `targets`, so the report a person approves promised 117 tag rows and the sweep
+  removed fewer. Learning 61.
+- **A3 arm the fortnightly ingest - BLOCKED, deliberately.** `arm.ps1` registers
+  ONE task, `contentarchives-chain`, and the mirror is using it. Arming the
+  ingest now would displace the upload. Do it after the mirror reports 0 left.
+- **A4 `refresh.py` - already fixed.** `python tools/refresh.py --check` passes
+  and writes nothing, so `state/` agrees with the artefacts. Overall field
+  completeness 86.1%; `person` is still the real gap.
+- **A5 the USN change journal - NEEDS KRISH.** It changes a system facility and
+  wants admin, so it is not mine to run:
+
+      fsutil usn createjournal m=32M a=8M D:
+
+  Seven files vanished from the library on 2026-09-18 and no record of the
+  deletion existed anywhere. It turned out to be Krish himself. Next time the
+  answer should come from a log rather than an investigation.
+
+- **`lib-index.pickle` is ABSENT**, so the "delete the dedup cache after
+  anything that removes library files" step is already satisfied. Check before
+  assuming it is owed.
+
+**A working note that cost five round trips tonight:** never build a file
+containing Windows paths through a shell - not `python -c`, and not even a
+quoted heredoc, which still ate a backslash and produced
+`SyntaxWarning: invalid escape sequence '\I'`. Write such files with the file
+tool and run them. `\\?\` and `D:\...` in a `-c` string arrive mangled, and the
+error it produces (`unterminated string literal`) points at the quoting rather
+than at the cause.
 
 ### DONE TONIGHT
 
