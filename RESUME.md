@@ -147,9 +147,13 @@ ending; it does NOT survive a reboot. If the state is not `Running`, re-arm:
    purged hash by CONTENT in both `ingest_folder` and `ingest_archive`, journals
    every refusal to `D:\_PhotoAudit\autopilot-blocked.csv`, and gates the hash on
    a size match so 88 files cost no throughput. Pinned by
-   `tests/test_blocklist_hook.py`. The other ingest paths -
-   `ingest_tree.py`, `ingest_from_h.py`, `extract_zip_media.py` - do NOT yet
-   call it, so route a phone through `autopilot.py` or add the hook there first.
+   `tests/test_blocklist_hook.py`. **All four ingest paths are covered**:
+   `autopilot.py` and `ingest_tree.py` call it directly, and `ingest_from_h.py`
+   and `extract_zip_media.py` both delegate placement to `ingest_tree.py` by
+   subprocess. **Use `ingest_tree.py` for a phone, a card or a folder** - it is
+   the documented tool and it is hooked. The only residual is that blocked bytes
+   can transit a staging folder before being refused; they never enter the
+   library.
 
 ### THE MIRROR: MEASURED NUMBERS, NOT ESTIMATES
 

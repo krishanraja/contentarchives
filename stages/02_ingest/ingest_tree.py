@@ -148,6 +148,22 @@ def main() -> None:
                   flush=True)
         name = os.path.basename(src)
 
+        # THE NO-REINGEST LIST, BEFORE ANYTHING ELSE.
+        #
+        # This is the tool ROADMAP Phase B names for "a phone, a card, a
+        # folder" - so it is the path the ten communal phones will actually
+        # travel, and it was one of three that did not enforce the blocklist
+        # when the hook went into autopilot.py. A blocklist enforced on one
+        # path of four reads as coverage.
+        #
+        # Keyed on content, so a purged file renamed by a phone's gallery is
+        # still refused; the size gates the hash, so files that are not
+        # candidates are never read.
+        if ap.is_blocked(src, size):
+            rows.append(["blocked", src, "", "on the no-reingest list"])
+            stats["blocked"] += 1
+            continue
+
         dup_of = None
         cands = by_size.get(size, ())
         if cands:

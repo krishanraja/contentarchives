@@ -101,11 +101,27 @@ gates the hash, so 88 files cost no throughput: a candidate whose size is not
 blocked is admitted without being read. Pinned by `tests/test_blocklist_hook.py`
 (22 checks), which proves the size gate by making `full_hash` RAISE.
 
-**Still open, and it matters before the phones arrive:** only `autopilot.py`
-calls the hook. `ingest_tree.py`, `ingest_from_h.py` and
-`extract_zip_media.py` do not, so route a phone through `autopilot.py` or add
-the call to those three first. A blocklist enforced on one path of four is the
-same shape of mistake as an inert one - it reads as coverage.
+**All four ingest paths are covered, and only two hooks were needed.**
+`autopilot.py` and `ingest_tree.py` call `is_blocked` directly. The other two
+delegate: `ingest_from_h.py` copies a batch into `P.H_STAGE` and then runs
+`ingest_tree.py --apply` on each routed subfolder by subprocess, and
+`extract_zip_media.py` extracts to `D:\_zip_extract` and hands its personal side
+to the same tool. So nothing reaches the library without passing the gate.
+
+Checking that was the point. The first version of this note said three paths
+were unhooked and told the next session to route phones through `autopilot.py` -
+advice that would have been wrong in the other direction, because
+`ingest_tree.py` is the documented tool for a phone and is now the better path.
+Delegation is coverage, but only once you have read the delegation.
+
+**The residual, stated precisely:** blocked bytes can still be COPIED INTO A
+STAGING FOLDER before being refused - `P.H_STAGE`, `D:\_zip_extract`, and
+`D:\_Staging\from-old-zips\work` for the work side, which is not ingested at all
+and is left for a human. They never enter the library, and `ingest_from_h`
+rmtree's its stage after each batch, but a purged file can exist on disk for the
+length of one batch. Hooking the copy loops as well would stop that; it needs
+the hash before the copy, which on a Drive mount means hydrating the file to
+read it, so it is not free.
 
 While wiring it up, the blocklist itself turned out to hold seven rows with a
 SIZE in the `Hash` column, written by `drop_removed_rows.py` (learning 60).
