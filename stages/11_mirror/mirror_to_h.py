@@ -81,9 +81,24 @@ FIELDS = ["when", "source", "dest", "bytes", "blake2b", "md5", "outcome"]
 CHUNK = 8 << 20
 LONGPATH = "\\\\?\\"
 
-# Throttles. The cache floor is the one that protects the machine.
-QUEUE_CEILING = 400          # pending DriveFS operations before we wait
-CACHE_FLOOR_GB = 40.0        # stop writing if H:'s cache volume drops below
+# Throttles.
+#
+# THE CACHE FLOOR IS THE GATE. THE QUEUE IS INFORMATIONAL.
+#
+# QUEUE_CEILING was 400, a number I invented - learning 54 exactly, a threshold
+# nobody measured. DriveFS's `operations` table sits naturally around 380-450
+# while uploading steadily, so the mirror spent hours oscillating between
+# "waiting: queue 423 (ceiling 400)" and "queue 398 - resuming", making almost
+# no progress while Drive was perfectly willing to accept more. Measured
+# 2026-09-18: the true depth drifted 408 -> 384 -> 382 -> 380 while the writer
+# sat idle believing it was backed up.
+#
+# What actually protects this machine is disk: DriveFS stages through
+# %LOCALAPPDATA%\Google\DriveFS on C:, so running out of cache is the failure
+# that hurts. The queue ceiling is now high enough to catch a genuine runaway
+# (DriveFS falling badly behind) and nothing tighter.
+QUEUE_CEILING = 3000         # a real backlog, not the normal working level
+CACHE_FLOOR_GB = 40.0        # the gate: stop if C:/H: headroom drops below this
 WAIT_SECONDS = 60
 MAX_WAIT_ROUNDS = 240        # 4 hours of waiting before giving up a batch
 
@@ -100,8 +115,24 @@ def _accounts():
 
 
 def _snapshot(db: str, tag: str):
+    r"""Copy the metadata db AND its write-ahead log before reading it.
+
+    Copying only `metadata_sqlite_db` reads the last COMMITTED state and misses
+    everything still in `metadata_sqlite_db-wal`, which on 2026-09-18 was 63 MB.
+    Measured three times, seconds apart: 408 vs 384, 382 vs 382, 382 vs 380. So
+    the number was stale by up to 26 operations and could sit frozen while the
+    real value moved - which is how the throttle came to wait on a figure that
+    looked dead.
+    """
     tmp = os.path.join(tempfile.gettempdir(), "dfs_mirror_{}.db".format(tag))
     shutil.copy2(db, tmp)
+    for suffix in ("-wal", "-shm"):
+        side = db + suffix
+        if os.path.exists(side):
+            try:
+                shutil.copy2(side, tmp + suffix)
+            except OSError:
+                pass
     con = sqlite3.connect(tmp)
     con.text_factory = bytes
     return con
@@ -256,12 +287,20 @@ def wait_for_room(say=print) -> bool:
     for i in range(MAX_WAIT_ROUNDS):
         q = queue_depth()
         free = cache_free_gb()
-        if q is None:
-            say("  DriveFS queue UNREADABLE - refusing to keep writing blind")
-            return False
         if free is None:
-            say("  cannot read H: free space - refusing to keep writing blind")
+            say("  cannot read the cache headroom - refusing to write blind")
             return False
+        # An unreadable queue is NOT a reason to stop any more.
+        #
+        # It used to be: `if q is None: return False`. On 2026-09-18 that ended
+        # a 781-minute run with 497 GB unsent, because the queue read failed
+        # once. The queue is now informational - the cache floor is what makes
+        # writing unsafe - so an unreadable queue is reported and the run
+        # continues on the constraint that actually matters.
+        if q is None:
+            say("  DriveFS queue unreadable; continuing on cache headroom "
+                "({:.1f} GB free, floor {:.0f})".format(free, CACHE_FLOOR_GB))
+            return free >= CACHE_FLOOR_GB
         if q <= QUEUE_CEILING and free >= CACHE_FLOOR_GB:
             if i:
                 say("  queue {:,}, cache {:.1f} GB free - resuming".format(q, free))
