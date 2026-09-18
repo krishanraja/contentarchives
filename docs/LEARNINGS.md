@@ -2067,3 +2067,43 @@ destination path in the library is 238 characters and none reaches 255.
 Generally: a compatibility shim that is correct on real volumes is not correct
 on a mount that emulates one, and the failure will surface on whichever
 operation you perform least.
+
+## 60. A value read from an assumed column is a value invented
+
+`drop_removed_rows.py` fed the no-reingest list - the only thing standing
+between purged content and the ten phones still to be ingested. On its first
+real use it appended this, under a header of `Hash,Bytes,Reason,When`:
+
+    73208,IMG-20211121-WA0000.jpg,"removed by Krish on purpose",2026-09-18T21:41:20
+
+A SIZE in the `Hash` column and a FILENAME in the `Bytes` column, because
+`hashes_for()` read column 1 of headerless `MIGRATION-HASHES.csv` as the hash.
+That column is the size: the layout is `path, bytes, hash`. Seven rows that can
+never match a real hash, in the ledger whose entire purpose is matching hashes,
+and they break any reader parsing `Bytes` as an integer.
+
+I then told Krish the seven files were blocked from re-ingest.
+
+**Two things made it survivable, and neither was skill.** The original purge had
+already blocklisted all 88 hashes including those seven, so the files were in
+fact protected - the bad rows were corrupt duplicates rather than the only
+defence. And the tool kept a `.bak-rowdrop` before rewriting the record, so the
+real hashes were still recoverable after the rows had been dropped from both
+live records and the index rebuilt past them. Without that backup the hashes
+would have been gone from every record on the machine.
+
+**The fix is to stop reading positions.** A blake2b-256 digest is exactly 64 hex
+characters; a byte count, a filename and a timestamp are all obviously not. So
+the hash is now found by SHAPE, scanning every field of the row, and the size by
+being a positive integer. Position is never consulted.
+
+This is learning 56 wearing different clothes - there, a per-path view joined on
+hash invented rows and every figure drawn from it was wrong; here, a column
+index assumed a layout and every value written from it was wrong. Both are a
+derived value trusted because the code that produced it looked reasonable.
+
+**And the part that generalises furthest:** stage 04 had NO TESTS AT ALL, and a
+tool that writes to a durable ledger was added to it. The first thing that tool
+did was corrupt the ledger. "Covered at run time" is not coverage - `--dry-run`
+printed `7 of them carry a hash in the records`, which was true, and said
+nothing about what those values were.

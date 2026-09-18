@@ -30,7 +30,15 @@ disk and reconciled against the records.
 | `tools/verify_inventory.py` | re-probe videos and check the inventory recorded the truth |
 
 ## Tests
-- none yet: covered only by `verify_inventory.py` at run time (debt)
+- `tests/test_drop_removed_rows.py` - the tool that feeds the no-reingest list
+  corrupted it on its first use, writing a SIZE into the `Hash` column because
+  it read column 1 of headerless `MIGRATION-HASHES.csv` when the layout is
+  `path, bytes, hash`. Pins that the hash is found by SHAPE (64 hex) and never by
+  position, that the blocklist columns follow their header, that a listed path
+  which still exists stops the whole run, and that the original record is kept
+  as a `.bak` before any rewrite
+- `build_inventory.py` and the origin map are still covered only by
+  `verify_inventory.py` at run time (debt)
 
 ## Lessons
 | # | what this stage does about it | enforced by |
@@ -38,3 +46,4 @@ disk and reconciled against the records.
 | 4 | an extension is sanity-checked against size | `code:stages/04_inventory/build_inventory.py:learning 4` |
 | 8 | compression settings are per source and measured (compression is abandoned) | prose-only |
 | 16 | the manifest is reconciled against the disk, absences explained | `code:tools/check_manifest.py:accepted-absences` |
+| 60 | a hash is identified by SHAPE, never by column position | `code:stages/04_inventory/drop_removed_rows.py:def hashlike`, `test:tests/test_drop_removed_rows.py:the hash is the 64-hex value, not the size` |

@@ -52,6 +52,7 @@ import csv
 import datetime as dt
 import io
 import os
+import re
 import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -84,27 +85,58 @@ def read_list(path: str) -> list[str]:
     return out
 
 
-def hashes_for(targets: set[str]) -> dict[str, str]:
-    """path -> hash, from whichever record carries one. Read BEFORE the rewrite."""
-    found: dict[str, str] = {}
+HEX64 = re.compile(r"^[0-9a-fA-F]{64}$")
+
+
+def hashlike(v) -> bool:
+    """A blake2b-256 digest is 64 hex characters. A byte count never is."""
+    return isinstance(v, str) and bool(HEX64.match(v.strip()))
+
+
+def hashes_for(targets: set[str]) -> dict[str, tuple[str, str]]:
+    r"""path -> (hash, bytes). Read BEFORE the rewrite; either may be "".
+
+    THE HASH IS FOUND BY SHAPE, NEVER BY COLUMN POSITION.
+
+    The first version of this function read column 1 of MIGRATION-HASHES.csv as
+    the hash. That column is the SIZE - the layout is `path, bytes, hash` - so
+    it wrote `73208` into PURGED-HASHES.csv's `Hash` column and the FILENAME
+    into its `Bytes` column. Seven files were reported to Krish as blocked from
+    re-ingest and were not blocked at all, and the blocklist gained seven rows
+    that can never match a real hash and that break any reader parsing `Bytes`
+    as an integer. The tool that exists to stop deleted content coming back had
+    quietly written nonsense into the one file that stops it.
+
+    It is the same mistake as learning 56 in a different costume: a value taken
+    from an assumed position in a record whose shape was never checked.
+
+    A 64-character hex string is unmistakable, and a size, a filename and a
+    timestamp are all obviously not one - so the shape is the safe key.
+    `store.content_hash` is blake2b-256 everywhere in this project, which is
+    exactly 64 hex characters.
+    """
+    found: dict[str, tuple[str, str]] = {}
     for name, col, header in RECORDS:
         path = os.path.join(AUDIT, name)
         if not os.path.exists(path):
             continue
-        fh = io.open(path, encoding="utf-8", newline="")
-        if header:
-            for r in csv.DictReader(fh):
-                p = norm(r.get(col) or "")
-                if p in targets:
-                    for k in ("Hash", "hash", "blake2b", "Blake2b"):
-                        if r.get(k):
-                            found.setdefault(p, r[k])
-                            break
-        else:
-            for row in csv.reader(fh):
-                if len(row) > 1 and norm(row[0]) in targets:
-                    found.setdefault(norm(row[0]), row[1])
-        fh.close()
+        with io.open(path, encoding="utf-8", newline="") as fh:
+            if header:
+                rows = ((norm(r.get(col) or ""),
+                         [v for v in r.values() if isinstance(v, str)])
+                        for r in csv.DictReader(fh))
+            else:
+                rows = ((norm(r[0]), list(r))
+                        for r in csv.reader(fh) if r)
+            for p, values in rows:
+                if not p or p not in targets or p in found:
+                    continue
+                h = next((v.strip().lower() for v in values if hashlike(v)), "")
+                nbytes = next((v.strip() for v in values
+                               if isinstance(v, str) and v.strip().isdigit()
+                               and int(v.strip()) > 0), "")
+                if h:
+                    found[p] = (h, nbytes)
     return found
 
 
@@ -209,7 +241,7 @@ def main() -> int:
         if new:
             wr.writerow(["when", "path", "hash", "reason", "records"])
         for p in listed:
-            wr.writerow([now, p, known.get(norm(p), ""), a.reason,
+            wr.writerow([now, p, known.get(norm(p), ("", ""))[0], a.reason,
                          ";".join("{}={}".format(k, v) for k, v in counts.items())])
         fh.flush()
         os.fsync(fh.fileno())
@@ -217,24 +249,32 @@ def main() -> int:
     print("journalled {} row(s) to {}".format(len(listed), JOURNAL))
 
     if a.block:
+        # The columns are Hash,Bytes,Reason,When - the order purge_content.py
+        # writes. Writing a filename where the size belongs is how the first
+        # version of this tool corrupted the one ledger that stops purged
+        # content coming back.
         have = set()
-        if os.path.exists(BLOCKLIST):
-            for row in csv.reader(io.open(BLOCKLIST, encoding="utf-8", newline="")):
-                if row:
+        fresh = not os.path.exists(BLOCKLIST)
+        if not fresh:
+            for row in csv.reader(io.open(BLOCKLIST, encoding="utf-8",
+                                          newline="")):
+                if row and hashlike(row[0]):
                     have.add(row[0].strip().lower())
         added = 0
         with io.open(BLOCKLIST, "a", encoding="utf-8", newline="") as fh:
             wr = csv.writer(fh)
+            if fresh:
+                wr.writerow(["Hash", "Bytes", "Reason", "When"])
             for p in listed:
-                h = known.get(norm(p), "")
-                if h and h.lower() not in have:
-                    wr.writerow([h, os.path.basename(p), a.reason, now])
-                    have.add(h.lower())
+                h, nbytes = known.get(norm(p), ("", ""))
+                if h and h not in have:
+                    wr.writerow([h, nbytes, a.reason, now])
+                    have.add(h)
                     added += 1
             fh.flush()
             os.fsync(fh.fileno())
         print("blocked {} new hash(es) in {}".format(added, BLOCKLIST))
-        missing = [p for p in listed if not known.get(norm(p))]
+        missing = [p for p in listed if not known.get(norm(p), ("", ""))[0]]
         if missing:
             print("NOT blocked - no hash on record for {} file(s):".format(len(missing)))
             for p in missing:
