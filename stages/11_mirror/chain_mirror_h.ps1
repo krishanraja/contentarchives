@@ -79,6 +79,19 @@ Invoke-Step -Name 'mirror-to-h' -ExpectedUnits 82112 -CheckpointMin 15 -VerifyEv
         # made; the same mistake here would be 82,000 files of something.
         $out = & python -u $py --limit 1 2>&1 | Out-String
         foreach ($ln in ($out -split "`n" | Where-Object { $_ -match 'written|failed|LOCAL WRITE' })) { Say "    $($ln.Trim())" }
+        # A FAILED PROBE IS A FAILED PREFLIGHT.
+        #
+        # This used to accept the run whenever the output merely CONTAINED
+        # "nothing left to send" - a phrase the status header prints for its own
+        # reasons - so on 2026-09-18 the probe reported "written 0, already there
+        # 0, failed 1", the log said "the one-file probe did not write anything",
+        # and the very next line said "preflight OK". A preflight that announces
+        # the failure and then proceeds is worse than none: it puts the evidence
+        # in the log and the decision somewhere else.
+        if ($out -match 'failed\s+[1-9]') {
+            Say '  the one-file probe FAILED - refusing to commit to the run'
+            return $false
+        }
         if ($out -notmatch 'written\s+[1-9]' -and $out -notmatch 'nothing left to send') {
             Say '  the one-file probe did not write anything'; return $false
         }

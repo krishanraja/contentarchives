@@ -366,6 +366,7 @@ def main() -> int:
     t0 = time.time()
     sent = skipped = failed = 0
     sent_b = 0
+    throttled = False
     pending: list = []
 
     for i, (src, size, want) in enumerate(todo, 1):
@@ -385,6 +386,7 @@ def main() -> int:
             if not wait_for_room():
                 print("\nSTOPPING on throttle. Everything sent so far is "
                       "journalled; re-run to continue.")
+                throttled = True
                 break
 
         # A single file bigger than the cache headroom can never be safe to
@@ -484,6 +486,24 @@ def main() -> int:
     print("DriveFS queue now: {}".format(
         "UNREADABLE" if q is None else "{:,}".format(q)))
     print("journal: {}".format(JOURNAL))
+
+    # A THROTTLE STOP MUST EXIT NON-ZERO, OR THE NIGHT ENDS SILENTLY.
+    #
+    # On 2026-09-18 the run stopped after 781 minutes because queue_depth()
+    # returned None and the throttle refused to write blind - the guard working
+    # exactly as intended. But it exited 0, the Task Scheduler read that as
+    # success, the task went Ready, and 1,639 files carrying 497 GB - all of the
+    # large video - sat unsent with nothing to restart it. chain_mirror_h.ps1's
+    # Postcondition fails on purpose so the task restarts; a clean exit walks
+    # straight past it.
+    #
+    # Unfinished is not success. RestartCount then does its job and the next run
+    # resumes from the journal.
+    if throttled:
+        print()
+        print("exiting non-zero: the run is UNFINISHED. The supervisor restarts")
+        print("on a non-zero exit and the next run resumes from the journal.")
+        return 2
     return 0 if failed == 0 else 1
 
 
