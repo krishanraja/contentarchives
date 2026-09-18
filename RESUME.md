@@ -114,7 +114,7 @@ the sentence.
 
 ----
 
-## RIGHT NOW: the H: mirror is ARMED AND RUNNING (2026-09-19, 00:15)
+## RIGHT NOW: the H: mirror is ARMED, 27 files short (2026-09-18, 22:10)
 
 **FIRST COMMAND, before anything else:**
 
@@ -150,19 +150,31 @@ ending; it does NOT survive a reboot. If the state is not `Running`, re-arm:
 
 | | |
 |---|---|
-| to mirror | **~824 GB / 82,110 files** - the 101 GB null-byte `.jpg` is now DELETED rather than merely excluded, so this is the library's true size |
-| H: account | **2,048 GB limit, 1,463.6 GB free** (read from the Drive API, not guessed) |
-| write rate to cache | **44.7 MB/s** measured (3.01 GB / 69 s, quiet queue) |
-| cache fills in | ~5.2 h at that rate |
-| **DriveFS upload drain** | **18.7 operations/minute** measured over 273 s |
-| **honest ETA** | **~70 hours**, bounded by Drive's upload, not by us |
+| to mirror | **824.2 GB / 82,104 files** - the rebuilt index agrees with the disk; the 101 GB null-byte `.jpg` is gone from both |
+| journalled | **82,077 files / 688.1 GB** at 22:10 on 2026-09-18 - **27 files, 136.1 GB outstanding** |
+| what is left | every one of the 27 is over 2.7 GB: DJI drone clips, GoPro chapters, and one 18.6 GB phone video |
+| write rate to cache | **49.5 MB/s** measured (32.92 GB / 680 s) |
+| **upload rate off this machine** | **8.73 MB/s** sustained - 1,574 MB in 180 s from the adapter counters, machine otherwise idle |
+| **honest ETA for the last 136 GB** | **~4.4 hours**, bounded by Drive's upload, not by us |
 
-Progress at 00:40 on 2026-09-19: **8,579 files journalled**, task `Running`,
-writer pid alive, C: ~81 GB free, H: ~77 GB. It is working through the 33,743
-sub-1MB files first because the index is size-ordered, so "GB sent" stays near
-zero for the first few thousand files. That is expected, not a stall.
+**The write rate is not the ETA.** Bytes land in a local cache on **C:** and
+upload behind it. The cache only frees when an upload COMPLETES, which is why
+the last 27 files are slow: each one needs its size in headroom above the 40 GB
+floor before it can be written at all, and that headroom comes back at 8.73 MB/s.
+Measured across three minutes while diagnosing this: H: free rose 42.4 -> 48.0 GB
+on its own.
 
-**A REBUILD IS STILL OWED, and here is why the first one did not work.**
+**A flat queue count is not a stall.** I reported the queue FROZEN on the
+strength of four identical count samples. Comparing row IDENTITY in the
+`operations` table showed 245 -> 240 over the same window, and the adapter showed
+520 MB leaving in 60 s. There is no quota error, no 403 and no 429 anywhere in
+the 4.4 MB structured log. If the count looks stuck, compare rows, not counts.
+
+**THE REBUILD IS DONE (2026-09-18, 21:47): 82,104 files / 824.2 GB, and the
+101 GB row is gone.** Keep the paragraph below anyway - it is the reason a
+rebuild after any deletion is not optional.
+
+**Why the first rebuild did not work.**
 
 After deleting the 101 GB file, `build_db.py` ran for 760 s and still reported
 **82,112 files / 925.3 GB** with one row naming `1000002434.jpg`. That is not a
@@ -199,6 +211,36 @@ of the 278 until the hash verdict exists**, and never the five DJI stubs.
 
 The write rate is NOT the ETA. Bytes land in a local cache on **C:** and upload
 behind it; the queue draining is the real signal, and it drains in steps.
+
+### FOUR TRAPS FOUND ON 2026-09-18, ALL FIXED, ALL WORTH KNOWING
+
+1. **A gate that logged could never say no** (learning 58). `Say` used
+   `| Tee-Object -FilePath $log -Append`, which writes the line to the OUTPUT
+   stream as well as the file, so every `Say` inside an `Invoke-Step` gate landed
+   in that gate's return value and `[bool]` of a non-empty array is `$true`. The
+   mirror's Postcondition returned `$false` and was read as success: the chain
+   exited 0 with 172.5 GB unsent and the task sat `Ready` all night. Worse, that
+   chain's `-Verify` gate had never been able to fail. `Invoke-Step` now takes the
+   LAST value a gate emits, and a gate that emits nothing is a no.
+   **If a log line says a check failed and the next line says it passed, believe
+   the first one and look at the logger.**
+2. **The long-path prefix does not work on the Drive mount** (learning 59).
+   `\\?\H:\My Drive\...` makes `os.path.exists` answer False for a file that is
+   plainly there and makes opening an existing file for write answer
+   `[Errno 22]`. 82,055 NEW files hid it - creating a file that does not exist
+   survives the bad prefix, so only re-writes failed. `lp()` now stops at the
+   mount's drive letter, taken from `--dest`.
+3. **A deferral is not a decision.** The per-file headroom check journalled
+   DEFERRED and moved on, so the last 27 files - all over 2.7 GB, against a cache
+   that only frees as uploads complete - were deferred anew every run and never
+   sent. `wait_for_headroom(size)` now waits for room for THAT file.
+4. **A deletion stales every path-keyed record.** The 7 files Krish removed
+   himself were still in `INVENTORY.csv` and `MIGRATION-HASHES.csv`, so the
+   mirror retried them every run and its denominator could never reach zero.
+   `stages/04_inventory/drop_removed_rows.py` drops rows by NAMED LIST only -
+   never by absence, because an unmounted drive makes thousands of files look
+   absent and `reconcile_disk.py` is additive by design. Their hashes are on the
+   no-reingest list so a phone ingest cannot restore them.
 
 ### DONE TONIGHT
 
