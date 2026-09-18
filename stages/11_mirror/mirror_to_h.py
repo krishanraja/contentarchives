@@ -344,6 +344,53 @@ def wait_for_room(say=print) -> bool:
     return False
 
 
+def wait_for_headroom(size: int, say=print) -> bool:
+    r"""Wait until THIS file fits above the cache floor. False = it never did.
+
+    `wait_for_room` answers a different question - "is the cache healthy enough
+    to keep writing?" - and a healthy cache with 8 GB of headroom still cannot
+    take an 18.6 GB file. So the size has to be part of the condition.
+
+    Why this exists: the per-file check used to journal DEFERRED and move on,
+    which is why the last 27 files of an 824 GB mirror could never be sent. All
+    27 were over 2.7 GB, the cache only frees as uploads COMPLETE, so every run
+    deferred all of them within seconds and exited, the task restarted, and it
+    deferred them again. The counter sat at 27 for hours while the machine
+    looked busy.
+
+    It also broke the chain's preflight, which probes with `--limit 1`. The
+    index is size-ordered ascending, so the probe picks the SMALLEST outstanding
+    file - by then 2.74 GB - which deferred as well. The probe wrote nothing,
+    the preflight refused to commit to the run, and the mirror had stopped
+    itself for good with 136 GB outstanding.
+
+    Measured while finding this: the client uploads at 8.73 MB/s sustained, and
+    H:'s free space rose 42.4 -> 48.0 GB across three minutes as completed
+    uploads were evicted. The headroom returns on its own. The only thing
+    missing was the patience to wait for it.
+    """
+    need = size / (1 << 30)
+    for i in range(MAX_WAIT_ROUNDS):
+        free = cache_free_gb()
+        if free is None:
+            say("  cannot read the cache headroom - refusing to write blind")
+            return False
+        if need <= free - CACHE_FLOOR_GB:
+            if i:
+                say("  {:.1f} GB now fits ({:.1f} GB free, floor {:.0f})".format(
+                    need, free, CACHE_FLOOR_GB))
+            return True
+        if i == 0 or i % 5 == 0:
+            q = queue_depth()
+            say("  waiting for room for {:.1f} GB: {:.1f} GB free, floor {:.0f}"
+                ", queue {}".format(need, free, CACHE_FLOOR_GB,
+                                    "{:,}".format(q) if q is not None else "?"))
+        time.sleep(WAIT_SECONDS)
+    say("  waited {} minutes and {:.1f} GB never fit above the floor".format(
+        MAX_WAIT_ROUNDS * WAIT_SECONDS // 60, need))
+    return False
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(
         description=__doc__,
@@ -468,13 +515,23 @@ def main() -> int:
         # write here, whatever the queue says.
         free_gb = cache_free_gb()
         if free_gb is not None and size / (1 << 30) > (free_gb - CACHE_FLOOR_GB):
-            now = dt.datetime.now().isoformat(timespec="seconds")
-            pending.append([now, src, dest_for(src), size, "", "",
-                            "DEFERRED: {:.1f} GB needs more cache headroom "
-                            "than {:.1f} GB free".format(
-                                size / (1 << 30), free_gb)])
-            skipped += 1
-            continue
+            # WAIT for the room. Do not skip the file.
+            #
+            # Skipping is what stranded the last 27 files of the library: all of
+            # them over 2.7 GB, a cache that only frees as uploads complete, so
+            # every run deferred all 27 in seconds and exited for the task to
+            # restart and defer them again. See wait_for_headroom.
+            if not wait_for_headroom(size):
+                now = dt.datetime.now().isoformat(timespec="seconds")
+                pending.append([now, src, dest_for(src), size, "", "",
+                                "DEFERRED: {:.1f} GB and the cache never freed "
+                                "(was {:.1f} GB free)".format(
+                                    size / (1 << 30), free_gb)])
+                skipped += 1
+                # A throttle stop must exit non-zero so the task restarts.
+                throttled = True
+                break
+            free_gb = cache_free_gb()
 
         dst = dest_for(src)
         now = dt.datetime.now().isoformat(timespec="seconds")

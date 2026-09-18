@@ -152,6 +152,52 @@ check("the queue ceiling is above DriveFS's steady state (~450)",
       M.QUEUE_CEILING > 450, True)
 
 print()
+print("8. wait_for_headroom answers about THIS file's size, not the cache's mood")
+# The bug it exists to prevent: the per-file check journalled DEFERRED and moved
+# on, so the last 27 files of the library - every one over 2.7 GB, against a
+# cache that only frees as uploads complete - were deferred anew on every run
+# and never sent. It also deferred the chain's one-file probe, which made the
+# preflight refuse to start the run at all.
+_real_free = M.cache_free_gb
+_real_queue = M.queue_depth
+_real_rounds = M.MAX_WAIT_ROUNDS
+_real_wait = M.WAIT_SECONDS
+_said = []
+try:
+    # BOUND THE WAIT FIRST. The real values are 240 rounds with a sleep
+    # between each, so the failing case below would sit here for hours - a test
+    # that hangs is a test nobody runs, and this file exists because nobody was
+    # running one.
+    M.MAX_WAIT_ROUNDS = 2
+    M.WAIT_SECONDS = 0
+    M.queue_depth = lambda *a, **k: 123   # no 225 MB snapshot inside a test
+
+    # Plenty of room: returns at once, says nothing.
+    M.cache_free_gb = lambda: M.CACHE_FLOOR_GB + 50.0
+    check("a file that fits returns true immediately",
+          M.wait_for_headroom(int(2.7 * (1 << 30)), say=_said.append), True)
+    check("and it does not narrate a wait it never made", _said, [])
+
+    # Exactly at the floor is NOT room: the floor is a floor, not a target.
+    M.cache_free_gb = lambda: M.CACHE_FLOOR_GB + 2.0
+    check("a file larger than the headroom does not pass",
+          M.wait_for_headroom(int(3.0 * (1 << 30)), say=_said.append) is True,
+          False)
+
+    # An unreadable headroom must refuse rather than write blind.
+    _said2 = []
+    M.cache_free_gb = lambda: None
+    check("an unreadable cache refuses rather than guessing",
+          M.wait_for_headroom(int(1 * (1 << 30)), say=_said2.append), False)
+    check("and it says why", any("refusing to write blind" in s for s in _said2),
+          True)
+finally:
+    M.cache_free_gb = _real_free
+    M.queue_depth = _real_queue
+    M.MAX_WAIT_ROUNDS = _real_rounds
+    M.WAIT_SECONDS = _real_wait
+
+print()
 if FAILURES:
     print("{} FAILED: {}".format(len(FAILURES), ", ".join(FAILURES)))
     sys.exit(1)
