@@ -128,10 +128,30 @@ SIZE in the `Hash` column, written by `drop_removed_rows.py` (learning 60).
 `blocked_index()` therefore ignores and COUNTS any row without a 64-hex hash
 rather than trusting the file it reads.
 
-**A2. `purge_content.py` has no `--traces-only` mode.** It requires a file it
-can re-hash at the instant of deletion, so it cannot sweep a hash whose file is
-already gone. That gap left 7 thumbnails, 5 face vectors, 5 bounding boxes and
-117 tag rows behind on the first run.
+**A2. `--traces-only` exists. DONE 2026-09-18.** `purge_content.py
+--traces-only --blocklist-also <csv>` sweeps the derived copies of hashes whose
+files are already gone, and deletes no files at all. The normal path cannot do
+this by design: `verify()` re-hashes every target at the instant of deletion -
+the defence that stops a stale list destroying the wrong files - so a vanished
+file fails as "already gone" and can never become a target.
+
+It refuses three ways rather than doing something surprising: with `--list`
+(which has no meaning when nothing is being deleted), without
+`--blocklist-also` (nothing to sweep is not the same as nothing to do), and with
+`--also` (which deletes a file, and this mode exists because there is no file
+left to verify against). It journals no deletion, because there is none -
+writing a header-only record would put an empty entry in the audit trail and
+`audit_deletions.py` would count it.
+
+**And the bug found while adding it, which mattered more.** The trace sweep's
+COUNTS have always been computed over `sweep` - targets plus block-only hashes -
+while the ACTIONS keyed on `targets` alone. So the summary a person approves the
+purge from promised 117 tag rows, 5 face vectors and 5 bounding boxes, and the
+sweep then removed fewer. A report that overstates what was done is worse than
+one that understates it, because it is the report the decision is made on. Fixed
+at the three action sites: `content_tags.csv`, `zero_face`, `strip_cluster`.
+`PATH_RECORDS` correctly still keys on paths, because a block-only hash has no
+path to remove.
 
 **A3. Arm the fortnightly ingest.** `guards/arm.ps1`. CronCreate is
 session-scoped and expires after 7 days; a scheduled task is not.

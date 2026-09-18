@@ -208,6 +208,92 @@ check("and it is a set, so the caller cannot double-sweep",
       isinstance(got, set), True)
 
 print()
+print("6. --traces-only refuses three ways, and every refusal EXITS NON-ZERO")
+# The mode exists because `verify()` re-hashes every target at the instant of
+# deletion, so a file that has already vanished fails as "already gone" and can
+# never be a target - leaving its thumbnail, its description and the vector
+# describing the face in it behind.
+#
+# Each refusal must exit non-zero. A tool that prints STOPPING and exits 0 is
+# worse than one that crashes: Invoke-Step reads the exit code, and a chain
+# carries on. That is learning 58 from the other side, and my own check of these
+# refusals reported rc=0 for all four because `| head -3` was swallowing the
+# code - so this asserts the returncode directly and never through a pipe.
+PURGE = os.path.join(ROOT, "stages", "10_reclaim", "purge_content.py")
+for label, extra_args in (
+        ("without --blocklist-also there is nothing to sweep",
+         ["--traces-only"]),
+        ("--list has no meaning when nothing is deleted",
+         ["--traces-only", "--list", "x.csv", "--blocklist-also", "y.csv"]),
+        ("--also deletes a file, which this mode has none of",
+         ["--traces-only", "--blocklist-also", "y.csv", "--also", "D:\\x.jpg"]),
+        ("and --list is still required in the normal mode", [])):
+    cp = subprocess.run([sys.executable, PURGE] + extra_args,
+                        capture_output=True, text=True, errors="replace")
+    check(label, cp.returncode != 0, True)
+    check("  ... and it says STOPPING rather than failing silently",
+          "STOPPING" in (cp.stdout or "") + (cp.stderr or ""), True)
+
+print()
+print("7. the trace sweep ACTS on the same set it COUNTS")
+# The counts in the summary have always been computed over `sweep` - targets
+# plus block-only hashes - while the three actions keyed on `targets` alone. So
+# the summary a person approves the purge from promised 117 tag rows, 5 face
+# vectors and 5 bounding boxes, and the sweep then removed fewer. A report that
+# overstates what was done is worse than one that understates it, because it is
+# the report the decision is made on (learning 61).
+#
+# This is a SOURCE-LEVEL check, deliberately. Driving main() end-to-end would
+# need PC.TAGS, FACES, VFACES, CLUSTERS, THUMBS, BLOCKLIST, JOURNAL and CACHE
+# all redirected - and it would STILL reach the real D:\_PhotoAudit, because
+# PATH_RECORDS, DISPOSABLE and the intimate-sweep journal sweep are built from
+# P.AUDIT directly. A test that deletes the operator's real records to prove a
+# deletion works is not a test worth having.
+src = io.open(PURGE, encoding="utf-8").read()
+
+# EXACT substrings, not parsed slices.
+#
+# The first version of this check sliced the source:
+#
+#     src.split("kept, dropped = rewrite_csv(")[1].split(")")[0]
+#
+# which cuts at the FIRST ")" - the one closing `lower()` - so the slice ended
+# before `in sweep` ever appeared. The positive check failed, and the negative
+# check ("no longer on targets") PASSED, because both strings were absent from a
+# slice that contained neither. A false pass, in the test written to pin
+# learning 61, by exactly the mechanism learning 61 is about: an assertion that
+# agreed with me without examining the thing it claimed to examine.
+#
+# So each site is asserted as the whole expression, and the OLD form is asserted
+# absent - a negative that could only pass by the string genuinely being gone.
+FIXED = [
+    ("content_tags.csv",
+     "r[0].strip().lower() in sweep else r)",
+     "r[0].strip().lower() in targets else r)"),
+    ("zero_face",
+     "if not r or r[0].strip().lower() not in sweep:",
+     None),           # shares its line shape with strip_cluster; counted below
+    ("strip_cluster",
+     "if not r or r[0].strip().lower() not in sweep:",
+     None),
+]
+check("content_tags.csv is swept on `sweep`", FIXED[0][1] in src, True)
+check("content_tags.csv no longer keys on `targets`", FIXED[0][2] in src, False)
+
+# zero_face and strip_cluster are the two `not in` sites and their guard lines
+# are identical, so count rather than locate: BOTH must be on `sweep` and
+# NEITHER on `targets`.
+check("both face sites key on `sweep`",
+      src.count("if not r or r[0].strip().lower() not in sweep:"), 2)
+check("and neither still keys on `targets`",
+      src.count("if not r or r[0].strip().lower() not in targets:"), 0)
+
+# PATH_RECORDS is the one that must NOT change: a block-only hash has no path
+# on record, so there is nothing of it to remove from a path-keyed file.
+check("the path records still key on paths, because a blocked hash has none",
+      "in dead else r" in src, True)
+
+print()
 if FAILURES:
     print("{} FAILED: {}".format(len(FAILURES), ", ".join(FAILURES)))
     sys.exit(1)

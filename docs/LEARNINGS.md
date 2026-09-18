@@ -2107,3 +2107,42 @@ tool that writes to a durable ledger was added to it. The first thing that tool
 did was corrupt the ledger. "Covered at run time" is not coverage - `--dry-run`
 printed `7 of them carry a hash in the records`, which was true, and said
 nothing about what those values were.
+
+## 61. The summary a person approves must be computed over the set the action uses
+
+`purge_content.py` prints a block headed "what will be destroyed" and waits for
+`--apply`. It is the only place a human sees the blast radius of an irreversible
+deletion, and it is the basis on which the deletion is authorised.
+
+Those counts were computed over `sweep` - the target hashes plus the block-only
+hashes, everything whose derived copies must go. The three actions that then do
+the sweeping keyed on `targets` alone. So the summary said:
+
+    tag/description rows      :    117
+    face rows zeroed          :      5
+    cluster rows stripped     :      5
+
+and the run removed fewer than it promised, silently, with no discrepancy
+printed anywhere. The numbers were not wrong about what SHOULD go; they were
+wrong about what WOULD go, which is the only question the approval answers.
+
+**An overstating report is worse than an understating one.** An understated
+summary leads to a pleasant surprise and an audit that finds more done than
+expected. An overstated one means the operator believes something was destroyed
+that still exists - and for purged intimate content, "I already dealt with that"
+is precisely the belief you must not hold falsely. It is also invisible to
+testing that checks the tool does what it says, because the tool's own report is
+the thing that is wrong.
+
+This is a general shape and worth watching for anywhere a dry run exists: the
+count and the action must read the SAME variable, not two variables that happen
+to agree in the common case. Here they agreed whenever `--blocklist-also` was
+unused, which was every run until the one that needed it.
+
+The fix is three one-word changes and a test that reads the source of all three
+sites, because driving the tool end-to-end would have to redirect eight module
+constants and would STILL reach the real `D:\_PhotoAudit` - `PATH_RECORDS`,
+`DISPOSABLE` and the intimate-sweep journal sweep are built from `P.AUDIT`
+directly. A test that deletes the operator's real records to prove a deletion
+works is not a test worth having, so a weaker check honestly labelled beats a
+stronger one that cannot be run.

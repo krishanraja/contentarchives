@@ -196,9 +196,17 @@ def main() -> int:
     ap = argparse.ArgumentParser(
         description=__doc__,
         formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--list", required=True,
+    ap.add_argument("--list", default="",
                     help="CSV of Hash,Path to destroy - built and reviewed "
-                         "separately, never a glob")
+                         "separately, never a glob. Optional ONLY with "
+                         "--traces-only, where there is nothing left to delete")
+    ap.add_argument("--traces-only", action="store_true",
+                    help="sweep the derived copies of hashes that are ALREADY "
+                         "GONE from disk, and delete no files at all. The "
+                         "normal path re-hashes every target at the instant of "
+                         "deletion, so a hash whose file has vanished can never "
+                         "be a target and its thumbnails, descriptions and face "
+                         "vectors outlive it. Needs --blocklist-also.")
     ap.add_argument("--reason", default="user-directed purge of intimate content")
     ap.add_argument("--also", action="append", default=[],
                     help="an extra absolute path to destroy (a verified copy "
@@ -211,19 +219,55 @@ def main() -> int:
     ap.add_argument("--apply", action="store_true")
     a = ap.parse_args()
 
-    rows = read_list(a.list)
-    ok, bad = verify(rows)
-    print("targets listed        : {}".format(len(rows)))
-    print("verified by hash NOW  : {}".format(len(ok)))
-    print("refused               : {}".format(len(bad)))
-    for b in bad:
-        print("   {}".format(b))
-    if bad:
-        print()
-        print("STOPPING: the list and the disk disagree. Nothing has been")
-        print("touched. A deletion justified by a stale record is how 45")
-        print("irreplaceable files were lost here.")
-        return 1
+    # --traces-only: a purge for content that is ALREADY GONE.
+    #
+    # The normal path cannot do this, by design. `verify()` re-hashes every
+    # target at the instant of deletion - the defence that stopped a stale list
+    # destroying the wrong files - and a file that has vanished fails that check
+    # as "already gone". So a hash with no file can never become a target, and
+    # everything derived from it survives: its 512px thumbnail, the written
+    # description of what it showed, the vector describing the face in it.
+    #
+    # Measured after the 2026-09-18 run: 7 thumbnails, 5 face vectors, 5
+    # bounding boxes and 117 tag rows outlived the content they described,
+    # because those 7 files had been deleted by hand beforehand.
+    #
+    # This mode deletes NOTHING. It only sweeps, and it refuses to run without
+    # hashes to sweep, because a sweep with an empty set is a no-op that prints
+    # success.
+    if a.traces_only:
+        if a.list:
+            print("STOPPING: --traces-only deletes no files, so --list has no")
+            print("  meaning here. Run the normal purge for files that exist.")
+            return 1
+        if not a.blocklist_also:
+            print("STOPPING: --traces-only needs --blocklist-also to name the")
+            print("  hashes whose traces must go. Nothing to sweep is not the")
+            print("  same as nothing to do.")
+            return 1
+        if a.also:
+            print("STOPPING: --also DELETES a file, and --traces-only exists")
+            print("  precisely because there is no file left to verify against.")
+            return 1
+        rows, ok, bad = [], [], []
+        print("TRACES ONLY - no file will be deleted")
+    else:
+        if not a.list:
+            print("STOPPING: --list is required unless --traces-only is set.")
+            return 1
+        rows = read_list(a.list)
+        ok, bad = verify(rows)
+        print("targets listed        : {}".format(len(rows)))
+        print("verified by hash NOW  : {}".format(len(ok)))
+        print("refused               : {}".format(len(bad)))
+        for b in bad:
+            print("   {}".format(b))
+        if bad:
+            print()
+            print("STOPPING: the list and the disk disagree. Nothing has been")
+            print("touched. A deletion justified by a stale record is how 45")
+            print("irreplaceable files were lost here.")
+            return 1
 
     targets = {r["Hash"].strip().lower() for r in ok}
     extra = []
@@ -329,8 +373,11 @@ def main() -> int:
 
     print()
     print("=== what will be destroyed ===")
-    print("  files in the library      : {:>6}  {:>10,} bytes".format(
-        len(ok), sum(r["_bytes"] for r in ok)))
+    if a.traces_only:
+        print("  files in the library      :      0  (--traces-only)")
+    else:
+        print("  files in the library      : {:>6}  {:>10,} bytes".format(
+            len(ok), sum(r["_bytes"] for r in ok)))
     for p, b, _ in extra:
         print("  verified copy outside it  : {}  ({:,} bytes)".format(p, b))
     print("  thumbnails and frames     : {:>6}".format(len(thumbs)))
@@ -386,9 +433,16 @@ def main() -> int:
     entries += [(p, b, a.reason + " (copy outside the library)",
                  "hash {} re-verified at deletion".format(h[:16]))
                 for p, b, h in extra]
-    journal(entries)
-    print()
-    print("journalled {} deletion(s) FIRST: {}".format(len(entries), JOURNAL))
+    if entries:
+        journal(entries)
+        print()
+        print("journalled {} deletion(s) FIRST: {}".format(len(entries), JOURNAL))
+    else:
+        # Nothing is being deleted, so there is nothing to journal. Writing a
+        # header-only row would put an empty deletion record in the audit trail
+        # and `audit_deletions.py` would count it.
+        print()
+        print("no files to delete, so no deletion journalled")
 
     # --- the blocklist, before the evidence goes ---------------------------
     fresh = not os.path.exists(BLOCKLIST)
@@ -424,13 +478,18 @@ def main() -> int:
     print("deleted {} thumbnail/frame file(s)".format(len(thumbs)))
 
     # --- the derived rows --------------------------------------------------
+    # `sweep`, not `targets`. The count printed in the summary above has always
+    # used `sweep`, so keying the ACTION on `targets` meant the summary promised
+    # 117 tag rows and the sweep removed fewer - a report that overstates what
+    # was done is worse than one that understates it, because it is the report a
+    # person approves the purge from.
     kept, dropped = rewrite_csv(
-        TAGS, lambda r: None if r and r[0].strip().lower() in targets else r)
+        TAGS, lambda r: None if r and r[0].strip().lower() in sweep else r)
     print("content_tags.csv: {:,} kept, {:,} rows removed".format(kept, dropped))
 
     def zero_face(r):
         """Keep the row and its POSITION; destroy what described the face."""
-        if not r or r[0].strip().lower() not in targets:
+        if not r or r[0].strip().lower() not in sweep:
             return r
         out = list(r)
         if len(out) >= 6:                 # hash,face_index,bbox,det,said,emb
@@ -445,7 +504,7 @@ def main() -> int:
             name, k))
 
     def strip_cluster(r):
-        if not r or r[0].strip().lower() not in targets:
+        if not r or r[0].strip().lower() not in sweep:
             return r
         out = list(r)               # hash,face_index,cluster,det_score,bbox
         if len(out) >= 5:
