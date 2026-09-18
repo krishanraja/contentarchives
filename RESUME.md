@@ -142,9 +142,14 @@ ending; it does NOT survive a reboot. If the state is not `Running`, re-arm:
    cloud library. The backend largely EXISTS - `library.db` has FTS5 over 15
    columns including `description`, `objects`, `activity`, `text`. Phase F.
 4. **Ingest, robustly and autonomously**: 10 old communal phones, photographs of
-   family albums, VHS conversions, over the coming weeks. Phase B. **Do Phase A
-   first** - the blocklist is still inert, which means a phone carrying one of
-   the 88 purged hashes re-admits it.
+   family albums, VHS conversions, over the coming weeks. Phase B.
+   **The blocklist is now LIVE** (2026-09-18): `autopilot.is_blocked` refuses a
+   purged hash by CONTENT in both `ingest_folder` and `ingest_archive`, journals
+   every refusal to `D:\_PhotoAudit\autopilot-blocked.csv`, and gates the hash on
+   a size match so 88 files cost no throughput. Pinned by
+   `tests/test_blocklist_hook.py`. The other ingest paths -
+   `ingest_tree.py`, `ingest_from_h.py`, `extract_zip_media.py` - do NOT yet
+   call it, so route a phone through `autopilot.py` or add the hook there first.
 
 ### THE MIRROR: MEASURED NUMBERS, NOT ESTIMATES
 

@@ -36,6 +36,9 @@ STATE   = os.path.join(AUDIT, "autopilot-state.csv")
 ADDED   = os.path.join(AUDIT, "autopilot-added.csv")
 LOGF    = os.path.join(AUDIT, "autopilot.log")
 DUPLOG  = os.path.join(AUDIT, "autopilot-duplicates.csv")
+# The no-reingest list, and the record of every refusal made from it.
+BLOCKLIST = os.path.join(AUDIT, "PURGED-HASHES.csv")
+BLOCKLOG  = os.path.join(AUDIT, "autopilot-blocked.csv")
 TMPDIR  = r"D:\_takeout_tmp"
 
 ARCHIVE_DIRS = list(P.SOURCES)
@@ -503,6 +506,106 @@ def record(dest, src, how):
     with open(os.path.join(CAT, "manifest.csv"), "a", newline="", encoding="utf-8") as f:
         csv.writer(f).writerow([dest, src, how])
 
+# ---------- the no-reingest list ----------
+#
+# Krish, 2026-09-18: "purge all intimate content forever". 88 hashes were
+# destroyed and recorded in PURGED-HASHES.csv, and until now NOTHING READ THAT
+# FILE. The blocklist was inert: ten old communal phones, the family albums and
+# the VHS conversions are all still to be ingested, and any one of them carrying
+# a copy would have re-admitted it silently. "Forever" is a property of the
+# ingest, not of the delete.
+#
+# Keyed on CONTENT, never on a path or a name (learning 1 and learning 57): the
+# copy on a phone has a different name, a different folder and a different date.
+#
+# COST. Hashing every candidate would make every ingest slower for the sake of
+# 88 files. Every blocked hash has a known size, so the SIZE gates the hash:
+# a file whose size is not in the map is admitted without ever being read, which
+# is learning 7 used in the other direction - size rules out, only a hash rules
+# in.
+_BLOCKED = None          # {size: {hash, ...}}, loaded once
+_blocked_count = 0
+
+
+def blocked_index():
+    """{size: {hashes}} from PURGED-HASHES.csv. An absent list is EMPTY, loudly.
+
+    A missing blocklist is not an error - there may be nothing purged yet - but
+    it is announced, because "no file" and "no entries" must never look the same
+    as a working blocklist that happens to match nothing.
+    """
+    global _BLOCKED
+    if _BLOCKED is not None:
+        return _BLOCKED
+    _BLOCKED = defaultdict(set)
+    if not os.path.exists(BLOCKLIST):
+        log(f"  no-reingest list ABSENT at {BLOCKLIST} - nothing is blocked")
+        return _BLOCKED
+    bad = 0
+    with open(BLOCKLIST, newline="", encoding="utf-8") as f:
+        for row in csv.reader(f):
+            if not row or row[0].strip().lower() in ("hash", ""):
+                continue
+            h = row[0].strip().lower()
+            # A size in the Hash column is what a broken writer produced once
+            # (learning 60). Count them rather than trusting them.
+            if len(h) != 64:
+                bad += 1
+                continue
+            try:
+                size = int(row[1]) if len(row) > 1 and str(row[1]).isdigit() else -1
+            except (TypeError, ValueError):
+                size = -1
+            _BLOCKED[size].add(h)
+    n = sum(len(v) for v in _BLOCKED.values())
+    log(f"  no-reingest list: {n} hash(es) across {len(_BLOCKED)} size(s)")
+    if bad:
+        log(f"  WARNING: {bad} blocklist row(s) have no 64-hex hash - IGNORED")
+    if -1 in _BLOCKED:
+        log(f"  NOTE: {len(_BLOCKED[-1])} blocked hash(es) carry no size, so "
+            f"every candidate must be hashed against them")
+    return _BLOCKED
+
+
+def is_blocked(path, size, label=None):
+    """True if this file's CONTENT is on the no-reingest list.
+
+    Hashes only when the size matches a blocked size (or when a blocked entry
+    has no size on record, which cannot be gated and says so at load time).
+    Every refusal is journalled: a file that silently vanishes during an ingest
+    is indistinguishable from a bug.
+    """
+    idx = blocked_index()
+    if not idx:
+        return False
+    candidates = set(idx.get(size, ()))
+    candidates |= idx.get(-1, set())
+    if not candidates:
+        return False
+    h = full_hash(path, size)
+    if h is None:
+        # Cannot read it, so cannot clear it. Admitting an unreadable file that
+        # matches a blocked SIZE is the one case where being wrong is
+        # irreversible, so refuse and say so.
+        log(f"  BLOCKED (unhashable, size matches a purged file): {label or path}")
+        return True
+    if h.lower() not in candidates:
+        return False
+    global _blocked_count
+    _blocked_count += 1
+    fresh = not os.path.exists(BLOCKLOG)
+    with open(BLOCKLOG, "a", newline="", encoding="utf-8") as f:
+        w = csv.writer(f)
+        if fresh:
+            w.writerow(["when", "source", "hash", "bytes"])
+        w.writerow([datetime.datetime.now().isoformat(timespec="seconds"),
+                    label or path, h.lower(), size])
+        f.flush()
+        os.fsync(f.fileno())
+    log(f"  BLOCKED by the no-reingest list: {label or path}")
+    return True
+
+
 # ---------- ingest a plain folder ----------
 def ingest_folder(root, by_size, ns, t0):
     new = dup = 0
@@ -518,6 +621,9 @@ def ingest_folder(root, by_size, ns, t0):
             except OSError:
                 continue
             if size == 0:
+                continue
+            # Purged content never comes back, whatever it is called now.
+            if is_blocked(src, size):
                 continue
             if (fn.lower(), size) in ns:
                 dup += 1; continue
@@ -620,6 +726,19 @@ def ingest_archive(path, by_size, ns, t0):
                 safe_remove(tmp, 'scratch')
             except OSError:
                 pass
+            return
+
+        # Purged content never comes back. Checked HERE rather than before the
+        # extract because a member inside an archive has no file to hash until
+        # it has been streamed out; the size gate means only a size-matching
+        # member is ever hashed for this.
+        if is_blocked(tmp, size, label=path + "!" + name):
+            try:
+                safe_remove(tmp, 'scratch')
+            except OSError:
+                pass
+            skipped += 1
+            pw.writerow([name, "blocked"]); ph.flush()
             return
 
         # Duplicate ONLY if a whole-file hash matches. No name shortcuts.

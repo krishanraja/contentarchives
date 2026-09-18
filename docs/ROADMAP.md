@@ -90,15 +90,27 @@ Everything after this is bulk work, and bulk work is where unattended machinery
 either earns its keep or quietly loses things. Ten phones, album photographs and
 VHS captures arriving over weeks is exactly the load that found every bug below.
 
-**A1. The blocklist is inert.** `D:\_PhotoAudit\PURGED-HASHES.csv` holds 88
-hashes and **nothing reads it**. `autopilot.ingest_folder` admits a file unless
-`(name, size)` is known or a size+signature matches - there is no content-hash
-gate. A phone carrying one of those 88 re-admits it. The hook belongs after the
-`size == 0` guard in both `ingest_folder` and `ingest_archive`, hashing with the
-existing `full_hash` (already blake2b-256, so it matches the blocklist) and only
-when the candidate's size matches a blocklisted size, so the cost is nil.
-**Needs a test: a blocklisted file refused and logged, an ordinary file of the
-same size still admitted.**
+**A1. The blocklist is LIVE. DONE 2026-09-18.** `autopilot.blocked_index()`
+loads `PURGED-HASHES.csv` into `{size: {hashes}}` once, and `is_blocked()`
+refuses a purged hash by CONTENT in `ingest_folder` (after the `size == 0`
+guard) and in `ingest_archive` (after the member is streamed out, because there
+is no file to hash before that). Every refusal is journalled to
+`D:\_PhotoAudit\autopilot-blocked.csv` with the hash and the source - a file
+that silently vanishes mid-ingest is indistinguishable from a bug. The size
+gates the hash, so 88 files cost no throughput: a candidate whose size is not
+blocked is admitted without being read. Pinned by `tests/test_blocklist_hook.py`
+(22 checks), which proves the size gate by making `full_hash` RAISE.
+
+**Still open, and it matters before the phones arrive:** only `autopilot.py`
+calls the hook. `ingest_tree.py`, `ingest_from_h.py` and
+`extract_zip_media.py` do not, so route a phone through `autopilot.py` or add
+the call to those three first. A blocklist enforced on one path of four is the
+same shape of mistake as an inert one - it reads as coverage.
+
+While wiring it up, the blocklist itself turned out to hold seven rows with a
+SIZE in the `Hash` column, written by `drop_removed_rows.py` (learning 60).
+`blocked_index()` therefore ignores and COUNTS any row without a 64-hex hash
+rather than trusting the file it reads.
 
 **A2. `purge_content.py` has no `--traces-only` mode.** It requires a file it
 can re-hash at the instant of deletion, so it cannot sweep a hash whose file is
@@ -273,7 +285,9 @@ has to reach.
 ## The order is not arbitrary
 
 - **Phase A before B.** Unattended ingest with an inert blocklist re-admits
-  purged content, and a stale path index manufactures duplicates.
+  purged content, and a stale path index manufactures duplicates. A1 is done -
+  the blocklist is enforced in `autopilot.py` - but three other ingest paths
+  still do not call it, so that much of A is not finished.
 - **B before C.** Segmentation decides Personal/Communal from enrichment, and
   enrichment needs thumbnails, which need the files.
 - **C before D.** Segmentation moves files; a mirror taken first must be

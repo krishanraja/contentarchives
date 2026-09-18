@@ -15,6 +15,8 @@ where the volume allows, resumable across kills.
 - a duplicate is only ever declared on a whole-file hash
 - the dedup index covers the whole library and says what it covers
 - a batch that stages data cleans up loudly, or halts
+- a purged hash is refused at ingest, by CONTENT, and the refusal is journalled -
+  "forever" is a property of the ingest, not of the delete
 
 ## Code
 | file | role |
@@ -39,6 +41,11 @@ where the volume allows, resumable across kills.
 - `tests/test_safety_and_dedupe.py`
 - `tests/test_dedup.py`
 - `tests/test_route_h.py`
+- `tests/test_blocklist_hook.py` - the no-reingest list existed for a day with
+  nothing reading it. Pins that a purged hash is refused by content under any
+  name, that a file whose SIZE is not blocked is never hashed (proved by making
+  `full_hash` raise), that same-size-different-content is still admitted, that
+  every refusal is journalled, and that an absent list blocks nothing and says so
 
 ## Edge cases
 
@@ -68,3 +75,4 @@ recurs, and nobody maintains it as part of the belt.
 | 31 | a cleanup that reclaims space must not suppress its errors | `code:stages/02_ingest/ingest_from_h.py:rmtree with ignore_errors=True hides its` |
 | 36 | name plus size is never a duplicate verdict | `test:tests/test_safety_and_dedupe.py:def test_same_name_same_size_different_content_is_not_a_duplicate` |
 | 51 | ingest hashes but never decodes, so 70 undecodable videos entered the library and were found 18 months later by 06 faces - decoding one frame at ingest is not built | prose-only HERE; the census that found them is in 06 faces, `code:stages/06_faces/video_face_frames.py:def marker` |
+| 57 | a purged hash is refused at ingest, by content, and the size gates the hash so 88 files cost no throughput | `code:stages/02_ingest/autopilot.py:def is_blocked`, `test:tests/test_blocklist_hook.py:the renamed copy is refused` |
