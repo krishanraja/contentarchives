@@ -84,7 +84,21 @@ function Remaining {
 
 Say "mirror to H: starting. journalled so far: $(Journalled) row(s)"
 
-Invoke-Step -Name 'mirror-to-h' -ExpectedUnits 82112 -CheckpointMin 15 -VerifyEvery 2 `
+# WHAT THIS RUN EXPECTS TO DO, not what the whole library contains.
+#
+# This was `-ExpectedUnits 82112`. Invoke-Step's ETA is
+# (ExpectedUnits - done) / rate, and `done` counts only what THIS run added - so
+# on a resume with 27 files left and 82,077 already sent, the first checkpoint
+# reported "5 done in 15 min (0.3/min), ETA 249,513 min". Five and a half months,
+# printed by the supervisor whose purpose is to recalibrate an estimate out loud
+# (learning 10). A number that is wrong by four orders of magnitude teaches
+# everyone to ignore the line it appears on, which is how a real stall gets
+# missed later.
+$expect = Remaining
+if ($expect -le 0) { $expect = 0 }
+Say "  this run expects to send $expect file(s)"
+
+Invoke-Step -Name 'mirror-to-h' -ExpectedUnits $expect -CheckpointMin 15 -VerifyEvery 2 `
     -Preflight {
         if (-not (Test-Path 'H:\My Drive')) { Say '  H: is not mounted'; return $false }
         if (-not (Test-Path 'D:\_PhotoAudit\library.db')) { Say '  no index'; return $false }
