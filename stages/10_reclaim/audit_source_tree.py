@@ -138,7 +138,16 @@ def main() -> int:
         description=__doc__,
         formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--root", required=True, help=r"tree to audit, e.g. E:\ ")
-    ap.add_argument("--max-seconds", type=float, default=500.0,
+    # 420, not 500 or 560.
+    #
+    # The slice has to finish INSIDE the caller's window, and the budget only
+    # covers the scanning loop - loading the library index, reading the resume
+    # set and walking to the first unaudited file all happen before the clock
+    # starts. A 560s slice overran a 600s window and was pushed into the
+    # background, which on this machine is where jobs get killed for memory:
+    # four died there tonight. Resumability made that free rather than costly,
+    # but a default that reliably fits is better than one that needs remembering.
+    ap.add_argument("--max-seconds", type=float, default=420.0,
                     help="stop cleanly after this long so the run fits in one "
                          "foreground call; re-run to resume")
     ap.add_argument("--report", action="store_true",
