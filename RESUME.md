@@ -126,16 +126,58 @@ The remaining 4 were journalled `already-present` (the destination already
 existed at the right size, so no md5 was computed) and are checked separately -
 size is not content.
 
-**The next real work is E:.** 102,657 media files / 1,068.1 GB - MORE than the
-library itself - under the old pre-segmentation layout, plus phone and laptop
-backups and four original Takeout zips. Verified independently: a direct walk
-counts 102,657 files / 1,068.1 GB with zero walk errors.
+**ALL FOUR SOURCES ARE AUDITED (2026-09-19). Every one reconciles EXACTLY
+against an independent walk - same file count, 0 difference, 0 walk errors.**
 
-Audit it in resumable slices, and read the running total from the tool, never
-from here:
+| source | held (redundant) | unique |
+|---|---|---|
+| E: | 99,085 files / 1,063.5 GB | 3,572 / 4.54 GB |
+| G:\My Drive | 7,617 / 18.0 GB | 1,504 / 2.18 GB |
+| H: `_photo-consolidation` | 1,714 / 12.0 GB | 387 / 0.01 GB |
+| OneDrive | 212 / 0.8 GB | 887 / 0.30 GB |
+| **TOTAL** | **108,628 / 1,094.3 GB** | 6,350 / 7.02 GB |
 
-    python stages/10_reclaim/audit_source_tree.py --root "E:\"
+**1,094.3 GB is proven byte-identical to the library and is what a purge would
+reclaim.** Re-check any source, any time:
+
     python stages/10_reclaim/audit_source_tree.py --root "E:\" --report
+
+**WHAT MUST BE INGESTED FIRST - 669 irreplaceable camera originals, 1.05 GB.**
+`UNIQUE` is not the same question as "would anyone miss it": 5,067 of the 6,350
+uniques are screenshots, `node_modules` build output, thumbnail caches and work
+material. Narrowed twice - `unique_personal_media.py` then
+`missing_personal_set.py`, which groups by CONTENT because one photograph in
+three places is one photograph - the real gap is:
+
+- 373 camera originals from assorted sources (0.44 GB)
+- 249 **lost in the restructure into D:** - 2012, 2018, 2024, 2025, 2026
+  personal and communal photos sitting in E:'s PREDECESSOR library (0.34 GB)
+- 47 recent Samsung phone files, Sept 2026, simply newer than the last ingest
+  (0.26 GB)
+
+One row per missing file with every surviving location:
+`D:\_PhotoAudit\MISSING-PERSONAL-SET.csv`
+
+**AWAITING KRISH'S DECISION, deliberately not decided here:** 294 files / 1.29 GB
+of `G:\My Drive\Lozzy Mems\Loz_Video_Package` (engagement-video masters,
+v8/v9/v10 render variants, `BG_###` background plates) and a 508 MB podcast
+recording. Personal, but production assets rather than camera originals -
+whether finished renders belong in a photo library is a judgement, not a
+measurement.
+
+**THE ORDER MATTERS. Purging before ingesting destroys those 669 files.**
+
+    1. ingest the 669 into D:  (ingest_tree.py - content-deduped, blocklist-gated)
+    2. python stages/08_index/build_db.py
+    3. mirror the new files to H: and re-verify with verify_drive_md5.py
+    4. only then purge the HELD files from E:, G:, H: and OneDrive
+
+**G:, H: and OneDrive are SYNC MOUNTS.** Deleting locally deletes from Google's
+and Microsoft's servers, recoverable from trash for 30 days and then not.
+
+**And E: is currently the only LOCAL second copy.** Emptying it leaves D: alone
+on this machine with H: in the cloud. That is genuinely two copies, and one
+machine failure from one.
 
 **DONE - H: `_photo-consolidation` leftovers.** The 2,798 files kept back in the
 2026-09-18 clear-out because they could not be proven held ARE now proven:
