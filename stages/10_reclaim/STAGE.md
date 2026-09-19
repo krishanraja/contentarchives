@@ -38,6 +38,7 @@ The only stage that destroys data, so the most guarded.
 | `stages/10_reclaim/space_audit.py` | where the bytes are, counted by inode |
 | `stages/10_reclaim/space_tiers.py` | freeable bytes by how much judgement each needs |
 | `stages/10_reclaim/already_in_library.py` | files whose content is already safely held |
+| `stages/10_reclaim/audit_source_tree.py` | does the library already hold these exact bytes? Answers it per file for ANY tree (E:, OneDrive, G:), read-only, deleting and proposing nothing. The reference set is `library.db`, and `content_hash` is IMPORTED rather than reimplemented - `already_in_library.py` computes its own 16-byte digest, which cannot be compared against the index at all. The size gate does the real work: 77,882 distinct library sizes mean a file whose size matches nothing is settled UNIQUE without being read. A file that will not hash is recorded UNREADABLE, never as a non-match - treating a failed hash as "no match" is how 222 GB of byte-identical duplicates were once admitted. Runs in bounded resumable slices because this machine kills long jobs |
 
 ## Tests
 - `tests/test_safety_and_dedupe.py`
