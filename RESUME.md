@@ -126,13 +126,44 @@ The remaining 4 were journalled `already-present` (the destination already
 existed at the right size, so no md5 was computed) and are checked separately -
 size is not content.
 
-**The next real work is E:.** It holds 102,657 media files / 1,068.1 GB - MORE
-than the library itself - under the old pre-segmentation layout, plus phone and
-laptop backups and four original Takeout zips. OneDrive holds another 25,782
-files / 140.7 GB and is actively syncing the same Samsung camera roll the
-library already has. G: is only 18.4 GB of media and H:'s leftovers only 12 GB;
-neither is worth much effort. **Nothing there has been hash-checked against the
-library yet, and nothing should be deleted until it has been.**
+**The next real work is E:.** 102,657 media files / 1,068.1 GB - MORE than the
+library itself - under the old pre-segmentation layout, plus phone and laptop
+backups and four original Takeout zips. Verified independently: a direct walk
+counts 102,657 files / 1,068.1 GB with zero walk errors.
+
+Audit it in resumable slices, and read the running total from the tool, never
+from here:
+
+    python stages/10_reclaim/audit_source_tree.py --root "E:\"
+    python stages/10_reclaim/audit_source_tree.py --root "E:\" --report
+
+**DONE - H: `_photo-consolidation` leftovers.** The 2,798 files kept back in the
+2026-09-18 clear-out because they could not be proven held ARE now proven:
+2,101 media files audited, **1,714 held byte-identical (12.0 GB)**, 387 unique
+totalling 0.01 GB - and those 387 are a phone's `.thumbnails` cache and small
+`__v` variant JPGs, not irreplaceable originals. The caution was right at the
+time; the proof simply had not been attempted. The remaining 697 files in that
+tree are NON-media and were never in scope: 144 `.lrf`, 123 `.lrv`, 123 `.thm`
+proxies, plus logs and CSVs - **and 54 `.mp3`, which may be real audio and has
+not been assessed.**
+
+**CORRECTION - OneDrive is NOT 25,782 files / 140.7 GB.** That figure appeared
+in this file and was wrong. Three consistent measurements put it at **1,099
+media files / 1.1 GB** (212 held, 887 unique), walked in one second with zero
+errors. The earlier survey walked a tree twenty times larger - 184,300 non-media
+files against 9,334 now - and I could not establish why; OneDrive was actively
+syncing at the time, which makes it a moving target. Either way it is ~1 GB and
+is not the opportunity. **Re-measure before believing any number about it.**
+
+**G: is 18.4 GB of media and deliberately NOT audited yet.** It is a DriveFS
+mount, so hashing it hydrates every placeholder and downloads the bytes into the
+local cache - the same cache whose exhaustion deadlocked the mirror overnight.
+Low value, real cost. Audit it only when the cache is idle.
+
+**Nothing on E: has been deleted, and nothing should be until its audit
+finishes.** HELD means the library holds those exact bytes and the library's
+copy is itself verified in the cloud; UNIQUE means E: is the only copy and it
+must be reviewed by a human, never swept.
 
 ---
 
