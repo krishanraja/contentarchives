@@ -114,7 +114,29 @@ the sentence.
 
 ----
 
-## RIGHT NOW: the H: mirror is ARMED, 27 files short (2026-09-18, 22:10)
+## RIGHT NOW: the H: mirror is COMPLETE AND VERIFIED (2026-09-19, 02:50)
+
+**All 82,104 files are on Drive, and 82,100 of them are proven against Google's
+own `md5Checksum` - 0 missing, 0 mismatched.** Re-check any time with:
+
+    python stages/11_mirror/verify_drive_md5.py            # uses the cached listing
+    python stages/11_mirror/verify_drive_md5.py --refresh  # re-fetch from Drive
+
+The remaining 4 were journalled `already-present` (the destination already
+existed at the right size, so no md5 was computed) and are checked separately -
+size is not content.
+
+**The next real work is E:.** It holds 102,657 media files / 1,068.1 GB - MORE
+than the library itself - under the old pre-segmentation layout, plus phone and
+laptop backups and four original Takeout zips. OneDrive holds another 25,782
+files / 140.7 GB and is actively syncing the same Samsung camera roll the
+library already has. G: is only 18.4 GB of media and H:'s leftovers only 12 GB;
+neither is worth much effort. **Nothing there has been hash-checked against the
+library yet, and nothing should be deleted until it has been.**
+
+---
+
+## (previous) the H: mirror is ARMED, 27 files short (2026-09-18, 22:10)
 
 **FIRST COMMAND, before anything else:**
 

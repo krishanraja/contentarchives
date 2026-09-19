@@ -22,6 +22,7 @@ destination's own evidence, never by reading back what was just written.
 | `stages/11_mirror/move_audio_to_h.py` | move to a cloud mount, deleting only once the queue proves receipt |
 | `stages/11_mirror/mirror_to_h.py` | mirror the whole library to H: - driven from the index, append-only journal so a kill costs minutes, blake2b AND md5 computed on the bytes written (never read back through the mount), throttled on the DriveFS queue and the cache floor |
 | `stages/11_mirror/chain_mirror_h.ps1` | run the mirror supervised, and resume after the kills this machine hands out - its Postcondition FAILS while files remain, which is what makes the task restart |
+| `stages/11_mirror/verify_drive_md5.py` | prove the cloud copy by GOOGLE'S server-side `md5Checksum`, the only check that crosses the network boundary in the right direction. Pages the whole Drive once (~83 requests, not 82,104 lookups), caches the listing as JSONL with an fsync per page so a kill costs nothing, reconstructs every path from parent IDs rather than matching filenames, and refreshes the gcloud token on a 401 |
 
 ## Tests
 - `tests/test_mirror_to_h.py` - the uploader ran 655 GB with no test at all, and
@@ -35,8 +36,20 @@ destination's own evidence, never by reading back what was just written.
   925 GB, a `-Verify` that re-derives sampled hashes from the SOURCE rather than
   reading the mount, and a Postcondition that refuses to call a partial upload
   finished. Those gates were inert until learning 58 was fixed
-- **Still debt:** nothing yet compares the server-side `md5Checksum`, so the
-  mirror is uploaded and not verified until a Drive-scoped credential exists
+- **The cloud copy is PROVEN, 2026-09-19:** `verify_drive_md5.py` matched all
+  82,100 journalled files against the checksum Google computed on receipt -
+  0 missing, 0 mismatched, 0 without a checksum. The debt this section carried
+  is paid.
+- Two failures worth keeping, because both reported a confident wrong answer:
+  the first run said **all 82,100 MISSING**, because Drive's `files.list` never
+  returns the account root, so a reconstructed path starts at
+  `ContentLibrary/...` while the journal records `H:\My Drive\ContentLibrary\...`
+  - a total failure produced entirely by my own key construction, on a mirror
+  whose very first probe had already matched an 18.6 GB file byte for byte. And
+  the first draft fell back to matching on BASENAME when the prefix was absent,
+  which would have confirmed a file sitting in the wrong folder; that fallback
+  is now an explicit `UNKEYED` failure, counted in the verdict rather than
+  quietly excluded from it
 
 ## Lessons
 | # | what this stage does about it | enforced by |
