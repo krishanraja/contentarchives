@@ -146,8 +146,27 @@ print("7. the throttle constants are measured numbers, not invented ones")
 # 380-450 while uploading steadily, so the mirror oscillated for hours. The
 # cache floor is the real gate; these pin the relationship, not the values.
 check("the cache floor is the gate and is positive", M.CACHE_FLOOR_GB > 0, True)
-check("a single file cannot exceed the cache floor by design",
-      M.MAX_FILE_GB > M.CACHE_FLOOR_GB, False)
+
+# THE FLOOR AND THE LARGEST PERMITTED FILE MUST FIT IN THE VOLUME TOGETHER.
+#
+# The check that used to sit here - `MAX_FILE_GB > CACHE_FLOOR_GB` is False -
+# passed with a floor of 40 AND with a floor of 25, so it proved nothing about
+# the only property that matters. With a floor of 40 against ~45.7 GB of
+# steady-state free space, just 5.7 GB was usable, and the largest permitted
+# file (20 GB) could never be written - not when the queue drained, not ever.
+# The mirror deadlocked three files from the end, repeating
+# "waiting for room for 7.6 GB: 45.7 GB free, floor 40" until the supervisor
+# killed it as stalled and the task restarted it to do the same thing.
+#
+# STEADY_FREE_GB is a MEASURED figure, not a guess: H: and C: both sat at
+# 45-48 GB free across the whole run while the DriveFS cache directory held
+# 1.0 GB. If the machine's real headroom changes, this number must be
+# re-measured and this test will say so.
+STEADY_FREE_GB = 45.0
+check("the floor plus the largest permitted file fit in the measured headroom",
+      M.CACHE_FLOOR_GB + M.MAX_FILE_GB <= STEADY_FREE_GB, True)
+check("so the largest permitted file is actually writable",
+      (STEADY_FREE_GB - M.CACHE_FLOOR_GB) >= M.MAX_FILE_GB, True)
 check("the queue ceiling is above DriveFS's steady state (~450)",
       M.QUEUE_CEILING > 450, True)
 

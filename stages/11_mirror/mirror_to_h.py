@@ -98,7 +98,33 @@ LONGPATH = "\\\\?\\"
 # that hurts. The queue ceiling is now high enough to catch a genuine runaway
 # (DriveFS falling badly behind) and nothing tighter.
 QUEUE_CEILING = 3000         # a real backlog, not the normal working level
-CACHE_FLOOR_GB = 40.0        # the gate: stop if C:/H: headroom drops below this
+
+# THE FLOOR AND THE FILE SIZE HAVE TO FIT IN THE VOLUME TOGETHER.
+#
+# This was 40.0, and it deadlocked the mirror three files from the end.
+#
+# The arithmetic nobody did: steady-state free space on the constrained volume
+# is ~45.7 GB, and MAX_FILE_GB is 20. A floor of 40 leaves 5.7 GB usable, so the
+# largest permitted file could NEVER be written - not when the queue drained, not
+# ever. The run sat at 3 files outstanding repeating
+# "waiting for room for 7.6 GB: 45.7 GB free, floor 40" until the supervisor
+# called it stalled, killed it, and the task restarted it to do the same thing.
+# A throttle that can never open is a deadlock wearing the costume of patience.
+#
+# The measurement that settles what the floor is actually for: the DriveFS cache
+# directory under %LOCALAPPDATA%\Google\DriveFS holds 1.0 GB. Not tens. The
+# floor was guarding against a volume filling that was never filling - learning
+# 54 exactly, a threshold nobody measured, and I had just rewritten
+# QUEUE_CEILING for that same reason without checking its neighbour.
+#
+# So the rule, and it is checkable rather than felt:
+#
+#     CACHE_FLOOR_GB + MAX_FILE_GB <= the volume's steady-state free space
+#
+# 25 + 20 = 45, against 45.7 GB measured. Writing the largest permitted file
+# leaves 25 GB on C:, which is comfortable for Windows, and DriveFS evicts as
+# the upload completes.
+CACHE_FLOOR_GB = 25.0        # the gate: stop if C:/H: headroom drops below this
 WAIT_SECONDS = 60
 MAX_WAIT_ROUNDS = 240        # 4 hours of waiting before giving up a batch
 

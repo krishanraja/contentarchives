@@ -125,7 +125,23 @@ Invoke-Step -Name 'mirror-to-h' -ExpectedUnits $expect -CheckpointMin 15 -Verify
         }
         $free = (Get-CimInstance Win32_LogicalDisk -Filter "DeviceID='H:'").FreeSpace / 1GB
         Say ("  H: cache free: {0:N1} GB" -f $free)
-        if ($free -lt 45) { Say '  cache too tight to start'; return $false }
+        # A SECOND INVENTED THRESHOLD, and it contradicted the first.
+        #
+        # This was `-lt 45`, chosen when mirror_to_h's CACHE_FLOOR_GB was 40.
+        # Free space sat at 45.7 GB, so the chain was one rounding away from
+        # refusing to start at all - and the writer it guards could not write
+        # anything anyway, because a floor of 40 against 45.7 GB free left 5.7 GB
+        # usable for files of 7.6, 8.8 and 18.6 GB. Two numbers, neither
+        # measured, disagreeing about the same volume.
+        #
+        # The gate now tracks the writer's own floor plus a little working room.
+        # It MUST be kept in step with CACHE_FLOOR_GB in mirror_to_h.py;
+        # tests/test_mirror_to_h.py pins that floor against measured headroom.
+        $floorGb = 25.0          # = mirror_to_h.CACHE_FLOOR_GB
+        if ($free -lt ($floorGb + 2)) {
+            Say ("  cache too tight to start: {0:N1} GB free, floor {1:N0}" -f $free, $floorGb)
+            return $false
+        }
         return $true
     } `
     -Start {
