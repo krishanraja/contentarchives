@@ -126,7 +126,22 @@ The remaining 4 were journalled `already-present` (the destination already
 existed at the right size, so no md5 was computed) and are checked separately -
 size is not content.
 
-**ALL FOUR SOURCES ARE AUDITED (2026-09-19). Every one reconciles EXACTLY
+**THE PURGE IS COMPLETE (2026-09-20). 1,094.3 GB of 1,094.3 GB reclaimed -
+108,628 files across four sources, ZERO refused by the guard and ZERO skipped
+as cloud-unproven.** E: free space went 128 -> 873.3 GB.
+
+Every deletion re-hashed BOTH the victim and the library survivor at the instant
+of the unlink, refused a survivor on the same inode, and required the survivor's
+md5 to appear in Google's own listing - so D: was never the only proven copy of
+anything being deleted. Journals: `PURGED-*.csv` per source, plus the evidence
+journal `guarded_delete` writes.
+
+**Before that, 581 irreplaceable camera originals were INGESTED** (669 staged,
+88 refused by the no-reingest list because they were the purged intimate files
+whose copies had survived on E: and H:). Index rebuilt to 82,685 files /
+825.2 GB, mirrored, and re-verified at 82,681/82,681 against Google's checksums.
+
+**ALL FOUR SOURCES WERE AUDITED FIRST (2026-09-19). Every one reconciled EXACTLY
 against an independent walk - same file count, 0 difference, 0 walk errors.**
 
 | source | held (redundant) | unique |
