@@ -141,6 +141,27 @@ journal `guarded_delete` writes.
 whose copies had survived on E: and H:). Index rebuilt to 82,685 files /
 825.2 GB, mirrored, and re-verified at 82,681/82,681 against Google's checksums.
 
+**THE LIBRARY WAS THEN DEDUPED (2026-09-20).** 1,236 copies inside
+`D:\ContentLibrary` were byte-identical to another file in the same library -
+all 1,205 groups checked for shared inodes FIRST, none was a hardlink, so the
+20.07 GB was real. Removed through `guarded_delete`, 0 refused. Rows dropped
+from `INVENTORY.csv` and `MIGRATION-HASHES.csv` (2,472 rows), `lib-index.pickle`
+deleted, index rebuilt.
+
+**THE LIBRARY IS NOW 81,449 FILES / 805.1 GB, WITH ZERO DUPLICATE CONTENT.**
+Total freed on 2026-09-20: 1,114 GB.
+
+**TWO THINGS LEFT, both needing Krish:**
+
+1. `gcloud auth login --enable-gdrive-access`, then empty Drive's trash - about
+   31 GB of the G:/H: deletions sits there for 30 days against the quota.
+   OneDrive's online recycle bin has no API path here; it needs the web UI.
+2. **D: AND H: HAVE DIVERGED.** Drive still holds the 1,236 deduped copies,
+   because the mirror only ever adds and has no delete path. D: is 81,449 files;
+   Drive is 82,685. Nothing is at risk - every D: file is still verified in the
+   cloud - but the two are no longer identical. Decide whether to delete those
+   1,236 from Drive or leave them.
+
 **ALL FOUR SOURCES WERE AUDITED FIRST (2026-09-19). Every one reconciled EXACTLY
 against an independent walk - same file count, 0 difference, 0 walk errors.**
 
