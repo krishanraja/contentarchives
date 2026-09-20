@@ -156,11 +156,29 @@ Total freed on 2026-09-20: 1,114 GB.
 1. `gcloud auth login --enable-gdrive-access`, then empty Drive's trash - about
    31 GB of the G:/H: deletions sits there for 30 days against the quota.
    OneDrive's online recycle bin has no API path here; it needs the web UI.
-2. **D: AND H: HAVE DIVERGED.** Drive still holds the 1,236 deduped copies,
-   because the mirror only ever adds and has no delete path. D: is 81,449 files;
-   Drive is 82,685. Nothing is at risk - every D: file is still verified in the
-   cloud - but the two are no longer identical. Decide whether to delete those
-   1,236 from Drive or leave them.
+2. **RESOLVED - D: and Drive match again at 81,449 files.** The mirror only ever
+   ADDS, so the 1,236 deduped copies survived in the cloud until
+   `stages/11_mirror/unmirror_deleted.py` removed them: 20.07 GB, 0 refused, 0
+   already gone. It refuses any victim whose KEEPER is absent from Drive, and
+   any whose size no longer matches the mirror journal. **Those 1,236 are now in
+   Drive's TRASH for 30 days and still count against the quota** - empty it.
+
+**WHY THE gcloud TOKEN KEEPS DYING, diagnosed properly rather than guessed at.**
+Both accounts fail, and they fail DIFFERENTLY:
+
+    krishanraja@gmail.com    invalid_grant        - refresh token revoked
+    krish@themindmaker.ai    Reauthentication     - Workspace policy forces
+                                                    periodic interactive login
+
+Neither can be refreshed from a script, and
+`%APPDATA%\gcloud\application_default_credentials.json` does not exist, so there
+is no ADC fallback either. `gcloud auth print-access-token` cannot prompt in a
+non-interactive shell, so this genuinely needs a human at the keyboard:
+
+    gcloud auth login --enable-gdrive-access
+
+Krish was right that I kept reporting "expired" without investigating. The
+answer is that it does need him - but that is now evidence, not a shrug.
 
 **ALL FOUR SOURCES WERE AUDITED FIRST (2026-09-19). Every one reconciled EXACTLY
 against an independent walk - same file count, 0 difference, 0 walk errors.**
