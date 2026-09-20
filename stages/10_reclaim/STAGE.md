@@ -83,3 +83,6 @@ every one of them exists because an obvious-looking reclaim was wrong.
 | 36 | name plus size never declares a duplicate | `test:tests/test_safety_and_dedupe.py:def test_same_name_same_size_different_content_is_not_a_duplicate` |
 | 57 | a purge is keyed on CONTENT, so every derived copy of a blocked hash goes with it - not only the copies it can unlink | `code:stages/10_reclaim/purge_content.py:def sweep_set`, `test:tests/test_purge_content.py:the sweep covers blocked hashes, not just deletable ones` |
 | 61 | the summary a person approves is computed over the same set the action uses | `code:stages/10_reclaim/purge_content.py:in sweep else r`, `test:tests/test_purge_content.py:the trace sweep ACTS on the same set it COUNTS` |
+| 63 | "the library lacks it" is narrowed to "someone would miss it" in separate, arguable steps | `code:stages/10_reclaim/unique_personal_media.py:def classify`, `code:stages/10_reclaim/missing_personal_set.py:def is_media_file` |
+| 64 | purged content is refused before it is copied, not after something else catches it | `code:stages/10_reclaim/stage_missing_personal.py:NO-REINGEST LIST IS CHECKED` |
+| 65 | a figure from a syncing filesystem is timestamped and re-measured, never quoted as a fact | prose-only |

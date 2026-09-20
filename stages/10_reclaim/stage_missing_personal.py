@@ -118,6 +118,30 @@ def main() -> int:
         print("DRY RUN. --apply to copy into {}".format(STAGE))
         return 0
 
+    # THE NO-REINGEST LIST IS CHECKED BEFORE A BYTE IS COPIED.
+    #
+    # On 2026-09-20 this staged 669 files and 88 of them were purged intimate
+    # content - absent from the library precisely BECAUSE Krish had them
+    # destroyed, which is exactly why an audit reports them as "missing". The
+    # ingest refused all 88, so none entered the library, but by then this tool
+    # had already written them back onto disk. Recreating destroyed content and
+    # relying on a later stage to refuse it is not a safeguard; it is a race
+    # that happened to be won.
+    #
+    # The blocklist is read here, and a blocked hash is never copied.
+    blocked = set()
+    if os.path.exists(BLOCKLIST):
+        for row in csv.reader(io.open(BLOCKLIST, encoding="utf-8", newline="")):
+            if row and len(row[0].strip()) == 64:
+                blocked.add(row[0].strip().lower())
+    refused = [(s, p, h) for s, p, h in take if h.lower() in blocked]
+    take = [(s, p, h) for s, p, h in take if h.lower() not in blocked]
+    if refused:
+        print("REFUSED by the no-reingest list, not copied: {:,}".format(
+            len(refused)))
+        print("  (purged content whose copies outlived the purge elsewhere)")
+        print()
+
     os.makedirs(lp(STAGE), exist_ok=True)
     copied = failed = 0
     rows = []

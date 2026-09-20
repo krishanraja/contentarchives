@@ -172,6 +172,19 @@ than from an investigation.
 
 ## Phase B - ingest the new material  ·  weeks, as it arrives  ·  free
 
+> **THIS IS NOW THE FRONT LINE (2026-09-20).** Phase A is done: the blocklist is
+> live and caught 88 purged files trying to re-enter on its first real use,
+> `--traces-only` exists, and `refresh.py` is fixed. The consolidation is
+> finished - 81,449 files / 805.1 GB, zero internal duplicates, two verified
+> copies, 1,114 GB reclaimed. **Nothing else blocks the new material.**
+>
+> Three sources are coming: **VHS captures**, **10 old communal phones**, and
+> **photographs of old photo albums**. Two of those three carry no EXIF at all,
+> which makes the folder name the only date signal they will ever have - so the
+> single highest-value thing to do before ingesting anything is to NAME THE
+> FOLDERS WITH THEIR YEAR. It costs minutes and it is the difference between a
+> dated library and a `NoDate\` pile.
+
 The toolchain for this is the most battle-tested part of the repo. Use it as it
 is; do not write a new importer.
 

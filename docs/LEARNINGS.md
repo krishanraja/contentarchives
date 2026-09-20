@@ -2146,3 +2146,136 @@ constants and would STILL reach the real `D:\_PhotoAudit` - `PATH_RECORDS`,
 directly. A test that deletes the operator's real records to prove a deletion
 works is not a test worth having, so a weaker check honestly labelled beats a
 stronger one that cannot be run.
+
+## 62. A throttle that can never open is a deadlock wearing the costume of patience
+
+The mirror stopped three files from the end and sat there, logging politely:
+
+    waiting for room for 7.6 GB: 45.7 GB free, floor 40, queue 76
+
+every minute, until the supervisor called it stalled, killed it, and the task
+restarted it to do exactly the same thing. It looked like a busy machine waiting
+for a slow cloud. It was arithmetic nobody had done.
+
+Steady-state free space on the constrained volume was ~45.7 GB and `MAX_FILE_GB`
+was 20. A floor of 40 leaves 5.7 GB usable, so the largest permitted file could
+never be written - not when the queue drained, not ever. The three files left
+were 18.6, 8.8 and 7.6 GB.
+
+**The floor was guarding a volume that was not filling.** Measured when finally
+asked: the DriveFS cache directory held 1.0 GB. Not tens. It was learning 54
+again - a threshold nobody measured - and I had rewritten `QUEUE_CEILING` for
+that exact reason an hour earlier without once checking the constant on the next
+line.
+
+The rule is now checkable rather than felt, and the test asserts it:
+
+    CACHE_FLOOR_GB + MAX_FILE_GB <= the volume's measured steady-state free space
+
+**The general shape:** two limits that are each individually sensible can
+multiply into an impossible condition, and the symptom is not an error. It is
+patience. A throttle should be able to say "this can never pass" as distinct
+from "this cannot pass yet", and anything that waits in a loop wants a test that
+the waiting can actually end.
+
+## 63. "Not in the library" is not the same question as "someone would miss it"
+
+The audit found 6,350 files that existed only outside the library. Reported as
+that number it demanded a purge be stopped: six thousand files of possibly
+irreplaceable content. Narrowed honestly it was 581.
+
+  5,067 were screenshots, `node_modules` build output, thumbnail caches and work
+  material. E: alone contributed 2,150 screenshots from four phone and laptop
+  backup folders, plus a folder of expense receipts.
+  One photograph in three places is one photograph: 976 candidate rows collapsed
+  to 669 distinct files once grouped by CONTENT rather than counted as rows.
+  A 1.83 GB downloaded film was 55% of the candidate gigabytes on its own.
+  88 were the intimate content Krish had ordered destroyed - "missing" precisely
+  BECAUSE he had them purged.
+
+Every one of those is a true statement about the data and a false statement
+about the decision. A `UNIQUE` verdict means the library lacks those bytes; it
+says nothing about whether anyone wants them, and presenting the two as the same
+number buries the one photograph that matters in 1,400 screenshots.
+
+**So narrowing is a step, not a nicety, and it belongs in separate tools with
+separate rules** - `unique_personal_media.py` splits candidate from noise and is
+deliberately biased towards keeping, `missing_personal_set.py` then groups by
+content and strips what is plainly not a memory. Two honest steps beat one
+clever rule, because each can be argued with on its own.
+
+## 64. I built an explanation out of filenames I never checked against the record
+
+I told Krish that 669 personal files had been "lost in the restructure" into the
+current library, and named the largest as evidence: a 32 MB video from March
+2026, `IMG_4666.JPG` from Thailand 2012, a Bharti photograph from 2019. It was a
+coherent story - a predecessor library, a reorganisation, content that did not
+survive the move - and it was wrong.
+
+88 of them were the intimate files he had ordered purged hours earlier. They
+were absent from the library BY HIS INSTRUCTION. Their copies had outlived the
+purge on E: and H:, so an audit keyed on "what does the library not hold"
+reported them as missing, and I wrapped a narrative around that without once
+checking the filenames against `PURGED-HASHES.csv` - a file I had written
+myself, that same session, for exactly this purpose.
+
+The blocklist caught all 88 at ingest and refused them. That is the only reason
+purged content did not return to the library, and it is not a defence: the
+safeguard worked, my reasoning did not.
+
+**What makes this different from being wrong about a number:** a wrong number
+gets corrected when someone re-measures. A wrong EXPLANATION is sticky. It tells
+the person what to conclude, it sounds like understanding, and it survives until
+something contradicts it head-on. Before explaining WHY data looks a certain
+way, check it against the records that would falsify the explanation - starting
+with the ones written this session for that question.
+
+## 65. A measurement of something that is moving is a measurement of nothing
+
+I reported OneDrive as holding 25,782 media files and 140.7 GB, put it in a
+summary table for Krish, and wrote it into RESUME.md as a headline figure. Three
+later measurements agreed on 1,099 files and 1.1 GB - wrong by more than a
+hundredfold.
+
+The tool that disagreed was right, and I doubted it precisely because it
+contradicted a number I had already published. I went looking for the bug in the
+scanner, found a plausible one (`os.walk` swallows directory errors by default,
+which would produce exactly that symptom on cloud placeholders), and it was not
+that either: zero errors, 4,238 directories walked. I then asserted a second
+cause - counters not reset between roots - without checking, and that was also
+wrong; the function initialises them per call.
+
+Re-running the identical code reproduced 1,099. Its non-media count had fallen
+from 184,300 to 9,334, so at 02:40 it had genuinely walked a tree twenty times
+larger. **OneDrive was mid-sync.** The measurement was accurate about a
+filesystem that no longer existed by the time it was quoted.
+
+**Two rules come out of it.** A figure taken from a syncing or mounted
+filesystem carries a timestamp and an obligation to re-measure, not a fact. And
+when a tool contradicts a published number, the published number is the suspect:
+I spent three round trips debugging the messenger.
+
+## 66. A mirror that only adds diverges from its source in silence
+
+`mirror_to_h.py` copies what the library has and skips what it already sent. It
+has no delete path, which is correct for a backup and becomes wrong the moment
+the source shrinks.
+
+After the library was deduped it held 81,449 files. Drive still held 82,685. No
+alarm fired, no verification failed, and none should have: `verify_drive_md5.py`
+checks that every journalled file IS on Drive, and extras satisfy that perfectly.
+The two copies were out of step by 1,236 files and every check in the system
+reported green.
+
+`unmirror_deleted.py` closes it, and the interesting part is what it refuses to
+do. Re-hashing both sides - the standard `guarded_delete` applies on local disk -
+would hydrate 1,236 placeholders and their keepers, pulling ~40 GB through the
+cache that had deadlocked the mirror overnight (learning 5), to re-prove
+something already proven twice: the dedupe re-hashed victim against keeper at
+the unlink, and the mirror verified both against Google's own md5. Identical by
+transitivity, with the chain written down. What it checks instead is that the
+KEEPER is still on Drive and the victim's size still matches the journal.
+
+**Generally:** any asymmetric sync needs an explicit answer to "what happens
+when the source loses a file", and "nothing" is an answer that must be chosen
+rather than inherited from the absence of code.

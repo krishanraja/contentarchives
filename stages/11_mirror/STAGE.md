@@ -59,3 +59,5 @@ destination's own evidence, never by reading back what was just written.
 | 17 | capacity comes from the account, not the mount | prose-only |
 | 25 | receipt is proven by the Drive client's operations queue | `code:stages/11_mirror/move_audio_to_h.py:operations` |
 | 59 | the long-path prefix stops at the mount, whose drive letter comes from `--dest` | `code:stages/11_mirror/mirror_to_h.py:MOUNT_DRIVE`, `test:tests/test_mirror_to_h.py:a mount path is returned unchanged` |
+| 62 | the floor and the largest permitted file must fit in the volume together, or the throttle can never open | `code:stages/11_mirror/mirror_to_h.py:CACHE_FLOOR_GB + MAX_FILE_GB`, `test:tests/test_mirror_to_h.py:the floor plus the largest permitted file fit in the measured headroom` |
+| 66 | a mirror that only adds diverges silently, so removal is explicit machinery rather than absent code | `code:stages/11_mirror/unmirror_deleted.py:the KEEPER still exists on Drive` |

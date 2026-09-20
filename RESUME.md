@@ -114,7 +114,53 @@ the sentence.
 
 ----
 
-## RIGHT NOW: the H: mirror is COMPLETE AND VERIFIED (2026-09-19, 02:50)
+## NEXT SESSION: the new material. Everything else is done. (2026-09-20)
+
+**The consolidation is finished.** The library is 81,449 files / 805.1 GB with
+zero duplicate content, it exists in two places, and both were verified
+file-by-file against Google's own checksums. 1,114 GB was reclaimed on
+2026-09-20 and every deletion is journalled with its evidence.
+
+**What is left is new material arriving, which is Phase B of `docs/ROADMAP.md`:**
+
+1. **VHS captures.** Converted from tape, so they carry NO EXIF and usually no
+   sensible filename. They will land in `NoDate\` and stay there forever unless
+   the folder is named with the year BEFORE ingesting - `ym_for()` falls back to
+   the folder when EXIF and filename give nothing, and that is the cheapest date
+   anyone will ever get. Name the folders first.
+2. **The 10 old communal phones.** Use `stages/02_ingest/ingest_tree.py`. It is
+   the documented tool for a phone, a card or a folder; it dedupes on CONTENT,
+   and it is hooked to the no-reingest list so purged material cannot return.
+   **Do NOT use a default `--min-size`** for a hand-picked set: it drops
+   anything under 20 KB as junk while reporting success.
+3. **Photographs of old photo albums.** Same as VHS - no EXIF, so the folder
+   name is the only date signal. Expect them to need `--any-ext` if they arrive
+   as scans in an unusual format.
+
+**Per source, in order** (this order is not arbitrary, see the roadmap):
+
+    ingest_tree.py --apply
+    stages/02_ingest/verify_h_batch.py        # prove the batch landed
+    stages/05_enrich/backfill_thumbs.py       # drives from the index
+    stages/05_enrich/classify_live.py --apply
+    stages/06_faces/faces_embed.py
+    stages/08_index/build_db.py
+    stages/11_mirror/  (arm the chain)  then verify_drive_md5.py --refresh
+
+**THE TRAP THAT WILL BITE FIRST:** `build_db.py` reads `INVENTORY.csv` and the
+hash maps. It does NOT walk the disk. Files added by `ingest_tree.py` are
+INVISIBLE to the index until `stages/04_inventory/reconcile_disk.py --write`
+appends them - that happened on 2026-09-20 and cost an hour of confusion when
+the index still read 82,104 after 581 files had demonstrably been ingested.
+Also delete `lib-index.pickle` after anything that moves or removes files.
+
+**A SIDE ENGINE NOW EXISTS FOR DOCUMENTS:** `C:\Users\krish\dev\filearchives`,
+built from this machinery's reusable parts for non-content files. Content stays
+here; documents go there.
+
+---
+
+## (previous) the H: mirror is COMPLETE AND VERIFIED (2026-09-19, 02:50)
 
 **All 82,104 files are on Drive, and 82,100 of them are proven against Google's
 own `md5Checksum` - 0 missing, 0 mismatched.** Re-check any time with:
