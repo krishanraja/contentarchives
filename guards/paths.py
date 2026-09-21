@@ -13,14 +13,31 @@ THE LAYOUT, AND WHY IT IS SHAPED THIS WAY
 
     D:\ContentLibrary\
     |-- Media\                    everything with a date, in a chronology
-    |   |-- Personal\YYYY\YYYY-MM\
-    |   |-- Communal\YYYY\YYYY-MM\
+    |   |-- Personal\YYYY\             ONE level deep since 2026-09-21
+    |   |-- Communal\YYYY\             ONE level deep since 2026-09-21
     |   |-- NoDate\
     |   `-- Pending-Segmentation\ ingested, not yet assigned a side
-    |-- Archive\                  documents and admin: identity, financial, work
+    |-- Archive\                  EMPTIED 2026-09-21 - the directory remains
     |-- ContentProduction\        podcasts, exports, produced work
-    |-- _Review\                  judged not-a-memory. NOT deleted. A human empties it.
-    `-- _Catalog\                 the manifest
+    |-- _Review\                  EMPTIED 2026-09-21 - the directory remains
+    `-- _Catalog\                 the manifest (D: ONLY - never mirrored)
+
+THE CHRONOLOGY IS ONE LEVEL DEEP. Krish, 2026-09-21: *"I do not want folders by
+the Month ("2017-02"), just put all of 2017 photos in the 2017 folder and there
+needs to be no subfolders."* `YYYY\YYYY-MM\` collapsed to `YYYY\` on both copies,
+66,047 files each. Anything written here that still assumes a month level will
+put files where nothing looks for them.
+
+`Archive\` and `_Review\` ARE EMPTY. Krish deleted their contents from the H:
+mirror on 2026-09-21 and D: was made to match - 7,678 files, 11.28 GB, journalled
+in MIRROR-DELETIONS-APPLIED.csv. The constants below still resolve, and the
+directories still exist, so a tool that writes into them will succeed and be the
+only thing in there. That is deliberate: `_Review` is a destination stage 09
+still uses, and emptying it is not the same as abolishing it.
+
+`_Catalog` LIVES ON D: ONLY. It holds manifest.csv, the provenance record, which
+the mirror never needed and which `apply_mirror_deletions.py` therefore excludes
+by name - otherwise its absence from H: would read as a deletion.
 
 A `YYYY\YYYY-MM\` tree is right for a life and wrong for everything else, which
 is why documents and produced content sit BESIDE `Media\` rather than inside it.

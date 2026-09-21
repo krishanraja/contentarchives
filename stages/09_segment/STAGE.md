@@ -5,6 +5,15 @@ and non-memories moved to `_Review` - moved, never deleted.
 
 ## Inputs
 - the library, the origin map, the classifier's kind and keep fields
+- for `flatten_months.py`: any library root, on either copy
+
+**THE CHRONOLOGY IS ONE LEVEL DEEP SINCE 2026-09-21.** Krish: *"I do not want
+folders by the Month ("2017-02"), just put all of 2017 photos in the 2017 folder
+and there needs to be no subfolders."* `YYYY\YYYY-MM\` collapsed to `YYYY\` on
+BOTH copies - 66,047 files moved on each, 762 empty month folders pruned. 70
+filenames collided across months of the same year and carry the month as a
+prefix (`05_001.jpg`), which was his choice over suffixing: the month it came
+from survives in the name rather than being thrown away.
 
 ## Outputs
 - files moved between `Pending-Segmentation`, `Personal`, `Communal`, `_Review`,
@@ -64,6 +73,7 @@ and non-memories moved to `_Review` - moved, never deleted.
 | `stages/09_segment/review_split_by_path.py` | the proposal as GROUPS of photographs with thumbnails, not rows of paths - because 18,985 CSV rows is a rubber stamp, not a review ("what am i supposed to do in that sheet?") |
 | `stages/09_segment/apply_split.py` | **STALE, do not run.** Applies a split journalled and reversible, but joins `ORIGIN-MAP.csv` to `SPLIT-PROPOSAL.csv` by origin folder and builds destinations from the PRE-MIGRATION layout (`LIBROOT\Library\...`, `LIBROOT\NoDate\...`). `migrate_layout.py` has since restructured the library to `Media\<Side>\...`, so every destination it computes is wrong |
 | `stages/09_segment/apply_split_by_path.py` | apply the approved per-file split - journal written FIRST, a missing source or a destination collision stops the run, `--verify` re-derives every side from disk, `--reverse` puts every file back. Reuses `sweep_intimate.reverse`, which `tests/test_segment_moves.py` already watches |
+| `stages/09_segment/flatten_months.py` | collapse `YYYY\YYYY-MM\` into `YYYY\`, identically on every copy. Plans every move in full BEFORE moving anything and refuses the whole run on any conflict, because a half-flattened tree is worse than an unflattened one - no record describes it. Collisions are the real problem and not rare: 70 names appeared in two months of the same year, and a silent overwrite would have destroyed one of each pair invisibly. Journals `source -> destination` so `patch_inventory_moves.py` can repoint the records without re-walking 82,000 files |
 | `stages/09_segment/sweep_intimate.py` | move everything classified `intimate` into `Media\Personal\Intimate\` - ONE FLAT FOLDER, no year subfolders - journal written FIRST, a destination collision stops the run (two years can share a basename, and flat destinations make that guard load-bearing rather than theoretical), emptied subfolders pruned, `--reverse` puts every file back, `--verify` re-derives the count from disk |
 | `stages/09_segment/classify_screenshots.py` | separate screenshots from photographs, deleting neither |
 | `stages/09_segment/move_to_review.py` | move a named set into _Review |
@@ -94,3 +104,4 @@ and non-memories moved to `_Review` - moved, never deleted.
 | 30 | \b treats underscore as a letter in filename patterns | `code:guards/profile.py:def is_personal`, `test:tests/test_profile.py:a term inside an underscored filename matches` |
 | 54 | a term is dropped for being too broad only after counting what it matches | `test:tests/test_profile.py:def test_no_term_is_too_broad` |
 | 54 | every person named in the journal is protected, asserted through is_personal | `test:tests/test_profile.py:def test_every_named_person_is_protected` |
+| 67 | a move journal is written in the columns its consumer reads, and the reader is checked before the writer is trusted | `code:stages/09_segment/flatten_months.py:source` |

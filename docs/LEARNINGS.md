@@ -2279,3 +2279,66 @@ KEEPER is still on Drive and the victim's size still matches the journal.
 **Generally:** any asymmetric sync needs an explicit answer to "what happens
 when the source loses a file", and "nothing" is an answer that must be chosen
 rather than inherited from the absence of code.
+
+## 67. A journal whose columns the consumer cannot read is worse than no journal
+
+`flatten_months.py` wrote its move journal with the headers `When, From, To,
+Prefixed`. `patch_inventory_moves.py` reads exactly `source` and `destination`,
+which is what every other mover in stage 09 writes.
+
+So the patch would have loaded **zero moves**, found nothing to change, verified
+its zero changes against the filesystem, printed "destinations that do not
+exist: 0", and promoted an inventory in which all 66,047 paths were still
+stale. Every line of that output is true and the result is a lie. There is no
+error state in it anywhere.
+
+Caught only because I read `load_moves` before running it, and the two column
+names were two lines apart on screen. Had I run it first, the green tick would
+have been believed - and the corruption would have surfaced days later as an
+index that could not find files that were plainly on disk.
+
+**A producer and a consumer that agree on meaning but not on spelling fail
+silently by construction.** The fix in the file is one line; the fix in the
+habit is that a journal format is part of an interface, so the reader is checked
+before the writer is trusted. The already-written journal had to be rewritten
+too - fixing the tool does not retro-fix 66,047 rows already on disk.
+
+## 68. A derived artefact rebuilt before its inputs settle looks authoritative and is stale
+
+I started `build_db.py` while the flatten was still running on H: and before the
+three path records had been patched. It completed, reported success, and wrote a
+database describing 81,449 files with 73,725 paths that no longer existed and
+70,121 still containing a month folder.
+
+Nothing was wrong with the rebuild. It read its inputs correctly and captured
+exactly the state those inputs were in when it started - which was the state
+before the operation it was meant to reflect. A derived record cannot know that
+its sources are mid-change, and it has no way to say so: its output has the same
+shape, the same row count order of magnitude, and the same confident summary
+either way.
+
+**So a rebuild is the LAST step, not a step that can be usefully started early
+to save time.** Where a long job tempts you to overlap it with the work it
+depends on, the temptation is the tell. The cost of being wrong is not a failed
+run; it is a plausible artefact that everything downstream then trusts.
+
+## 69. A job that worked twice and then died three times is a resource problem, not a code problem
+
+`build_db.py` completed in 247s and again in 412s. Then it was killed for memory
+three times in a row, twice in the background and twice after overrunning a
+600-second window.
+
+The pull is to start reading the script for a leak, to batch something that is
+already batched, to rewrite the thing that was working an hour ago. I nearly
+did. What actually changed was the machine: **1.5 GB free of 15.8**, with two
+ChatGPT processes, an Edge webview, Chrome and a codex process holding roughly
+4.5 GB between them. One leftover python of mine, at 12 MB.
+
+Measured, told Krish which applications to close, and it then completed in 273s
+with 5.6 GB free.
+
+**Before changing code that recently worked, measure the environment it stopped
+working in.** The evidence is cheap - free memory, top consumers by working set,
+and specifically whether any of the processes holding RAM are your own orphans.
+And say which application to close: "it keeps running out of memory" is not
+actionable, "ChatGPT is holding 1.7 GB and the rebuild needs less than that" is.

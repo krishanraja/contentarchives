@@ -44,3 +44,5 @@ every opinion kept and human answers always winning.
 | 49 | a group photograph keeps every person in it | `test:tests/test_build_db.py:a group photograph keeps everybody in it` |
 | 54 | a name a later answer replaced never returns through the derived tag layer, and an uncontradicted tag name is never stripped | `code:stages/08_index/build_db.py:superseded`, `test:tests/test_build_db.py:the replaced name is gone from photo_people` |
 | 56 | `v_files` is one row per path, so a per-hash question groups instead of joining, and a count above the file count is a fan-out | `code:stages/08_index/build_db.py:GROUP BY f.path`, `test:tests/test_build_db.py:one row per hash, never one row per join` |
+| 68 | the index is rebuilt LAST, after the disk and every path record have settled - a rebuild started early captures the old state and looks authoritative | prose-only |
+| 69 | a job that recently worked and now dies is measured against the machine before the code is touched | prose-only |
