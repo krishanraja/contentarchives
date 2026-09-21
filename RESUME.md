@@ -114,12 +114,32 @@ the sentence.
 
 ----
 
-## NEXT SESSION: the new material. Everything else is done. (2026-09-20)
+## NEXT SESSION: the new material. Everything else is done. (2026-09-21)
 
-**The consolidation is finished.** The library is 81,449 files / 805.1 GB with
-zero duplicate content, it exists in two places, and both were verified
-file-by-file against Google's own checksums. 1,114 GB was reclaimed on
-2026-09-20 and every deletion is journalled with its evidence.
+**The consolidation is finished, and the library was RESTRUCTURED on 2026-09-21.**
+
+    D:\ContentLibrary          73,774 files
+    H:\My Drive\ContentLibrary 73,773 files   <- identical, file for file
+    library.db                 73,771 files / 793.8 GB, 0 duplicate content
+
+The only difference between the two copies is `_Catalog\manifest.csv`, which
+lives on D: by design and is excluded from the mirror by name.
+
+**THE CHRONOLOGY IS ONE LEVEL DEEP.** `Media\Personal\YYYY\` and
+`Media\Communal\YYYY\` - no month folders anywhere. Krish, 2026-09-21: *"I do
+not want folders by the Month"*. 66,047 files moved on EACH copy; 70 names that
+collided across months of the same year carry the month as a prefix
+(`05_001.jpg`). Anything written from now on that assumes a `YYYY-MM` level will
+put files where nothing looks for them.
+
+**`Archive\` AND `_Review\` ARE EMPTY**, but the directories remain - `_Review`
+is still a destination stage 09 writes to, and emptying it is not abolishing it.
+Krish deleted their contents from H: and D: was made to match: 7,678 files /
+11.28 GB, each hashed and journalled before the unlink in
+`MIRROR-DELETIONS-APPLIED.csv`, because none had a surviving copy.
+
+1,114 GB was reclaimed on 2026-09-20, before all of that, and every deletion
+from both days is journalled with its evidence.
 
 **What is left is new material arriving, which is Phase B of `docs/ROADMAP.md`:**
 
@@ -194,15 +214,19 @@ all 1,205 groups checked for shared inodes FIRST, none was a hardlink, so the
 from `INVENTORY.csv` and `MIGRATION-HASHES.csv` (2,472 rows), `lib-index.pickle`
 deleted, index rebuilt.
 
-**THE LIBRARY IS NOW 81,449 FILES / 805.1 GB, WITH ZERO DUPLICATE CONTENT.**
-Total freed on 2026-09-20: 1,114 GB.
+**THE LIBRARY WAS 81,449 FILES / 805.1 GB AT THE END OF 2026-09-20**, with zero
+duplicate content. Total freed that day: 1,114 GB. **It is now 73,774 files /
+793.8 GB** - see the current-state block at the top of this file; 7,678 more
+were removed on 2026-09-21 to match deletions Krish made on the mirror.
 
 **TWO THINGS LEFT, both needing Krish:**
 
 1. `gcloud auth login --enable-gdrive-access`, then empty Drive's trash - about
    31 GB of the G:/H: deletions sits there for 30 days against the quota.
    OneDrive's online recycle bin has no API path here; it needs the web UI.
-2. **RESOLVED - D: and Drive match again at 81,449 files.** The mirror only ever
+2. **RESOLVED (2026-09-20) - D: and Drive matched again at 81,449 files.** Both
+   have since dropped to 73,774/73,773 by the 2026-09-21 restructure; see the
+   current-state block at the top. The mirror only ever
    ADDS, so the 1,236 deduped copies survived in the cloud until
    `stages/11_mirror/unmirror_deleted.py` removed them: 20.07 GB, 0 refused, 0
    already gone. It refuses any victim whose KEEPER is absent from Drive, and
@@ -343,7 +367,9 @@ report:
 
 ### WHAT KRISH WANTS, IN HIS ORDER
 
-1. **Two identical clean libraries** - D: (done, 824.2 GB / 82,111 files) and
+1. **Two identical clean libraries** - ACHIEVED. D: and H: match file for file
+   (73,774 / 73,773 as of 2026-09-21; the figure below is the 2026-09-18 state
+   and is kept for the history, not as the target) - D: (824.2 GB / 82,111 files) and
    the H: cloud copy (in progress). A second LOCAL copy on E: is Phase D of
    `docs/ROADMAP.md` and is NOT started; E: still holds the stale predecessor.
 2. **The richest, most accurate knowledge** of every file. 99.4% on kind /

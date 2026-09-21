@@ -175,7 +175,9 @@ than from an investigation.
 > **THIS IS NOW THE FRONT LINE (2026-09-20).** Phase A is done: the blocklist is
 > live and caught 88 purged files trying to re-enter on its first real use,
 > `--traces-only` exists, and `refresh.py` is fixed. The consolidation is
-> finished - 81,449 files / 805.1 GB, zero internal duplicates, two verified
+> finished - 73,774 files / 793.8 GB after the 2026-09-21 restructure (the
+> chronology is now ONE level deep, `YYYY\` with no month folders, and `Archive\`
+> and `_Review\` were emptied), zero internal duplicates, two verified
 > copies, 1,114 GB reclaimed. **Nothing else blocks the new material.**
 >
 > Three sources are coming: **VHS captures**, **10 old communal phones**, and
