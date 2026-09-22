@@ -61,12 +61,42 @@ PROPOSAL = os.path.join(P.AUDIT, "SPLIT-FINAL.csv")
 FIELDS = ["when", "hash", "side", "signal", "source", "destination"]
 
 
+# The vocabulary `side_of` speaks. A proposal that uses any other spelling is
+# refused at load rather than at verify.
+VALID_SIDES = ("Personal", "Communal")
+
+
 def load(proposal):
+    r"""Read the proposal, and REFUSE a side this project does not recognise.
+
+    `verify` compares `side_of(path)` - which returns "Personal"/"Communal",
+    capitalised - against this column, exactly. A proposal written with
+    `communal` in lower case therefore moves every file correctly, because the
+    DESTINATION drives the move, and then reports "11,707 not where expected".
+    That happened on 2026-09-22: a total-failure verdict on a run in which
+    every single file had landed exactly where it should.
+
+    The failure mode is the one this repo keeps paying for - a check that
+    cannot pass, reporting confidently. The answer is not to lower-case the
+    comparison, which would let a genuinely unknown side through; it is to
+    refuse the spelling BEFORE 11,707 files move, when the cost of being wrong
+    is a message instead of a reversal.
+    """
     rows = []
     with io.open(proposal, encoding="utf-8", newline="") as fh:
-        for r in csv.DictReader(fh):
+        for n, r in enumerate(csv.DictReader(fh), 2):
+            side = r["Side"]
+            if side not in VALID_SIDES:
+                msg = chr(10).join([
+                    "{}, line {}: Side is {!r}.".format(proposal, n, side),
+                    "  This column is compared against side_of(), which answers",
+                    "  exactly one of {}. Nothing has moved. Correct the".format(
+                        " or ".join(VALID_SIDES)),
+                    "  proposal - a case difference is enough to cause this.",
+                ])
+                sys.exit(msg)
             rows.append({"when": dt.datetime.now().isoformat(timespec="seconds"),
-                         "hash": r.get("Hash", ""), "side": r["Side"],
+                         "hash": r.get("Hash", ""), "side": side,
                          "signal": r.get("Signal", ""),
                          "source": r["Source"], "destination": r["Destination"]})
     return rows

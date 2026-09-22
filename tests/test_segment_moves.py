@@ -36,6 +36,7 @@ sys.path.insert(0, ROOT)
 import stagepath  # noqa: E402,F401
 
 import sweep_intimate as S                               # noqa: E402
+import apply_split_by_path as A                          # noqa: E402
 
 FAILURES = []
 
@@ -270,6 +271,41 @@ def main():
     os.makedirs(empty, exist_ok=True)
     check("an EMPTY dest is still never removed",
           (S.prune_empty(empty), os.path.isdir(empty)), ([], True))
+
+    # A PROPOSAL WHOSE SIDE IS SPELLED WRONG IS REFUSED BEFORE ANYTHING MOVES.
+    #
+    # `verify` compares side_of(path) - "Personal"/"Communal", capitalised -
+    # against the proposal's Side column, exactly. On 2026-09-22 a proposal
+    # written with lower-case "communal" moved all 11,707 files CORRECTLY,
+    # because the destination drives the move, and then reported "11,707 not
+    # where expected": a total-failure verdict on a flawless run. The check
+    # could not pass, and said so with total confidence (learning 58's shape).
+    #
+    # Lower-casing the comparison would hide a genuinely unknown side. The
+    # refusal belongs at load, when being wrong costs a message rather than a
+    # reversal of 11,707 files.
+    d5 = tempfile.mkdtemp(prefix="split-side-")
+    bad = os.path.join(d5, "bad.csv")
+    with io.open(bad, "w", encoding="utf-8", newline="") as fh:
+        w = csv.writer(fh)
+        w.writerow(["Source", "Destination", "Side", "Signal"])
+        w.writerow([os.path.join(d5, "a.jpg"), os.path.join(d5, "b.jpg"),
+                    "communal", "lower case on purpose"])
+    try:
+        A.load(bad)
+        got = "accepted"
+    except SystemExit as e:
+        got = "refused" if "Side is" in str(e) else "wrong message: {}".format(e)
+    check("a lower-case Side is refused at LOAD, before any move", got, "refused")
+
+    good = os.path.join(d5, "good.csv")
+    with io.open(good, "w", encoding="utf-8", newline="") as fh:
+        w = csv.writer(fh)
+        w.writerow(["Source", "Destination", "Side", "Signal"])
+        w.writerow([os.path.join(d5, "a.jpg"), os.path.join(d5, "b.jpg"),
+                    "Communal", "the spelling side_of answers with"])
+    check("the spelling side_of answers with is accepted",
+          [r["side"] for r in A.load(good)], ["Communal"])
 
     print()
     if FAILURES:
