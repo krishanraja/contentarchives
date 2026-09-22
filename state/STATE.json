@@ -1,32 +1,32 @@
 {
-  "generated": "2026-09-17T22:22:48",
+  "generated": "2026-09-22T21:26:21",
   "library": {
-    "dated_files": 74246,
-    "dated_bytes": 952423772484,
-    "nodate_files": 38,
-    "nodate_bytes": 75863233,
-    "total_files": 74284,
+    "dated_files": 85427,
+    "dated_bytes": 981490265142,
+    "nodate_files": 35,
+    "nodate_bytes": 728958,
+    "total_files": 85462,
     "chronology": {
       "personal": {
-        "files": 62090,
-        "bytes": 825285074932
+        "files": 61586,
+        "bytes": 711907996039
       },
       "communal": {
-        "files": 12145,
-        "bytes": 127138250174
+        "files": 23841,
+        "bytes": 269582269103
       },
       "pending-segmentation": {
-        "files": 11,
-        "bytes": 447378
+        "files": 0,
+        "bytes": 0
       },
       "nodate": {
-        "files": 38,
-        "bytes": 75863233
+        "files": 35,
+        "bytes": 728958
       }
     }
   },
   "ingest": {
-    "files_added_total": 74991,
+    "files_added_total": 87279,
     "duplicates_rejected": 10026,
     "units_consumed": [
       "E-Drive-Rescue",
@@ -68,9 +68,9 @@
     "detail": "PERSONAL-losses.csv"
   },
   "disks_free_gb": {
-    "C": 138.3,
-    "D": 3725.7,
-    "G": 89.3,
-    "H": 131.3
+    "C": 151.2,
+    "D": 3532.1,
+    "G": 126.9,
+    "H": 143.6
   }
 }

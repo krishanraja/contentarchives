@@ -114,7 +114,134 @@ the sentence.
 
 ----
 
-## NEXT SESSION: the new material. Everything else is done. (2026-09-21)
+## THE FOUR COMMUNAL ARCHIVES ARE IN (2026-09-22)
+
+**163 GB of Google Takeout parked in `Media\Communal\Unintegrated` is now in the
+library. Communal went 12,134 -> 23,841.**
+
+    D:\ContentLibrary          85,480 files   926.5 GB
+    H:\My Drive\ContentLibrary 85,480 files   926.5 GB   <- path for path, 0 size mismatches
+    library.db                 85,480 files   0 without a hash
+
+Every one of the 13,266 media members is accounted for: **11,707 placed, 809
+already in the library, 750 duplicated within the batch itself** (494 of those
+from `ALL-1-001.zip`, which overlaps the Takeout set). 0 failed, 0 undated, 0
+folders below the year level. All 1,559 duplicates were refused on a whole-file
+hash, never on a name or a size.
+
+The four source zips are in `D:\_Staging\communal-2026-09-22\_archives`, moved
+out of the library so they are never mirrored. **Krish chose: delete them once
+every member is accounted for.** That accounting now exists
+(`INGEST-communal-2026-09-22.csv`), but the zips have NOT been deleted - do that
+deliberately, and only after the md5 verification below.
+
+### WHAT IS NOT FINISHED
+
+**`verify_drive_md5.py` has not run.** gcloud's refresh token expired mid-session
+and reauth needs a browser, which a non-interactive shell cannot drive. What
+exists instead:
+
+  * both copies agree path for path, size for size, 0 files on one and not the
+    other, measured from the filesystem
+  * all 11,707 uploaded rows in `h-mirror.csv` carry a blake2b AND an md5
+    computed on the bytes AS THEY WERE WRITTEN - source-side, never read back
+    through the mount
+  * the DriveFS operations queue drained, which is this stage's own witness for
+    departure (learning 25; the stage invariant allows the queue OR the checksum)
+
+What is still missing is the cross-network confirmation: Google's server-side
+`md5Checksum` compared against those journalled digests, which is the only check
+that catches a corrupted upload of the right size. It needs no re-upload and no
+re-hash - it is a lookup:
+
+    gcloud auth login --enable-gdrive-access     # MUST have the flag; a plain
+                                                 # login yields no Drive scope
+    python stages/11_mirror/verify_drive_md5.py --refresh
+
+### SEVEN DEFECTS, SIX OF THEM WAITING FOR THE NEXT INGEST
+
+Every one passed silently, and all but the last predate this session. **The
+restructure of 2026-09-21 was applied to 66,047 files on each copy and
+documented carefully, and five separate pieces of code were never brought
+along.** Nothing errored, because writing into a folder nothing reads looks
+exactly like writing into one that works.
+
+1. **Four placement writers still built `YYYY\YYYY-MM\`** - `autopilot.place`,
+   autopilot's tree walk, `ingest_tree.py`, `redate_videos.py`. This ingest
+   would have rebuilt the month level one file at a time. One owner now,
+   `autopilot.dated_dest`; `tests/test_flat_chronology.py` reads the source, so
+   a fifth copy of the join cannot appear unnoticed.
+2. **`build_inventory.py` dated by a regex requiring `YYYY\YYYY-MM`** - it has
+   matched nothing since the flatten, so a full rebuild would have given all
+   85,480 files an empty Year. The month folder is optional now.
+3. **The mirror journal still named pre-flatten paths**, so `--status` claimed
+   66,047 files still to send. The uploader would not have re-sent them; it
+   would have rewritten 66,113 `written` rows - each carrying digests computed
+   on the bytes written - as `already-present`, which carries no digest at all.
+   `patch_mirror_flatten.py` repointed them and kept the proof.
+4. **`ingest_tree` ignored Takeout `.json` sidecars** that `autopilot` reads, so
+   the same export dated differently depending on which tool ingested it. For
+   HEIC and re-encoded video the sidecar is the ONLY date. 10,689 titles fed
+   this ingest.
+5. **`reconcile_disk --write` left every new file undated and called 4,344
+   videos photographs.** Its `Side` column holding "Media" is NOT a defect - it
+   is the top-level tree by design, and "correcting" it broke the contract
+   before being changed straight back (learning 54).
+6. **Nothing in the ingest chain computes a content hash.** This is the big one.
+   `ingest_tree` hashes only size-collisions, `reconcile_disk` walks
+   directories, `build_db` joins hashes out of CSVs - so after the documented
+   chain, 11,707 files sat in the index with no hash, and a row with no hash is
+   INVISIBLE. `backfill_thumbs` reported 116 files to do. No thumbnail means no
+   classifier, no face pass and no naming game: those people could never have
+   been asked about. `hash_new_files.py` closes it, and **this hole opens on
+   every ingest** - the VHS tapes, the ten phones and the albums below would all
+   have fallen into it.
+7. Mine: a lower-case `Side` in the split proposal moved all 11,707 files
+   correctly and then reported "11,707 not where expected". `apply_split_by_path`
+   now refuses an unknown spelling at load, before anything moves.
+
+### THE ORDER THAT ACTUALLY WORKS FOR A NEW SOURCE
+
+`ingest_tree.py` refuses a source inside the library, so extract elsewhere.
+
+    stages/02_ingest/ingest_tree.py --source ... --min-size 0 --apply
+    # --min-size 0 deliberately: the 20 KB default would have dropped 7 real
+    # WhatsApp and iPhone photographs from this batch. Check before trusting it.
+    stages/09_segment/apply_split_by_path.py --proposal ... --apply   # Side capitalised
+    del D:\_PhotoAudit\lib-index.pickle
+    stages/04_inventory/reconcile_disk.py --write
+    stages/04_inventory/hash_new_files.py --apply      # <- the step that did not exist
+    stages/08_index/build_db.py
+    stages/05_enrich/backfill_thumbs.py
+    stages/05_enrich/classify_live.py --thumbs D:\_thumbs --store D:\_enrichment --apply
+    stages/06_faces/faces_embed.py --thumbs D:\_thumbs --store D:\_enrichment --shard 0/1
+    # --shard 0/1 MATTERS: without it the resume key looks for faces.csv while
+    # the library's work is in faces.0.csv, and it silently redoes all 58,906.
+    stages/11_mirror/mirror_to_h.py
+    stages/11_mirror/verify_drive_md5.py --refresh
+
+This session's enrichment: 11,740 thumbnails (0 failures from this batch),
+11,740 classified for a MEASURED $6.74, and 24,995 faces found in 9,980 images.
+
+### 81 UNDECODABLE FILES, ALL PREDATING THIS SESSION
+
+`thumb-backfill.csv` holds 115 failures and not one is from this ingest. They
+are worth a look because no classifier can see any of them: 70 videos where the
+duration is known but no frame could be extracted (learning 51's territory), 23
+that no decoder could open - several 20-35 MB `.jpg` files that are almost
+certainly not JPEGs - and a 101.1 GB `.jpg` that is a disk image, not a
+photograph.
+
+### TWO ORPHANS WORTH A DECISION
+
+`Media\NoDate\` holds two files from an old phone source that no inventory ever
+recorded, which is why the 2026-09-18 split could not see them to side them.
+They are in the records now. The path rule Krish set that day would put them in
+Communal; nobody has applied it to them.
+
+----
+
+## (previous) the new material. Everything else is done. (2026-09-21)
 
 **The consolidation is finished, and the library was RESTRUCTURED on 2026-09-21.**
 
