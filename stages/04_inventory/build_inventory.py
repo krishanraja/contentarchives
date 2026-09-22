@@ -285,6 +285,9 @@ def event_from_folder(folder: str) -> tuple[str, str]:
     return "", place.title()
 
 
+YM_RX = re.compile(r"[\\/](\d{4})[\\/](?:(\d{4})-(\d{2})[\\/])?")
+
+
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -361,8 +364,16 @@ def main() -> None:
                 # every root would render an Archive\ file's side as "..".
                 rel = os.path.relpath(p, root).split(os.sep)
                 side = rel[0] if root == LIB else os.path.basename(root)
-                ym = re.search(r"(\d{4})[\\/](\d{4})-(\d{2})", p)
-                year, month = (ym.group(1), ym.group(3)) if ym else ("", "")
+                # The chronology is ONE LEVEL DEEP since 2026-09-21. This pattern
+                # required a YYYY-MM folder and so matched NOTHING after
+                # flatten_months.py, which would have given all 85,480 files an empty
+                # Year on the next full rebuild - silently, exactly as the four
+                # placement writers would have silently rebuilt the month level. The
+                # month folder is optional now, so a tree that has not been flattened
+                # (an older copy, another machine) still yields its month rather than
+                # being read as undated.
+                ym = YM_RX.search(p)
+                year, month = (ym.group(1), ym.group(3) or "") if ym else ("", "")
 
                 meta: dict = {}
                 if kind == "photo" and ext in (".jpg", ".jpeg"):
