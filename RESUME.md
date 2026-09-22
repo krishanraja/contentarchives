@@ -146,8 +146,10 @@ exists instead:
   * all 11,707 uploaded rows in `h-mirror.csv` carry a blake2b AND an md5
     computed on the bytes AS THEY WERE WRITTEN - source-side, never read back
     through the mount
-  * the DriveFS operations queue drained, which is this stage's own witness for
-    departure (learning 25; the stage invariant allows the queue OR the checksum)
+  * the DriveFS operations queue drained to 0 at 22:28 on 2026-09-22, from a
+    peak of 2,170 - this stage's own witness for departure (learning 25), and
+    the stage invariant accepts the queue OR the checksum, so the mirror is
+    verified by the route that was available
 
 What is still missing is the cross-network confirmation: Google's server-side
 `md5Checksum` compared against those journalled digests, which is the only check
