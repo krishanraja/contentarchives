@@ -136,6 +136,14 @@ def main() -> None:
     print(f"         {len(tiny):,} under {a.min_size//1024} KB skipped as "
           f"stickers/thumbnails ({sum(s for s, _ in tiny)/1024**2:.1f} MB)")
 
+    # An export's sidecars date the files its filenames and EXIF cannot -
+    # HEIC and re-encoded video carry nothing else. autopilot reads them from
+    # inside the archive; this tool passed {} and silently dated the same
+    # export worse. Scanned once, before the loop, not per file.
+    jsonmap = ap.sidecar_map_from_tree(src_root)
+    if jsonmap:
+        print(f"sidecars: {len(jsonmap):,} dated titles from export metadata")
+
     print("indexing the library...")
     by_size, ns = ap.build_index()
     ap.load_hash_cache()
@@ -204,15 +212,19 @@ def main() -> None:
             dest_dir = os.path.join(a.dest_root, sub) if sub else a.dest_root
             y = "routed"
         else:
-            y, m = ap.ym_for(src, name, os.path.dirname(src), {})
-            dest_dir = os.path.join(ap.LIB, y, f"{y}-{m}") if y else ap.NODATE
-        os.makedirs(ap.lp(dest_dir), exist_ok=True)
-        dest = os.path.join(dest_dir, name)
-        stem, ext = os.path.splitext(dest)
-        n = 0
-        while os.path.exists(ap.lp(dest)):
-            n += 1
-            dest = f"{stem}__{n}{ext}"
+            y, m = ap.ym_for(src, name, os.path.dirname(src), jsonmap)
+            # One level deep since 2026-09-21; ap.dated_dest owns the layout
+            # and the collision convention so the three writers cannot drift.
+            dest = ap.dated_dest(name, y, m)
+            dest_dir = os.path.dirname(dest)
+        if divert_as or a.dest_root:
+            os.makedirs(ap.lp(dest_dir), exist_ok=True)
+            dest = os.path.join(dest_dir, name)
+            stem, ext = os.path.splitext(dest)
+            n = 0
+            while os.path.exists(ap.lp(dest)):
+                n += 1
+                dest = f"{stem}__{n}{ext}"
         try:
             if link:
                 os.link(ap.lp(src), ap.lp(dest))

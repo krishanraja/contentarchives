@@ -46,6 +46,14 @@ where the volume allows, resumable across kills.
   name, that a file whose SIZE is not blocked is never hashed (proved by making
   `full_hash` raise), that same-size-different-content is still admitted, that
   every refusal is journalled, and that an absent list blocks nothing and says so
+- `tests/test_flat_chronology.py` - the chronology was flattened to `YYYY\` on
+  2026-09-21 but the WRITERS were not: `place`, the tree walk and
+  `ingest_tree.py` all still joined `f"{y}-{m}"`, so the next ingest would have
+  rebuilt the month level one file at a time into folders no index, mirror arm
+  or reader looks in. Nothing would have failed, which is why it needs a test.
+  Pins the flat destination, the month-prefix collision convention taken from
+  `flatten_months.py`, and - reading the source, because the bug was four
+  copies of one join - that no writer joins a `YYYY-MM` folder again
 
 ## Edge cases
 

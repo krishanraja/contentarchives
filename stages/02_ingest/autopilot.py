@@ -433,6 +433,59 @@ def container_ym(path):
     return None, None
 
 
+SIDECAR_MAX = 4_000_000   # a Takeout sidecar is a few KB; anything huge is not one
+
+
+def parse_sidecar(raw):
+    """One Takeout sidecar -> (title, photoTakenTime), or None.
+
+    Google exports the real capture time in a `.json` beside the photo, and it
+    is the only date a HEIC or a re-encoded video carries once the camera's
+    filename has been rewritten - `ym_for` reads EXIF for jpg only and the
+    container clock for video only, so for everything else this sidecar IS the
+    date. `autopilot` read them from inside the archive; `ingest_tree` passed
+    `{}` and never looked, which meant the SAME export dated differently
+    depending on which of the two tools ingested it. One parser so they cannot
+    disagree again.
+
+    Keyed on the sidecar's `title`, which is the original filename, because the
+    sidecar's OWN name is mangled by Takeout (truncated, `.supplemental-meta`,
+    `(1)` suffixes) and matching on it loses files silently.
+    """
+    try:
+        d = json.loads(raw.decode("utf-8", "ignore"))
+    except Exception:
+        return None
+    if not isinstance(d, dict):
+        return None
+    t = (d.get("photoTakenTime") or {}).get("timestamp")
+    ttl = d.get("title") or ""
+    if t and ttl:
+        return ttl.lower(), t
+    return None
+
+
+def sidecar_map_from_tree(root, lp_fn=None):
+    """Build the title -> timestamp map by walking an EXTRACTED export tree."""
+    opener = lp_fn or lp
+    out = {}
+    for dp, _, fns in os.walk(opener(root)):
+        for fn in fns:
+            if not fn.lower().endswith(".json"):
+                continue
+            full = os.path.join(dp, fn)
+            try:
+                if os.path.getsize(full) > SIDECAR_MAX:
+                    continue
+                with open(full, "rb") as fh:
+                    got = parse_sidecar(fh.read())
+            except OSError:
+                continue
+            if got:
+                out[got[0]] = got[1]
+    return out
+
+
 def ym_for(tmp_path, name, folder, jsonmap):
     """Date precedence, strongest evidence first.
 
@@ -472,15 +525,38 @@ def ym_for(tmp_path, name, folder, jsonmap):
     return date_from_name("", folder)
 
 # ---------- placement ----------
-def place(tmp_path, name, y, m, by_size, ns, size):
-    dest_dir = os.path.join(LIB, y, f"{y}-{m}") if y else NODATE
+def dated_dest(name, y, m):
+    r"""Where a newly dated file goes, and under what name.
+
+    THE CHRONOLOGY IS ONE LEVEL DEEP SINCE 2026-09-21. Krish: *"I do not want
+    folders by the Month ... there needs to be no subfolders"*. Every writer in
+    this stage still built `LIB\YYYY\YYYY-MM\` after `flatten_months.py`
+    collapsed the library to `LIB\YYYY\`, so the next ingest would have
+    recreated the month level one file at a time - and a file in a folder
+    nothing looks for reports success while being invisible (the same shape as
+    learning 51).
+
+    A collision inside the year is settled the way `flatten_months.py` settled
+    70 of them, because two conventions for one layout is a convention nobody
+    can read: prefix the month (`05_001.jpg`), so the month survives in the
+    name rather than being thrown away. Only if THAT is taken does the numeric
+    suffix apply, which is the pre-existing last resort and not the first move.
+    """
+    dest_dir = os.path.join(LIB, y) if y else NODATE
     os.makedirs(lp(dest_dir), exist_ok=True)
     dest = os.path.join(dest_dir, name)
+    if y and m and os.path.exists(lp(dest)):
+        dest = os.path.join(dest_dir, f"{m}_{name}")
     stem, ext = os.path.splitext(dest)
     n = 0
     while os.path.exists(lp(dest)):
         n += 1
         dest = f"{stem}__{n}{ext}"
+    return dest
+
+
+def place(tmp_path, name, y, m, by_size, ns, size):
+    dest = dated_dest(name, y, m)
     shutil.move(lp(tmp_path), lp(dest))
     by_size[size].append(dest)
     ns.add((name.lower(), size))
@@ -633,14 +709,7 @@ def ingest_folder(root, by_size, ns, t0):
                     dup += 1; continue
             y, m = ym_for(src, fn, dp, {})
             # same volume -> hardlink, else copy
-            dest_dir = os.path.join(LIB, y, f"{y}-{m}") if y else NODATE
-            os.makedirs(lp(dest_dir), exist_ok=True)
-            dest = os.path.join(dest_dir, fn)
-            stem, ext = os.path.splitext(dest)
-            k = 0
-            while os.path.exists(lp(dest)):
-                k += 1
-                dest = f"{stem}__{k}{ext}"
+            dest = dated_dest(fn, y, m)
             try:
                 if src[0].upper() == 'D':
                     os.link(lp(src), lp(dest))
@@ -687,15 +756,13 @@ def ingest_archive(path, by_size, ns, t0):
         base = os.path.basename(name)
         ext = os.path.splitext(base)[1].lower()
         if ext == ".json":
-            if size > 4_000_000:
+            if size > SIDECAR_MAX:
                 return
             try:
                 with opener() as fh:
-                    d = json.loads(fh.read().decode("utf-8", "ignore"))
-                t = (d.get("photoTakenTime") or {}).get("timestamp")
-                ttl = d.get("title") or ""
-                if t and ttl:
-                    jsonmap[ttl.lower()] = t
+                    got = parse_sidecar(fh.read())
+                if got:
+                    jsonmap[got[0]] = got[1]
             except Exception:
                 pass
             return

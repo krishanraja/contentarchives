@@ -44,6 +44,7 @@ while _d != _os.path.dirname(_d) and not _os.path.exists(_os.path.join(_d, 'stag
 _sys.path.insert(0, _d)
 import stagepath  # noqa: E402,F401  - every stage on sys.path, wherever this file lives
 import paths as P  # noqa: E402
+import autopilot as _ap  # noqa: E402  - the one owner of the chronology layout
 LIB = r"D:\ContentLibrary\Media\Pending-Segmentation"
 NODATE = r"D:\ContentLibrary\Media\NoDate"
 MANIFEST = r"D:\ContentLibrary\_Catalog\manifest.csv"
@@ -173,14 +174,10 @@ def main() -> None:
             w.writerow(["From", "To", "WasDated", "NowDated", "Evidence", "When"])
         when = dt.datetime.now().isoformat(timespec="seconds")
         for p, y, m, was in moves:
-            dest_dir = os.path.join(LIB, y, f"{y}-{m}")
-            os.makedirs(lp(dest_dir), exist_ok=True)
-            dest = os.path.join(dest_dir, os.path.basename(p))
-            stem, ext = os.path.splitext(dest)
-            k = 0
-            while os.path.exists(lp(dest)):
-                k += 1
-                dest = f"{stem}__{k}{ext}"
+            # One level deep since 2026-09-21. A redate that rebuilt
+            # `YYYY\YYYY-MM\` would undo flatten_months.py one video at a
+            # time; autopilot.dated_dest owns the layout for every writer.
+            dest = _ap.dated_dest(os.path.basename(p), y, m)
             w.writerow([p, dest, was, f"{y}-{m}",
                         "container creation_time via ffprobe", when])
             jf.flush()
