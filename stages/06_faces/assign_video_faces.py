@@ -84,9 +84,25 @@ def read_csv(p: str) -> list[dict]:
 
 
 def face_rows(p: str) -> list[dict]:
-    return [r for r in iter_csv(p)
-            if r.get("emb") and (r.get("face_index") or "-1").lstrip("-").isdigit()
-            and int(r["face_index"]) >= 0]
+    r"""Usable face rows. The guard and the conversion must read the SAME value.
+
+    This tested `(face_index or "-1")` - so an EMPTY face_index defaulted to
+    "-1", passed `.isdigit()`, and then crashed on `int(r["face_index"])`,
+    which reads the raw "" the guard had just substituted away. 20 rows in
+    faces.video.csv carry an empty face_index beside a 40-character hash and a
+    score in the bbox column - a run killed mid-write, the shape of learning
+    45 - and every one of them takes this function down.
+
+    A row is skipped when its own value is not a usable index, and the value
+    checked is the value used.
+    """
+    out = []
+    for r in iter_csv(p):
+        fi = (r.get("face_index") or "").strip()
+        if not r.get("emb") or not fi.lstrip("-").isdigit() or int(fi) < 0:
+            continue
+        out.append(r)
+    return out
 
 
 def decode(emb: str):
@@ -204,29 +220,82 @@ def main() -> int:
 
     import numpy as np
 
-    for p in (a.assign, a.cache, a.photo_faces, a.faces):
+    for p in (a.assign, a.photo_faces, a.faces):
         if not os.path.exists(p):
             print("STOPPING: {} does not exist".format(p))
             return 1
 
+    # CENTROIDS BY KEY, NOT BY POSITION.
+    #
+    # This built them from face-emb.npy, a cache paired with FACE-CLUSTERS.csv
+    # by ROW NUMBER, and guarded it with check_alignment because that pairing
+    # is learning 45 exactly: a positional cache drifted once until 11,347 of
+    # 11,611 vectors described the wrong photograph while every row count
+    # agreed. The cache does not exist on this machine, so the tool could not
+    # run at all - `--verify` stopped on the missing file and its test had been
+    # failing on that rather than on anything it checks.
+    #
+    # Rebuilding the cache would rebuild the hazard. Learning 45's own durable
+    # fix is "not to pair by position at all - put the payload in the row that
+    # describes it", and faces.0.csv already does: every embedding sits in the
+    # row carrying its (hash, face_index). Joined on that key there is no
+    # positional artefact to drift and nothing to sample-check, and a frozen
+    # face that cannot be found REFUSES the run, because a centroid built from
+    # a partial cluster is a wrong centroid.
     photo = read_csv(a.assign)
-    E = np.load(a.cache)
-    problems = check_alignment(photo, E, a.photo_faces)
-    if problems:
-        print("STOPPING: the frozen clusters' embeddings do not match their source "
-              "(learning 45). Centroids built from them would put the wrong names "
-              "on videos:")
-        for p in problems[:10]:
-            print("   " + p)
+    cluster_of = {(r["hash"], str(r["face_index"])): int(r["cluster"][1:])
+                  for r in photo}
+    kmax = max(cluster_of.values()) + 1
+    S = np.zeros((kmax, DIM), dtype=np.float32)
+    got = np.zeros(kmax, dtype=np.int64)
+    for r in iter_csv(a.photo_faces):
+        fi = r.get("face_index") or "-1"
+        if not r.get("emb") or not fi.lstrip("-").isdigit() or int(fi) < 0:
+            continue
+        c = cluster_of.get((r["hash"], fi))
+        if c is not None:
+            S[c] += decode(r["emb"])
+            got[c] += 1
+    if int(got.sum()) != len(cluster_of):
+        print("STOPPING: {:,} of {:,} frozen faces were not found in {} by "
+              "(hash, face_index). A centroid built from a partial cluster is "
+              "a wrong centroid, and it would put the wrong names on videos."
+              .format(len(cluster_of) - int(got.sum()), len(cluster_of),
+                      os.path.basename(a.photo_faces)))
         return 1
-    print("frozen embeddings re-derived from {} - aligned".format(
+    print("frozen centroids joined from {} by key - every face found".format(
         os.path.basename(a.photo_faces)))
 
     ids = np.array([int(r["cluster"][1:]) for r in photo], dtype=np.int64)
-    k = int(ids.max()) + 1
-    S = np.zeros((k, DIM), dtype=np.float32)
-    np.add.at(S, ids, E)
-    del E
+
+    # THE NEW-ID FLOOR CLEARS EVERY FILE THAT HANDS ONE OUT, INCLUDING THIS
+    # TOOL'S OWN PREVIOUS OUTPUT. Taking it from FACE-CLUSTERS.csv alone is the
+    # mistake assign_new_faces.py made on 2026-09-23: it numbered 6,970 new
+    # photograph clusters from the photograph maximum while 15,326 video
+    # clusters already occupied c44284-c59609, so one id named two different
+    # people and six of them already carried an answer. The same shape is
+    # available here in reverse - a re-run whose previous video ids sit above
+    # the photograph maximum would collide with itself - so the floor is a
+    # maximum over both files rather than over the one this run happens to read.
+    # TWO DIFFERENT NUMBERS, AND CONFLATING THEM BREAKS --verify.
+    #
+    # `k` was doing both jobs: the size of the centroid array AND the base for
+    # new ids. Widening it to clear this tool's own previous output added rows
+    # to C that no frozen face occupies, so they are zero vectors that never
+    # match - and --verify, re-deriving the assignment, then called every face
+    # that had been given one of those ids "a new cluster" and reported 3 of 5
+    # assignments wrong on an assignment that was correct.
+    #
+    # The centroid space is what the FROZEN photograph clusters occupy. The
+    # new-id base is the first id no file has handed out. They are separate.
+    k = kmax                                     # centroid space
+    prev = -1
+    if os.path.exists(a.out):
+        for r in iter_csv(a.out):
+            c = (r.get("cluster") or "")
+            if c[1:].isdigit():
+                prev = max(prev, int(c[1:]))
+    new_base = max(int(ids.max()), prev) + 1     # first free id
     photo_count = np.bincount(ids, minlength=k)
     nrm = np.linalg.norm(S, axis=1, keepdims=True)
     C = S / np.where(nrm > 0, nrm, 1.0)          # empty ids stay zero: never match
@@ -270,7 +339,7 @@ def main() -> int:
         order = (list(good[np.argsort(-score[good])]) +
                  list(rest[np.argsort(-score[rest])]))
         sub, new_k = cluster(V[miss], order, a.threshold, say=lambda m: None)
-        label[miss] = sub.astype(np.int64) + k
+        label[miss] = sub.astype(np.int64) + new_base
     del V
 
     total = collections.Counter(label.tolist())
@@ -333,7 +402,7 @@ def main() -> int:
         for i, r in enumerate(vids):
             w.writerow([r["hash"], r["image"], r["face_index"],
                         "c{}".format(label[i]), r["det_score"], r["bbox"],
-                        "joined" if label[i] < k else "new"])
+                        "joined" if label[i] < new_base else "new"])
     os.replace(tmp, a.out)
     print()
     print("wrote {}".format(a.out))

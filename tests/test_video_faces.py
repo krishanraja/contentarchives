@@ -240,13 +240,39 @@ def test_assign(d):
 
 
 def test_alignment(d):
+    r"""The positional cache is GONE from this tool, so the hazard is too.
+
+    This used to drift `face-emb.npy` by one row and watch the run refuse -
+    check_alignment doing its job through assign_video_faces. On 2026-09-23 the
+    tool stopped reading that cache at all and joins `faces.0.csv` on
+    (hash, face_index) instead, which is learning 45's own durable fix: "not to
+    pair by position at all - put the payload in the row that describes it."
+    A drifted cache cannot be refused by a tool that never opens it.
+
+    The guard itself is not dead and is not untested: `merge_clusters.py` still
+    pairs positionally and still calls it, and `tests/test_guards.py` exercises
+    it directly on an aligned cache, a drifted one and a count mismatch. What
+    is asserted here now is the property that REPLACED it - a frozen face the
+    photograph file cannot produce stops the run, because a centroid built from
+    a partial cluster is a wrong centroid and would put wrong names on videos.
+    """
     print()
     print("4. alignment")
     p = assign_fixture(d)
-    E = np.load(p["face-emb.npy"])
-    np.save(p["face-emb.npy"], np.roll(E, 1, axis=0))     # drift by one row
+    os.remove(p["face-emb.npy"])
     code, out = run("stages/06_faces/assign_video_faces.py", *assign_args(p))
-    check("a cache drifted by one row is refused", (code, "STOPPING" in out), (1, True))
+    check("a MISSING positional cache no longer stops the run", code, 0)
+
+    # Take one frozen face out of faces.0.csv: its cluster's centroid would be
+    # built from fewer faces than the assignment claims, so the run must refuse.
+    rows = list(csv.reader(io.open(p["faces.0.csv"], encoding="utf-8", newline="")))
+    with io.open(p["faces.0.csv"], "w", encoding="utf-8", newline="") as fh:
+        csv.writer(fh).writerows(rows[:-1])
+    code, out = run("stages/06_faces/assign_video_faces.py", *assign_args(p))
+    check("a frozen face missing from faces.0.csv is refused",
+          (code, "STOPPING" in out), (1, True))
+    check("  and it says a partial cluster is a wrong centroid",
+          "partial cluster" in out, True)
 
 
 def test_dry_run(d):
