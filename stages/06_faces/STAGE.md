@@ -30,6 +30,7 @@ people, and keep the cluster ids Krish's answers point at stable for ever.
 | `stages/06_faces/cluster_faces.py` | the original clustering; never re-applied |
 | `stages/06_faces/merge_clusters.py` | merge clusters that are one person, tested against names |
 | `stages/06_faces/assign_video_faces.py` | put video faces into the frozen clusters |
+| `stages/06_faces/assign_new_faces.py` | put newly ingested PHOTOGRAPH faces into the frozen clusters. The invariant above had a hole: `assign_video_faces.py` covers faces arriving from video frames, and nothing covered faces arriving from new photographs - which is what every ingest produces - so the only tool that would have taken the 26,646 faces of 2026-09-22 was the one this stage forbids. Same algorithm on the photograph side, and it builds its centroids by JOINING ON (hash, face_index) rather than through `face-emb.npy`: that cache did not exist, and rebuilding a positional artefact to consume it would have rebuilt the hazard learning 45 was paid for. 16,910 of the new faces joined a cluster that already existed and 7,754 inherited a name Krish had already given, naming 4,982 photographs without a question being asked |
 | `stages/06_faces/verify_faces.py` | re-derive embeddings from their images |
 | `stages/06_faces/sample_missed_faces.py` | how many faces the classifier filter throws away |
 | `stages/06_faces/chain_video_faces.ps1` | frames, faces, assign, rebuild, every step gated |
