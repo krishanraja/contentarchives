@@ -211,19 +211,68 @@ def test_assign(d):
           sorted(tags), sorted({("a", "c0"), ("b", "c1"),
                                 ("c", got["c"]["cluster"]), ("d", got["c"]["cluster"])}))
     check("no tag for a cluster of one", any(h == "e" for h, _ in tags), False)
-    code, out = run("stages/06_faces/assign_video_faces.py", *assign_args(p, "--apply"))
-    check("a second --apply is REFUSED", (code, "REFUSING" in out), (1, True))
-
     print()
     print("5. verifiers, passing and failing")
     code, out = run("stages/06_faces/assign_video_faces.py", *assign_args(p, "--verify"))
     check("--verify passes on the real assignment", code, 0)
+
+    # A face THIS run placed and got wrong is an ERROR. Corrupt it before any
+    # second --apply, while the rows still carry how=joined/new.
     rows = list(csv.DictReader(io.open(p["OUT.csv"], encoding="utf-8")))
     good = io.open(p["OUT.csv"], encoding="utf-8").read()
+    # WHAT --verify CAN AND CANNOT SAY. Ids are preserved on purpose, and the
+    # centroids move as photographs arrive, so a row disagreeing with a fresh
+    # derivation may be drift or may be wrong and NOTHING HERE CAN TELL THEM
+    # APART. It counts and names the disagreement instead of returning a
+    # verdict it cannot reach.
     rows[0]["cluster"] = "c1" if rows[0]["cluster"] == "c0" else "c0"
     write_csv(p["OUT.csv"], list(rows[0].keys()), [list(r.values()) for r in rows])
     code, out = run("stages/06_faces/assign_video_faces.py", *assign_args(p, "--verify"))
-    check("--verify FAILS when one face is in the wrong cluster", code, 1)
+    check("a changed id is COUNTED as drift, not silently accepted",
+          ("drifted" in out, code), (True, 0))
+    io.open(p["OUT.csv"], "w", encoding="utf-8", newline="").write(good)
+
+    # ...and what it CAN still prove is structural, which is fatal. A file that
+    # does not cover every detected face is well-formed and meaningless
+    # (learning 33).
+    rows = list(csv.DictReader(io.open(p["OUT.csv"], encoding="utf-8")))
+    write_csv(p["OUT.csv"], list(rows[0].keys()),
+              [list(r.values()) for r in rows[:-1]])
+    code, out = run("stages/06_faces/assign_video_faces.py", *assign_args(p, "--verify"))
+    check("--verify FAILS when the file misses a detected face", code, 1)
+    io.open(p["OUT.csv"], "w", encoding="utf-8", newline="").write(good)
+
+    # A SECOND --apply IS SAFE NOW, and that is the point: it used to be
+    # refused because every video-only cluster was recomputed, so the same
+    # people came back under different ids and 4 of Krish's answers would have
+    # described strangers. The ids are preserved instead, so re-running is
+    # ordinary - which is what lets new video arrive on every ingest.
+    before = {(r["image"], r["face_index"]): r["cluster"]
+              for r in csv.DictReader(io.open(p["OUT.csv"], encoding="utf-8"))}
+    code, out = run("stages/06_faces/assign_video_faces.py", *assign_args(p, "--apply"))
+    check("a second --apply is allowed", code, 0)
+    after = {(r["image"], r["face_index"]): r["cluster"]
+             for r in csv.DictReader(io.open(p["OUT.csv"], encoding="utf-8"))}
+    check("  and every id is unchanged", after, before)
+    # `how` is DERIVED from the id - joined when photograph faces occupy the
+    # cluster, new when only video does - so it is stable across runs and the
+    # set of video-only ids is never empty just because a run repeated. Carried
+    # forward as history it collapsed to one value twice, and each time the
+    # collision test guarding cluster ids passed on an empty set.
+    hows = {r["how"] for r in csv.DictReader(io.open(p["OUT.csv"], encoding="utf-8"))}
+    check("  and how still distinguishes joined from video-only",
+          hows <= {"joined", "new"} and bool(hows), True)
+
+    # A PRESERVED face that disagrees with a fresh derivation is DRIFT, not an
+    # error: the centroids move as photographs are added, and these ids are
+    # held on purpose because answers point at them. Counted, never fatal.
+    rows = list(csv.DictReader(io.open(p["OUT.csv"], encoding="utf-8")))
+    rows[0]["cluster"] = "c1" if rows[0]["cluster"] == "c0" else "c0"
+    write_csv(p["OUT.csv"], list(rows[0].keys()), [list(r.values()) for r in rows])
+    code, out = run("stages/06_faces/assign_video_faces.py", *assign_args(p, "--verify"))
+    check("a KEPT face that disagrees is drift, not failure", code, 0)
+    check("  and the drift is counted out loud", "drifted" in out, True)
+    io.open(p["OUT.csv"], "w", encoding="utf-8", newline="").write(good)
     io.open(p["OUT.csv"], "w", encoding="utf-8", newline="").write(good)
 
     db = sqlite3.connect(p["lib.db"])

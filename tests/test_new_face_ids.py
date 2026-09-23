@@ -119,15 +119,25 @@ def main():
     real_p = r"D:\_PhotoAudit\FACE-CLUSTERS.csv"
     real_v = r"D:\_PhotoAudit\FACE-CLUSTERS-VIDEO.csv"
     if os.path.exists(real_p) and os.path.exists(real_v):
-        p = {int(r["cluster"][1:]) for r in
-             csv.DictReader(io.open(real_p, encoding="utf-8", errors="replace",
-                                    newline=""))}
-        v = {int(r["cluster"][1:]) for r in
-             csv.DictReader(io.open(real_v, encoding="utf-8", errors="replace",
-                                    newline=""))}
-        new = {i for i in p if i > 44283}
-        check("on the REAL library, new photograph ids never reuse a video id",
-              len(new & v), 0)
+        # An id appearing in BOTH files is normal and is the point: a video
+        # face that joins photograph cluster c59914 is the same person in both,
+        # so c59914 is written to each. What must never overlap is the ids each
+        # tool ALLOCATES - a video-only cluster must not be given an id that
+        # photograph faces occupy. The video file says which is which in its
+        # `how` column, so the question is asked of those rows and not of the
+        # whole file. Asserting no overlap at all failed the moment video faces
+        # started joining the new photograph clusters, which is correct
+        # behaviour being reported as a fault.
+        photo = {int(r["cluster"][1:]) for r in
+                 csv.DictReader(io.open(real_p, encoding="utf-8",
+                                        errors="replace", newline=""))}
+        video_only = set()
+        for r in csv.DictReader(io.open(real_v, encoding="utf-8",
+                                        errors="replace", newline="")):
+            if (r.get("how") or "") == "new" and r["cluster"][1:].isdigit():
+                video_only.add(int(r["cluster"][1:]))
+        check("on the REAL library, a video-only id is never a photograph id",
+              len(video_only & photo), 0)
     else:
         print("  (the real assignment files are not on this machine - skipped)")
 
