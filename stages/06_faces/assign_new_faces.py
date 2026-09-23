@@ -71,6 +71,7 @@ import stagepath  # noqa: E402,F401  - every stage on sys.path, wherever this fi
 AUDIT = r"D:\_PhotoAudit"
 STORE = r"D:\_enrichment"
 ASSIGN = os.path.join(AUDIT, "FACE-CLUSTERS.csv")
+VIDEO_ASSIGN = os.path.join(AUDIT, "FACE-CLUSTERS-VIDEO.csv")
 FACES = os.path.join(STORE, "faces.0.csv")
 DIM = 512
 
@@ -90,6 +91,9 @@ def main():
         description=__doc__,
         formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--assign", default=ASSIGN)
+    ap.add_argument("--video-assign", default=VIDEO_ASSIGN,
+                    help="the OTHER file that hands out cluster ids. A new "
+                         "id must clear both or two different people share one.")
     ap.add_argument("--faces", default=FACES)
     ap.add_argument("--threshold", type=float, default=0.55)
     ap.add_argument("--min-score", type=float, default=0.60,
@@ -108,8 +112,35 @@ def main():
     frozen = read_csv(a.assign)
     cluster_of = {(r["hash"], str(r["face_index"])): int(r["cluster"][1:])
                   for r in frozen}
-    k = max(cluster_of.values()) + 1
-    print("frozen assignment: {:,} faces, ids c0-c{}".format(len(cluster_of), k - 1))
+    photo_max = max(cluster_of.values())
+
+    # THE NEXT FREE ID MUST CLEAR EVERY FILE THAT HANDS ONE OUT, NOT JUST THIS
+    # ONE. `assign_video_faces.py` numbers ITS new clusters after the highest
+    # id in FACE-CLUSTERS.csv and writes them to a SEPARATE file, so the ids
+    # above the photograph maximum are already taken - 15,326 of them, c44284
+    # to c59609. Numbering from the photograph file alone put 6,970 new
+    # photograph clusters straight on top of them on 2026-09-23, so c44588
+    # named one group of faces in video and a different group in photographs,
+    # and six of them already carried one of Krish's answers. An answer that
+    # lands on two different people is the exact harm the frozen-id invariant
+    # exists to prevent, arriving through the door built to honour it.
+    video_max = -1
+    if os.path.exists(a.video_assign):
+        for r in csv.DictReader(io.open(a.video_assign, encoding="utf-8",
+                                        errors="replace", newline="")):
+            c = r.get("cluster") or ""
+            if c[1:].isdigit():
+                video_max = max(video_max, int(c[1:]))
+    else:
+        print("STOPPING: {} is missing. It hands out cluster ids too, and "
+              "without reading it this cannot know which are free."
+              .format(a.video_assign))
+        return 1
+    k = max(photo_max, video_max) + 1
+    print("frozen assignment: {:,} faces, photograph ids up to c{}".format(
+        len(cluster_of), photo_max))
+    print("video assignment : ids up to c{}".format(video_max))
+    print("new ids start at : c{}  (clear of both)".format(k))
 
     # One pass over faces.0.csv: every embedding is summed into its cluster by
     # KEY, and any row the frozen assignment does not name is kept as new work.

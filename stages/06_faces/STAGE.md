@@ -37,6 +37,16 @@ people, and keep the cluster ids Krish's answers point at stable for ever.
 
 ## Tests
 - `tests/test_video_faces.py`
+- `tests/test_new_face_ids.py` - the frozen-id rule says "never renumber the old
+  ids" and says nothing about "never hand out an id somebody else is using",
+  which are different rules. `assign_new_faces.py` took its next free id from
+  `FACE-CLUSTERS.csv` alone while `assign_video_faces.py` had already allocated
+  c44284-c59609 in a SEPARATE file, so 6,970 new photograph clusters landed on
+  top of 15,326 video ones and six of them inherited one of Krish's answers -
+  one answer, two different people. Pins that the floor is a maximum across
+  every allocator, that a lower video maximum cannot drag it down, that a
+  missing allocator stops the run rather than being read as zero, and that the
+  real library's new ids never reuse a video id
 
 ## Lessons
 | # | what this stage does about it | enforced by |
