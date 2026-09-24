@@ -66,9 +66,21 @@ def load_moves(patterns):
             files.append(path)
             with io.open(path, encoding="utf-8", newline="") as fh:
                 for r in csv.DictReader(fh):
-                    s, d = r.get("source"), r.get("destination")
+                    # BOTH SPELLINGS. Stage 09's movers write
+                    # source/destination; identity-docs-moved.csv and the H:
+                    # flatten journal write From/To. A reader that knows one
+                    # spelling silently maps NOTHING from the other and reports
+                    # a clean patch over an unpatched record - learning 67,
+                    # found when a reader read columns its writer never wrote.
+                    s = r.get("source") or r.get("From") or r.get("from")
+                    d = r.get("destination") or r.get("To") or r.get("to")
                     if s and d:
                         moves[s.lower()] = d
+    if files and not moves:
+        sys.exit("{} journal(s) parsed to 0 moves. Their columns are not "
+                 "ones this reader knows, and an empty map patches nothing "
+                 "while looking like success (learning 67):\n  {}"
+                 .format(len(files), "\n  ".join(files)))
     return moves, files
 
 

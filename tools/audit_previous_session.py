@@ -17,6 +17,7 @@ further work.
 from __future__ import annotations
 
 import csv
+import re
 import json
 import os
 import subprocess
@@ -141,26 +142,41 @@ review = (LIB / "_Review").is_dir()
 check("screenshot review bucket exists", review,
       "present" if review else "no _Review/ - classification has not run")
 
-sensitive = AUDIT / "SENSITIVE-FILES.csv"
-if sensitive.exists():
-    # The question is whether they are still IN the chronology, not whether the
-    # recorded path exists. Once moved, the recorded path is an absolute path
-    # under Archive\, and joining that onto the library root returns it
-    # unchanged - so a naive existence test answers "yes, still there" about a
-    # file that has already been filed correctly.
-    chronology = [str(MEDIA / d).lower() for d in CHRONOLOGY]
-    with open(sensitive, newline="", encoding="utf-8", errors="ignore") as f:
-        still = []
-        for r in csv.DictReader(f):
-            p = r["LibraryPath"]
-            full = p if os.path.isabs(p) else str(LIB / p)
-            if any(full.lower().startswith(c) for c in chronology) \
-                    and os.path.exists(lp(full)):
-                still.append(full)
-    check("identity documents moved out of the chronology", not still,
-          f"{len(still)} still in the chronology" if still
-          else f"none remain in any of {CHRONOLOGY}")
+# IT SCANS THE CHRONOLOGY. IT DOES NOT ASK A LIST.
+#
+# This read SENSITIVE-FILES.csv and checked whether the files IT named were
+# still in the chronology. That file held ONE row, so the check passed every
+# session while two passports, a visa stamp, three medicare cards and two
+# driver's licences sat in the chronology - none of them flagged, so none of
+# them ever looked at. A check that can only fail on what something else
+# already found will pass on a library full of the thing it is looking for,
+# and this file's own opening comment already says why that is worse than a
+# failure: "A vacuous pass is more dangerous than a failure." Found by hand on
+# 2026-09-23, after a batch brought in two more and only one was flagged.
+#
+# The terms are filename signals, not a classifier. They will miss a document
+# whose name says nothing (IMG_4471.jpg) and will catch a joke about a car
+# number plate. The point is not that the list is complete; it is that the
+# question is asked of the LIBRARY rather than of a record that may be empty.
+IDENTITY_RX = re.compile(
+    r"passport|driving licence|drivers? licen[cs]e|birth certificate"
+    r"|marriage cert|national insurance|medicare|tax file|aadhaar|pan card"
+    r"|social security|[^a-z]visa[^a-z]", re.I)
 
+found = []
+for _side in CHRONOLOGY:
+    _root = MEDIA / _side
+    if not _root.is_dir():
+        continue
+    for _dp, _, _fns in os.walk(lp(str(_root))):
+        for _fn in _fns:
+            if IDENTITY_RX.search(_fn):
+                found.append(os.path.join(_dp, _fn))
+check("identity documents moved out of the chronology", not found,
+      "{} still in the chronology: {}".format(
+          len(found), ", ".join(os.path.basename(f) for f in found[:4]))
+      if found else
+      "swept {} by name, none found".format("/".join(CHRONOLOGY)))
 # --- 6. scratch that should not survive -------------------------------------
 scratch = [p for p in (r"D:\_zip_extract", r"D:\_lorimer_tmp", r"D:\_takeout_tmp",
                        r"D:\_compress_tmp") if Path(p).is_dir()]
