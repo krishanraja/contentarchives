@@ -114,6 +114,86 @@ the sentence.
 
 ----
 
+## THE INDEX IS DESCRIBED, AND THE NEXT THING IS EMBEDDINGS (2026-09-24)
+
+**Krish's objective, recorded so the next session builds toward it:** *"the
+objective should be to be able to build a tool that allows me to 'talk' the
+content I want to the surface somehow."* Everything below is measured against
+that, not against tidiness.
+
+### WHAT A QUESTION CAN FILTER ON NOW
+
+    description      85,368   99.9%      place            44,598   52.2%
+    activity         85,368   99.9%      country          33,805   39.5%
+    occasion         85,368   99.9%      person           30,800   36.0%
+    mood             85,368   99.9%      text             29,006   33.9%
+    objects          85,156   99.6%      year             77,754   91.0%
+    subject/kind     85,377   99.9%      date_taken       48,196   56.4%
+    people/setting   85,377   99.9%      lat              34,500   40.4%
+
+**TWO NUMBERS IN THAT TABLE WERE WRONG UNTIL TODAY, IN OPPOSITE DIRECTIONS.**
+
+`resolve()` in `build_db.py` resolved every hash in the enrichment store
+regardless of whether the library still held the file, so 7,172 orphan hashes -
+purged and deduplicated files - carried descriptions, places and people into
+the index. Coverage read 108% of the library, and a question could have
+returned a sentence about a photograph that is not there. It is scoped to live
+hashes now; 456 orphans remain, all of them `person`/`unidentifiable` rows
+applied from the answers journal.
+
+Scoping it dropped `description` from an apparent 94.5% to a real **86.1%**,
+and chasing that difference found the second: **the entire 2026-09-22 batch had
+no description at all.** `classify_live.py` was run without `--rich`, so 11,705
+files got the basic labels (era, keep, kind, people, sensitivity, setting,
+subject) and none of the fields a question actually needs. It reported complete
+success - 11,740 classified, 0 failed, $6.74 - because that is what the cheap
+pass does. **The rich pass has since run: 11,739 files, $7.98, 2 failed, 10
+blocked**, and description is now 99.9%.
+
+Until it ran, a semantic search over this library would have returned NOTHING
+from the four newest archives - 150 GB, the whole reason for the session - and
+said "no matches" with complete confidence.
+
+### THE NEXT STEP, AND WHY IT IS THE RIGHT ONE
+
+`search` is FTS5 over 15 fields and works, but it matches SPELLING.
+`search MATCH 'beach'` cannot answer *"the afternoon everyone was squinting
+into the sun"*, and the descriptions already contain exactly that.
+
+**Embed the descriptions.** Measured: 85,368 of them, ~22 MB of text, ~5.6M
+tokens - about **$1 and an hour** through the same key the classifier uses, and
+roughly 124 MB of float16 vectors. Cosine over 85k vectors is one matrix
+multiply; it needs no FAISS and no service.
+
+After that, two things make it answerable rather than merely searchable:
+
+1. **Group into events.** `occasion` is on 99.9% of files. "The Lisbon trip"
+   wants a cluster across days, not 40 separate hits; occasion + date + place
+   turns files into events.
+2. **MAKE THE TOOL REPORT ITS OWN COVERAGE.** A query that filters on `place`
+   can see 52% of the library and on `date_taken` 56%. A tool that answers
+   "14 matches" while silently blind to half of it is this project's recurring
+   failure wearing a friendlier face - the honest answer names what it could
+   not see. This is the one design rule to carry into the tool.
+
+### WHAT IS DELIBERATELY NOT DONE
+
+  * `verify_drive_md5.py` has still not run. The Workspace account is
+    authenticated but its reauth policy needs a browser, which a
+    non-interactive shell cannot drive: `gcloud auth login --enable-gdrive-access`.
+    The mirror is otherwise proven - identical file-for-file and byte-for-byte,
+    digests computed on the bytes as written, DriveFS queue drained.
+  * The 163 GB of source zips in `D:\_Staging\communal-2026-09-22\_archives`.
+    Krish chose deletion once every member is accounted for, and it is; doing
+    it after the checksum check costs nothing and keeps the only re-do path.
+  * 83 undecodable files, 9.7 GB - valid containers, no decodable picture. They
+    have no description and never will.
+  * 5,844 single-video Communal clusters (1,981 videos, 6.5 hours) are not in
+    Bharti's queue. One question per video is wasteful as a first batch and
+    right for a swipe game later.
+
+----
+
 ## THE FACES OF THE NEW MATERIAL ARE IN (2026-09-24)
 
 **The naming seams are worked out on Krish's side, and Bharti's queue is no

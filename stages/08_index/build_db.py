@@ -254,9 +254,21 @@ def resolve(db: sqlite3.Connection) -> int:
     """Pick the winning value per (hash, field) using SOURCE_RANK."""
     worst = max(MS.SOURCE_RANK.values()) + 1
     best = {}
+
+    # ONLY FOR FILES THE LIBRARY STILL HOLDS.
+    #
+    # `tags` is the observation record and keeps everything ever seen, which is
+    # right: it is how a purged or deduplicated file's history survives. The
+    # INDEX is a different thing - it answers questions about the library that
+    # exists - and this resolved every hash in the store regardless, so 7,172
+    # hashes with no file carried descriptions, places and people into it.
+    # Coverage read 108% of the library, and a question could return a sentence
+    # about a photograph that is not there.
+    live = {h for (h,) in db.execute(
+        "SELECT hash FROM files WHERE hash IS NOT NULL AND hash <> ''")}
     for h, tag, value, source, conf in db.execute(
             "SELECT hash, tag, value, source, confidence FROM tags"):
-        if tag not in RESOLVED:
+        if tag not in RESOLVED or h not in live:
             continue
         rank = MS.SOURCE_RANK.get(source, worst)
         cur = best.get((h, tag))

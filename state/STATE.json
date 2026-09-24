@@ -1,19 +1,19 @@
 {
-  "generated": "2026-09-22T21:26:21",
+  "generated": "2026-09-24T12:07:44",
   "library": {
-    "dated_files": 85427,
-    "dated_bytes": 981490265142,
+    "dated_files": 85416,
+    "dated_bytes": 981475238038,
     "nodate_files": 35,
     "nodate_bytes": 728958,
-    "total_files": 85462,
+    "total_files": 85451,
     "chronology": {
       "personal": {
-        "files": 61586,
-        "bytes": 711907996039
+        "files": 61585,
+        "bytes": 711922683351
       },
       "communal": {
-        "files": 23841,
-        "bytes": 269582269103
+        "files": 23831,
+        "bytes": 269552554687
       },
       "pending-segmentation": {
         "files": 0,
@@ -68,9 +68,9 @@
     "detail": "PERSONAL-losses.csv"
   },
   "disks_free_gb": {
-    "C": 151.2,
-    "D": 3532.1,
-    "G": 126.9,
-    "H": 143.6
+    "C": 180.1,
+    "D": 3531.2,
+    "G": 126.2,
+    "H": 171.1
   }
 }
