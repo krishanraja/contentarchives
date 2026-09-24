@@ -114,6 +114,112 @@ the sentence.
 
 ----
 
+## THE FACES OF THE NEW MATERIAL ARE IN (2026-09-24)
+
+**The naming seams are worked out on Krish's side, and Bharti's queue is no
+longer empty.** The journal holds 2,726 answers, 1,117 of them added across
+2026-09-23/24.
+
+    person            944     (297 distinct people, 12 new this session)
+    needs_identifying 1,111   (1,110 of them Bharti's)
+    unidentifiable    671
+
+### WHAT WAS DONE TO THE FACES
+
+`assign_new_faces.py` (new) put 26,646 newly ingested PHOTOGRAPH faces into the
+frozen clusters, and `assign_video_faces.py` - made incremental, see below -
+placed 57,565 video faces. Between them:
+
+  * **4,982 photographs** inherited a name Krish had already given, no question
+    asked
+  * **5,172 videos** now carry a named person: Krish 1,599, Bharti 1,289,
+    Anya 491, Bhasker 452, Lauren 381, Lily 355
+
+Three naming rounds ran, each gated by `verify_people_sheet.py` (every crop
+belongs to its row) and `check_repeats.py` (nothing already offered):
+
+    round 25  82 rows  Communal photographs   15 names, 48 to Bharti, 11 corrected
+    round 27  53 rows  Personal video         19 names, 34 declined
+    round 28  37 rows  Personal video         14 names, 23 declined
+
+### THE SEAMS ARE MEASURED, AND TWO OF THREE ARE DONE
+
+Reach per round, which is the only number that decides whether another is
+worth Krish's attention:
+
+    round 27   119 videos   116 minutes
+    round 28    64 videos   134 minutes
+    round 29    58 videos    29 minutes   <- built, NOT shown, not worth it
+
+Communal photographs were finished the same way at round 26: 6 rows covering 12
+photographs, 594 of 600 candidates dropped as background people by the 0.12
+subject floor. **That floor is Krish's ("add a size floor and stop", 2026-09-16)
+and it is what lets the rounds END rather than feeding him three-face clusters
+for ever.** What remains on his side is a long tail: 9,463 of 10,398 Personal
+video clusters cover a single video each.
+
+**BHARTI'S QUEUE IS THE LAST SUBSTANTIAL SEAM.** 1,110 clusters:
+
+    128   pre-existing, from 2026-09-15
+     59   Communal photographs, queued 2026-09-23
+    923   Communal video, queued 2026-09-24 - 718 videos, 5.1 hours
+
+Krish authorised both (2026-09-17's "do not make me identify any more faces
+from Communal" is about HIS sheets, and he chose on 2026-09-24 to queue the
+video to her). The 923 are the clusters covering 2+ videos: 14% of the
+candidates for 44% of the footage. **5,844 single-video Communal clusters are
+NOT queued** - 1,981 videos, 6.5 hours - because one question per video is
+wasteful as a first batch and fine later in a swipe game. They are one
+`record_people.py --file` away.
+
+### DO NOT RE-CLUSTER. THE IDS ARE LOAD-BEARING.
+
+Stage 06's invariant is absolute and was nearly broken twice on 2026-09-23:
+
+  * `assign_new_faces.py` numbered its new clusters from the PHOTOGRAPH maximum
+    while 15,326 video clusters already held c44284-c59609, so 6,970 clusters
+    landed on top of them and six ids carried an answer describing two
+    different people. The id floor is now a maximum across every allocator.
+  * `assign_video_faces.py` recomputed every video-only cluster on each run,
+    which is why it REFUSED a second one - and why 15,640 newly detected faces
+    had nowhere to go. It is incremental now: 41,925 faces kept their ids and
+    only 4,087 were clustered. 7 answers sit on video-only ids and 4 are names
+    (Mili, Izzy, Amish, Rio); a recompute would have left those describing
+    strangers.
+
+Both now build centroids by JOINING `faces.0.csv` on (hash, face_index) rather
+than through `face-emb.npy`, which does not exist on this machine. That is
+learning 45's own durable fix - "not to pair by position at all" - rather than
+a guard wrapped around the hazard.
+
+**`--verify` reports DRIFT, not a verdict it cannot reach.** Ids are preserved
+deliberately and centroids move as photographs arrive, so a row disagreeing
+with a fresh derivation may be drift or may be wrong and nothing in the file
+can tell them apart. It counts and names them (2 of 41 re-derived) and stays
+fatal on what it CAN prove: coverage, and every row resolving to a real
+embedding.
+
+### 83 FILES NO CLASSIFIER CAN SEE, AND THEY ARE NOT RECOVERABLE
+
+Counted from `thumb-backfill.csv` against what is actually on disk - the log
+also carries 32 rows for files already deleted, including two for the 101 GB
+null-byte `.jpg` that is long gone, so its 212 GB figure is historical fiction.
+
+    83 files, 9.7 GB
+    70  valid container, NO decodable picture
+    10  no duration and no extractable frame
+     1  truncated (GH010081.MP4, 3.2 GB, moov atom not found)
+
+`ffprobe` reads duration, h264 and aac from them, which is why they look fine
+in the index and count toward every total. They do not decode: tested at three
+offsets, from zero with `-err_detect ignore_err`, and scanning the whole file
+for an I-frame. Nothing. **The container promises a picture that is not there** -
+learning 51 grown up, and the same 70 videos it was written about.
+
+Nothing has been deleted. A path is never sufficient grounds.
+
+----
+
 ## THE FOUR COMMUNAL ARCHIVES ARE IN (2026-09-22)
 
 **163 GB of Google Takeout parked in `Media\Communal\Unintegrated` is now in the
