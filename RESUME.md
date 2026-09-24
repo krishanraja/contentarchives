@@ -180,10 +180,37 @@ carrying its own hashes AND vectors, written once and renamed atomically -
 learning 45 is a positional cache that drifted until 11,347 of 11,611 vectors
 described the wrong photograph while every row count agreed.
 
-**What would make it better, in order:** group hits into EVENTS (`occasion` is
-on 99.9% of files, and "the Lisbon trip" wants a cluster across days rather
-than 40 separate hits); then improve `place` (52%) and `date_taken` (56%),
-which are the two axes people actually ask on and the two that are weakest.
+### DONE: IT ANSWERS IN EVENTS, NOT JUST PHOTOGRAPHS (2026-09-24)
+
+    python stages/08_index/build_events.py --ask "a big family wedding"
+
+1,388 events over 46,625 photographs, in `D:\_PhotoAudit\EVENTS.json`. *"A
+holiday abroad by the sea"* returns a 3-day trip to the Netherlands in 2019 -
+1,035 photographs, Bharti, Bhasker, Anya, Lily, Vibha - not twelve scattered
+frames from the middle of it. *"A big family wedding"* returns four different
+weddings across three countries and nine years, each with its date, place and
+who was there.
+
+**An event is a run of photographs with no gap longer than 14 hours, and
+nothing else.** `occasion` CANNOT do this job and it is worth saying why: it is
+a category - "everyday" 28,549, "travel" 23,289, "party" 9,041 - so grouping on
+it puts every party since 2008 in one bucket. Time is the only signal that
+separates one wedding from another; place, people and occasion then DESCRIBE
+the event time has already found.
+
+**37,296 files have no clock and are in NO event**, and every answer says so.
+They are scans, WhatsApp forwards, anything whose EXIF was stripped.
+
+### THE TWO WEAK AXES, AND WHY ONE OF THEM IS A CEILING
+
+`place` is 52% and **cannot be improved cheaply**: `geocode_library.py` reports
+nothing to do, because every file carrying coordinates already has a place
+name. Only 40% of the library has GPS at all; the rest of that 52% is the
+model's guess from the picture. Chasing it means a better model, not a rerun.
+
+`date_taken` is 56%, and that ceiling is EXIF that was never written or was
+stripped in transit. `redate_videos.py` can recover container clocks for video;
+for stripped stills there is nothing to read.
 
 ### THE STEP AFTER THAT, AND WHY IT IS THE RIGHT ONE
 
