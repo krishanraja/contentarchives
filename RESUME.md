@@ -154,7 +154,38 @@ Until it ran, a semantic search over this library would have returned NOTHING
 from the four newest archives - 150 GB, the whole reason for the session - and
 said "no matches" with complete confidence.
 
-### THE NEXT STEP, AND WHY IT IS THE RIGHT ONE
+### DONE: THE LIBRARY CAN BE ASKED IN WORDS (2026-09-24)
+
+    python stages/08_index/embed_descriptions.py --ask "someone crying at a wedding"
+
+85,368 descriptions embedded with gemini-embedding-001 at 768 dimensions: 24
+minutes, **$0.90 measured**, 0 failed, 146 MB in `D:\_PhotoAudit\desc-vectors`.
+All 11,701 files of the 2026-09-22 batch are in it.
+
+It answers questions whose words appear nowhere in the data. *"Someone crying
+at a wedding"* returns a bride wiping a tear in 2021 and two brides in saris
+wiping tears in 2014, across Personal and Communal both. *"The afternoon
+everyone was squinting into the sun"* returns low sun, long shadows and crowds
+in fields, and the word "squinting" is in none of them.
+
+**EVERY ANSWER STATES WHAT IT COULD NOT SEE**, and that is not decoration:
+`--ask` ends with "searched 85,368 of 85,480 files (99.9%). The rest have no
+description and cannot match anything." A result silently blind to part of the
+library is this project's recurring failure in friendlier clothing, and two
+hours before this ran the honest number would have been 86%, with the entire
+new batch missing.
+
+The vectors are not paired by position with anything. Each shard is one `.npz`
+carrying its own hashes AND vectors, written once and renamed atomically -
+learning 45 is a positional cache that drifted until 11,347 of 11,611 vectors
+described the wrong photograph while every row count agreed.
+
+**What would make it better, in order:** group hits into EVENTS (`occasion` is
+on 99.9% of files, and "the Lisbon trip" wants a cluster across days rather
+than 40 separate hits); then improve `place` (52%) and `date_taken` (56%),
+which are the two axes people actually ask on and the two that are weakest.
+
+### THE STEP AFTER THAT, AND WHY IT IS THE RIGHT ONE
 
 `search` is FTS5 over 15 fields and works, but it matches SPELLING.
 `search MATCH 'beach'` cannot answer *"the afternoon everyone was squinting

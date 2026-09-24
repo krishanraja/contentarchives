@@ -30,6 +30,7 @@ every opinion kept and human answers always winning.
 | file | role |
 |---|---|
 | `stages/08_index/build_db.py` | build library.db from every source of truth |
+| `stages/08_index/embed_descriptions.py` | a vector per description, so the library can be asked in words rather than keywords. `search` is FTS5 and matches SPELLING - it cannot find "we were all squinting into the sun" though a description saying exactly that sits in the row. 85,368 descriptions, gemini-embedding-001 at 768 dims, 24 min, $0.90 measured, 0 failed. The vectors are NOT paired by position with a separate file: each shard is one `.npz` holding its own hashes AND vectors, written once and renamed atomically, because learning 45 is a positional cache that drifted until 11,347 of 11,611 vectors described the wrong photograph. `--ask` prints how much of the library it searched and says plainly that the rest cannot match anything |
 | `stages/08_index/sample_rebuild.py` | record what the index files do through a rebuild, so a progress signal is chosen from a trace rather than guessed |
 | `stages/08_index/master_sheet.py` | one row per file, everything known about it |
 
