@@ -51,6 +51,7 @@ nothing can ever overwrite it.
 ## Lessons
 | # | what this stage does about it | enforced by |
 |---|---|---|
+| 74 | the LAST answer for a merge group decides, so a correction appended after a refusal actually applies | `code:stages/07_people/build_game.py:THE LATEST ANSWER WINS`, `test:tests/test_game_ingest.py:a decline SUPERSEDED by 'for Bharti' reaches her game` |
 | 48 | the page a human looks at is verified, not only the data behind it | `code:stages/07_people/verify_people_sheet.py:data-face` |
 | 52 | a row shown and not named is recorded as declined, so no face is offered twice | `code:stages/07_people/record_people.py:shown and not named`, `test:tests/test_people_rounds.py:the BLANK row is recorded as declined` |
 | 55 | the repeat guard covers EVERY round, never a hardcoded range of them | `code:stages/07_people/check_repeats.py:NEVER a bounded range`, `test:tests/test_people_rounds.py:def test_repeat_guard` |

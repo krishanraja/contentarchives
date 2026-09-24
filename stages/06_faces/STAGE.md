@@ -51,6 +51,8 @@ people, and keep the cluster ids Krish's answers point at stable for ever.
 ## Lessons
 | # | what this stage does about it | enforced by |
 |---|---|---|
+| 71 | a value never means two things: `how` is DERIVED from the id, and centroid space is separate from the new-id base | `code:stages/06_faces/assign_video_faces.py:def how_of`, `test:tests/test_video_faces.py:and how still distinguishes joined from video-only` |
+| 72 | a new id clears every file that allocates one, and a missing allocator stops the run | `code:stages/06_faces/assign_new_faces.py:THE NEXT FREE ID MUST CLEAR`, `test:tests/test_new_face_ids.py:the next id clears the VIDEO file too, not just its own` |
 | 23 | frame names are unique even for a clip milliseconds long | `code:stages/06_faces/video_face_frames.py:def targets`, `test:tests/test_video_faces.py:distinct paths for a` |
 | 33 | every video in the library is in the frame set, missing ones counted | `code:stages/06_faces/video_face_frames.py:missing from disk`, `test:tests/test_video_faces.py:25 of 28 videos missing from disk STOPS the run` |
 | 41 | an unreadable frame is recorded as -2, not "no faces" | `code:stages/06_faces/faces_embed.py:face_index -2`, `test:tests/test_video_faces.py:counts 2 to look at, 1 done, 1 unreadable` |

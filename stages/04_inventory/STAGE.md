@@ -54,6 +54,7 @@ disk and reconciled against the records.
 ## Lessons
 | # | what this stage does about it | enforced by |
 |---|---|---|
+| 73 | a check asks its question of the LIBRARY, never of a record that may be empty | `code:tools/audit_previous_session.py:IT SCANS THE CHRONOLOGY`, `test:tests/test_reconcile_rows.py:NoDate gets no year invented for it` |
 | 4 | an extension is sanity-checked against size | `code:stages/04_inventory/build_inventory.py:learning 4` |
 | 8 | compression settings are per source and measured (compression is abandoned) | prose-only |
 | 16 | the manifest is reconciled against the disk, absences explained | `code:tools/check_manifest.py:accepted-absences` |

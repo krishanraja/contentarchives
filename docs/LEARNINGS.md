@@ -2342,3 +2342,165 @@ working in.** The evidence is cheap - free memory, top consumers by working set,
 and specifically whether any of the processes holding RAM are your own orphans.
 And say which application to close: "it keeps running out of memory" is not
 actionable, "ChatGPT is holding 1.7 GB and the rebuild needs less than that" is.
+
+## 70. A structural change must be applied to the WRITERS, not only to the data
+
+`flatten_months.py` collapsed `YYYY\YYYY-MM\` to `YYYY\` on 2026-09-21, moved
+66,047 files on each copy, journalled every move, and was documented carefully
+in three places. Nothing was wrong with it.
+
+Five separate pieces of code that WRITE into that layout were never touched:
+`autopilot.place`, autopilot's tree walk, `ingest_tree.py`, `redate_videos.py`
+and `build_inventory.py`'s year regex. The next ingest would have rebuilt the
+month level one file at a time, into folders no index, mirror arm or reader
+looks in, and `build_inventory` would have given all 85,480 files an empty Year.
+
+Nothing failed. A file written into a folder nobody reads is not an error
+anyone sees; it is a success report over an invisible file.
+
+**After changing a layout, grep for every place that CONSTRUCTS it, not only
+the places that read it.** RESUME.md had carried the warning in prose since the
+day of the flatten - "anything written from now on that assumes a YYYY-MM level
+will put files where nothing looks for them" - and prose is not a guard. One
+owner now (`autopilot.dated_dest`), and `tests/test_flat_chronology.py` reads
+the SOURCE of all four writers, because a behavioural test of one would have
+passed while three stayed broken.
+
+## 71. A value that means two things will eventually mean the wrong one
+
+Four in one session, all in the face-assignment code, none of which raised
+anything:
+
+  * `k` was the size of the centroid array AND the base for new cluster ids.
+    Widening it to avoid a collision added zero-vector centroids, and `--verify`
+    reported 3 of 5 correct assignments wrong.
+  * `cid >= k` stood in for "is this a video-only cluster". True only while the
+    ranges were tidy; once photograph ids were allocated above video ones the
+    ranges interleaved and a threshold could no longer answer a set question.
+    16 of 41 correct rows were called wrong.
+  * `how` meant "which run wrote this row" AND "how the face got its id". Every
+    row said `kept`, then every row said `joined`, and each time the set of
+    video-only ids came out EMPTY - so the test guarding against id collisions
+    passed on nothing, twice.
+  * `Side` in the inventory is the top-level TREE (`Media`, `Archive`), and it
+    reads like the Personal/Communal side. "Correcting" it to a real side broke
+    the contract every reader relies on, and had to be changed straight back.
+
+**When a name could describe two facts, it is already describing the wrong one
+somewhere.** The repair is not a comment; it is two names, or a value derived
+from something that cannot drift - `how` is now computed from the id itself.
+
+## 72. An allocator must clear every allocator, not only its own file
+
+Stage 06 froze cluster ids because the answers journal points at them. A new
+tool honoured that invariant and broke it anyway: it took the next free id from
+`FACE-CLUSTERS.csv`, the highest in THAT file, while `assign_video_faces.py`
+had already handed out c44284-c59609 in a SEPARATE file. 6,970 new clusters
+landed on top of 15,326 existing ones, and six of the colliding ids already
+carried one of Krish's answers - one answer, two different people.
+
+"Do not renumber the old ids" and "do not hand out an id somebody else is
+using" are different rules, and only the first was written down.
+
+**The floor for a new id is a maximum across every file that allocates, and a
+MISSING allocator stops the run rather than counting as zero** - an absent file
+and a file with no ids are indistinguishable to `max()` over nothing.
+
+## 73. A check that consults a list can only fail on what the list contains
+
+The session audit verified that "identity documents moved out of the
+chronology" by reading `SENSITIVE-FILES.csv` and asking whether the files IT
+named were still there. That file held one row. The check passed, every
+session, while two passports, a US visa stamp, three medicare cards and two
+driver's licences sat in `Media\Personal\`.
+
+It could only ever fail on what something else had already found, so it passed
+on a library full of the thing it was looking for. `audit_previous_session.py`
+already warns that "a vacuous pass is more dangerous than a failure", about a
+different check, in the same file.
+
+**Ask the question of the SUBJECT, not of a record about the subject.** It
+sweeps the chronology by name now. The terms will miss `IMG_4471.jpg` and that
+is fine - the point is not that the list of terms is complete, it is that the
+universe being searched is the library rather than a record that may be empty.
+
+## 74. An append-only journal read as a set cannot be appended to
+
+`build_game.py` decided what to ask by collapsing the answers journal to "does
+this cluster have ANY answer", and excluding it. That turns an append-only,
+chronological record into a set: the first verdict is permanent and a
+correction appended afterwards does nothing.
+
+Krish found it by changing his mind. 57 rows recorded as declined under his own
+standing rule were then to be routed to Bharti's game; appending
+`needs_identifying = Bharti` would have LOOKED like routing them while the
+decline kept them out.
+
+**Where a record is ordered and append-only, the LAST entry decides.** The
+superseded one stays, because the journal records what was decided and when -
+it is not a cache of current state. A correction that reads as applied and is
+not is worse than no correction.
+
+## 75. A chain with no step for something omits it on every single run
+
+The documented route for new material is `ingest_tree --apply`, then
+`reconcile_disk --write`, then `build_db`. Run exactly that and the new files
+land in the index with NO content hash, because none of the three computes one.
+
+A row with no hash is not a row with a gap - it is invisible. `backfill_thumbs`
+drives from the index and reported 116 files to do while 11,707 newly ingested
+photographs sat unseen, and with no thumbnail there is no classifier, no face
+pass and no naming game. The people in them could never have been asked about.
+
+The same shape appeared twice more the same day: nothing existed to assign new
+PHOTOGRAPH faces to frozen clusters (only video), and the classifier was run
+without `--rich`, so 11,705 files got labels but no description - invisible to
+any question about meaning, while reporting "11,740 classified, 0 failed".
+
+**A pipeline is only as complete as its least-represented step, and the missing
+step never announces itself.** After adding material, check what each downstream
+stage can SEE, not whether each command exited 0.
+
+## 76. Direction matters: reading a cloud mount is not writing to one
+
+Learning 25 says writing into a Drive mount proves nothing, because the bytes
+land in a local cache and upload behind it. That is correct, and it was
+generalised here into "the mount cannot verify the cloud", which is false.
+
+Reading is the same coin the other way up. A file NOT in the local cache is
+FETCHED FROM GOOGLE to satisfy the read, so hashing it compares Google's bytes
+against the digest computed on the bytes that were sent. That is the
+cross-network check, available with no API token at all, and it went unused for
+a whole session while the token was treated as a blocker and raised with Krish
+five times. He said, twice: *"you have access to G and H drives... stop with
+this authentication bullshit."* He was right.
+
+444 of 444 files matched, 0 mismatched.
+
+**When a rule says an operation proves nothing, check whether it constrains the
+opposite operation too.** And `verify_drive_by_mount.py` prints its measured
+throughput rather than asserting the reads crossed the network, because a
+cached file is read locally and the tool cannot tell which - 2,312 KB/s
+sustained against a 171 GB cache and a 926 GB library is evidence the reader
+can weigh, and a claim it cannot verify would be the same failure again.
+
+## 77. A count is not evidence until you know what it counted
+
+Three numbers this session were confidently wrong, in both directions:
+
+  * `description` coverage read 94.5%, inflated by 7,172 enrichment rows
+    describing files the library no longer holds. Scoped to live hashes it was
+    86.1%, and the missing 11,846 were one thing: an entire ingest with no
+    descriptions at all.
+  * The undecodable-file census read 212.5 GB from a log. Counted against what
+    is actually on disk it is 9.7 GB: a third of the rows describe deleted
+    files, including a 101 GB file counted twice.
+  * 142 of 300 duplicate-survivors looked MISSING before a 162 GB delete. They
+    were not: their recorded paths were pre-split, and following the move
+    journal gave 400 of 400 present. Taking the first number at face value
+    would have refused a safe delete; ignoring it would have deleted on a check
+    that was not understood.
+
+**A log is not an inventory, and a percentage is a fraction of a population you
+have to name.** Before acting on a count, state what it counted and check that
+population against disk.

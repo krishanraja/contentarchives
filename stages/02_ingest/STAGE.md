@@ -74,6 +74,8 @@ recurs, and nobody maintains it as part of the belt.
 ## Lessons
 | # | what this stage does about it | enforced by |
 |---|---|---|
+| 70 | every writer builds the chronology through ONE owner, and the test reads the source of all of them | `code:stages/02_ingest/autopilot.py:def dated_dest`, `test:tests/test_flat_chronology.py:no writer joins a YYYY-MM folder onto the library root` |
+| 75 | the chain has a step that computes a content hash, without which new files are invisible to every later stage | `code:stages/04_inventory/hash_new_files.py:A row with no hash`, `test:tests/test_flat_chronology.py:a sidecar is keyed by its title, not its own filename` |
 | 5 | cloud placeholders are detected, not skipped | `code:stages/02_ingest/ingest_from_h.py:learning 5` |
 | 7 | size rules out, only a hash rules in | `guard:contentarchives/dedupe.py:class Index`, `test:tests/test_safety_and_dedupe.py:def test_novel_size_short_circuits_without_io`, `test:tests/test_safety_and_dedupe.py:def test_signature_is_not_trusted_alone` |
 | 11 | same-volume files enter as hardlinks | `code:stages/02_ingest/autopilot.py:hardlink` |

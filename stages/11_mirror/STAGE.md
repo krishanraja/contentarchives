@@ -58,6 +58,7 @@ destination's own evidence, never by reading back what was just written.
 ## Lessons
 | # | what this stage does about it | enforced by |
 |---|---|---|
+| 76 | the cloud copy is proven by READING it back through the mount, and the tool prints the throughput rather than claiming the network | `code:stages/11_mirror/verify_drive_by_mount.py:judge for yourself`, `test:tests/test_mirror_to_h.py:a mount path is returned unchanged` |
 | 5 | a cloud mount's placeholders and free space are not what they look like | prose-only HERE; enforced in 02 ingest by `code:stages/02_ingest/ingest_from_h.py:learning 5` |
 | 17 | capacity comes from the account, not the mount | prose-only |
 | 25 | receipt is proven by the Drive client's operations queue | `code:stages/11_mirror/move_audio_to_h.py:operations` |

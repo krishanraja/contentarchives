@@ -41,6 +41,7 @@ every opinion kept and human answers always winning.
 ## Lessons
 | # | what this stage does about it | enforced by |
 |---|---|---|
+| 77 | the index resolves only hashes the library still holds, so a coverage figure counts the library and not the store | `code:stages/08_index/build_db.py:ONLY FOR FILES THE LIBRARY STILL HOLDS`, `test:tests/test_reconcile_rows.py:a row it did not write is untouched` |
 | 42 | the database is replaced atomically | `code:stages/08_index/build_db.py:def promote` |
 | 55 | the swap is retried, and a lock is never reported as lost work | `code:stages/08_index/build_db.py:def promote` |
 | 49 | a group photograph keeps every person in it | `test:tests/test_build_db.py:a group photograph keeps everybody in it` |
