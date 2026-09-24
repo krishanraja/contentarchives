@@ -236,14 +236,29 @@ After that, two things make it answerable rather than merely searchable:
 
 ### WHAT IS DELIBERATELY NOT DONE
 
-  * `verify_drive_md5.py` has still not run. The Workspace account is
-    authenticated but its reauth policy needs a browser, which a
-    non-interactive shell cannot drive: `gcloud auth login --enable-gdrive-access`.
-    The mirror is otherwise proven - identical file-for-file and byte-for-byte,
-    digests computed on the bytes as written, DriveFS queue drained.
-  * The 163 GB of source zips in `D:\_Staging\communal-2026-09-22\_archives`.
-    Krish chose deletion once every member is accounted for, and it is; doing
-    it after the checksum check costs nothing and keeps the only re-do path.
+  * **THE CLOUD COPY IS PROVEN AGAIN, WITHOUT A TOKEN (2026-09-24).**
+    `verify_drive_by_mount.py` reads files back THROUGH the H: mount and hashes
+    them: **444 of 444 matched their recorded digest, 0 mismatched.** The 56
+    reported absent are `_Review` and `Archive` files Krish deleted from BOTH
+    copies on 2026-09-21; they are absent from D: too.
+
+    Learning 25 says writing into a mount proves nothing because the bytes sit
+    in a local cache. Reading is the same coin the other way up and the
+    direction matters: a file NOT in the cache is FETCHED FROM GOOGLE to
+    satisfy the read. That was dismissed for most of this session on the
+    strength of learning 25, which is about writing. The cache holds ~171 GB
+    against 926 GB, and the run sustained 2,312 KB/s over 1.15 GB - not an
+    NVMe. The tool prints that figure rather than asserting the claim.
+
+    `verify_drive_md5.py` (Google's own `md5Checksum`, over the API) is still
+    the stronger check and still needs `gcloud auth login --enable-gdrive-access`.
+  * **DONE: the source archives are deleted (2026-09-24).** 162 GB freed,
+    journalled in `ARCHIVE-DELETIONS.csv` with a head+tail fingerprint of each,
+    after proving all 13,266 media members accounted for and 400 sampled
+    duplicate-survivors present. The 24,286-file extraction tree went too -
+    `fsutil hardlink list` confirmed those names shared inodes with the
+    library, so removing them left the content. D: free 3,531 -> 3,722 GB, the
+    library unchanged at 85,480 files / 926.5 GB.
   * 83 undecodable files, 9.7 GB - valid containers, no decodable picture. They
     have no description and never will.
   * 5,844 single-video Communal clusters (1,981 videos, 6.5 hours) are not in
