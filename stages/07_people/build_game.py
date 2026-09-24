@@ -132,12 +132,43 @@ def main() -> int:
         print("STOPPING: no answers file at {}".format(a.answers))
         print("  Proceeding would re-ask every question already answered.")
         return 1
-    answered = set()
+    # THE LATEST ANSWER WINS, BECAUSE THE JOURNAL IS ORDERED AND A PERSON MAY
+    # CHANGE THEIR MIND.
+    #
+    # This collapsed the journal to "has this cluster ANY answer" and excluded
+    # it. That makes an append-only, chronological record behave like a set:
+    # the first verdict is permanent, and appending a correction does nothing.
+    #
+    # Krish did exactly that on 2026-09-24. 57 rows he had not named in rounds
+    # 27 and 28 were recorded as declined under his own standing rule, and he
+    # then said they should go to Bharti's game instead. Appending
+    # needs_identifying=Bharti would have LOOKED like routing them to her while
+    # the decline kept them out - a correction that reads as applied and is not.
+    #
+    # So the last answer for a merge group decides. A decline still excludes -
+    # that is what "stop resending me batches I have refused" means - but a
+    # LATER `needs_identifying` supersedes it and the cluster goes to that
+    # person's queue.
+    verdict = {}
     for r in csv.DictReader(io.open(a.answers, encoding="utf-8", newline="")):
         if r.get("field") in ("person", "needs_identifying", "unidentifiable"):
-            answered.add(group_of.get(r["target"], r["target"]))
-    clusters = {g: v for g, v in clusters.items() if g not in answered}
-    print("unanswered: {:,}".format(len(clusters)))
+            verdict[group_of.get(r["target"], r["target"])] = (
+                r["field"], r.get("value") or "")
+    mine = (a.who or "").strip().lower()
+    keep = {}
+    for g, v in clusters.items():
+        f = verdict.get(g)
+        if f is None:
+            keep[g] = v                                   # never asked
+        elif f[0] == "needs_identifying" and mine and f[1].strip().lower() == mine:
+            keep[g] = v                                   # handed to THIS person
+    superseded = sum(1 for g in clusters
+                     if verdict.get(g, ("", ""))[0] == "needs_identifying")
+    clusters = keep
+    print("unanswered: {:,}{}".format(
+        len(clusters),
+        "  (including {:,} handed to {} after an earlier answer)".format(
+            superseded, a.who) if superseded and mine else ""))
 
     known = PS.known_clusters(a.tags)
     if not known:

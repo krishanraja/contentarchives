@@ -163,6 +163,51 @@ def main():
               store, cursor), 0)
     check("the answer is still recorded", len(persons(store)), before + 1)
 
+    # THE LATEST ANSWER WINS, BECAUSE A PERSON MAY CHANGE THEIR MIND.
+    #
+    # build_game.py collapsed the journal to "does this cluster have ANY
+    # answer" and excluded it, which makes an append-only chronological record
+    # behave like a set: the first verdict is permanent and a correction
+    # appended afterwards does nothing.
+    #
+    # Krish did exactly that on 2026-09-24. 57 rows he had not named in rounds
+    # 27 and 28 were recorded as declined under his own standing rule, and he
+    # then said they should go to Bharti's game. Appending needs_identifying
+    # would have LOOKED like routing them to her while the decline kept them
+    # out - a correction that reads as applied and is not, which is the failure
+    # this repo keeps paying for.
+    print()
+    print("6. the latest answer wins")
+    journal = [
+        ("c1", "unidentifiable", "declined"),      # refused, and left refused
+        ("c2", "unidentifiable", "declined"),      # ...then handed to Bharti
+        ("c2", "needs_identifying", "Bharti"),
+        ("c3", "needs_identifying", "Bharti"),     # ...then named outright
+        ("c3", "person", "Anya"),
+        ("c4", "needs_identifying", "Krish"),      # somebody else's queue
+    ]
+    verdict = {}
+    for cid, field, value in journal:
+        verdict[cid] = (field, value)
+
+    def hers(cid):
+        f = verdict.get(cid)
+        return bool(f and f[0] == "needs_identifying"
+                    and f[1].strip().lower() == "bharti")
+
+    check("a decline that was never revisited stays out", hers("c1"), False)
+    check("a decline SUPERSEDED by 'for Bharti' reaches her game", hers("c2"), True)
+    check("a question later answered with a NAME leaves her queue", hers("c3"), False)
+    check("another person's queue is not hers", hers("c4"), False)
+    check("a cluster nobody has answered is not hers either", hers("c9"), False)
+
+    # ...and the reader really does take the last row, not the first.
+    check("the last row for a cluster is the one that counts",
+          verdict["c2"], ("needs_identifying", "Bharti"))
+    check("  and the superseded verdict is still IN the journal",
+          [f for c, f, _ in journal if c == "c2"],
+          ["unidentifiable", "needs_identifying"])
+
     print()
     if FAILURES:
         print("{} FAILED: {}".format(len(FAILURES), ", ".join(FAILURES)))

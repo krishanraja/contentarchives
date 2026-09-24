@@ -139,8 +139,17 @@ Three naming rounds ran, each gated by `verify_people_sheet.py` (every crop
 belongs to its row) and `check_repeats.py` (nothing already offered):
 
     round 25  82 rows  Communal photographs   15 names, 48 to Bharti, 11 corrected
-    round 27  53 rows  Personal video         19 names, 34 declined
-    round 28  37 rows  Personal video         14 names, 23 declined
+    round 27  53 rows  Personal video         19 names, 34 unnamed
+    round 28  37 rows  Personal video         14 names, 23 unnamed
+
+**THE UNNAMED ROWS GO TO BHARTI, NOT TO THE BIN.** Krish, 2026-09-24: *"the
+unnamed rows in this session should route to Bharti's mobile game for
+identification"*. The standing rule that a row shown and not named is a REFUSAL
+still holds in general - it is what "stop resending me batches I have refused"
+means - but he overrode it for this session, so all 57 are recorded
+`needs_identifying = Bharti`. The 11 Archive clusters corrected out of her
+queue on 2026-09-23 stay `unidentifiable`: those were a deliberate correction,
+not rows he had yet to reach.
 
 ### THE SEAMS ARE MEASURED, AND TWO OF THREE ARE DONE
 
