@@ -515,6 +515,25 @@ def main() -> int:
     k, _ = rewrite_csv(CLUSTERS, strip_cluster)
     print("FACE-CLUSTERS.csv: {:,} rows, cluster ids kept, bboxes cleared".format(k))
 
+    # --- the family app's cloud copy (stages/13_app) -----------------------
+    # Another place a deletion has to reach (learning 57). Purged hashes are
+    # also excluded by share_set(), so the next seed's reconcile removes them
+    # regardless - but "next seed" can be a day away, and this is the one
+    # copy other people are looking at.
+    if os.environ.get("SUPABASE_URL") and os.environ.get("SUPABASE_SERVICE_ROLE_KEY"):
+        try:
+            from cloud import Cloud
+            n = Cloud().delete_in("photos", "hash", sorted(sweep))
+            print("family app: {:,} hash(es) removed from the cloud index".format(n))
+        except Exception as e:                                   # noqa: BLE001
+            print("WARNING: family app NOT swept ({}). Run "
+                  "stages/13_app/seed_index.py --apply - its reconcile removes "
+                  "purged hashes.".format(e))
+    else:
+        print("WARNING: family app NOT swept - SUPABASE_URL / "
+              "SUPABASE_SERVICE_ROLE_KEY are not set. Run "
+              "stages/13_app/seed_index.py --apply with them set.")
+
     if os.path.exists(CACHE):
         os.remove(CACHE)
         print("deleted {} - it regenerates from the purged source".format(

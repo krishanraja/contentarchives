@@ -7,6 +7,12 @@
 # the loader stopped rather than guessing (which is what it is for).
 PyYAML>=6.0        # profile parsing: guards/profile.py
 #
+# Used for years and never declared (a fresh machine found out the hard way):
+numpy>=1.24        # embeddings, faces, the archives app's seed
+Pillow>=10.0       # thumbnails, crops, frame sizes
+pillow-heif>=0.13  # HEIC thumbnails (stages/05_enrich/thumbnail.py)
+requests>=2.31     # the archives app's cloud client (stages/13_app/cloud.py)
+#
 # External binaries (not pip-installable):
 #   ffmpeg / ffprobe  - video dates and compression
 #                       build with libvmaf for perceptual scoring

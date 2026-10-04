@@ -205,7 +205,7 @@ create or replace function search_photos(
 language sql stable as $$
   with base as (
     select p.* from photos p
-    where not p.hidden
+    where not p.hidden and p.drive_id is not null
       and (q_people is null or not exists (
             select 1 from unnest(q_people) want
             where not exists (select 1 from photo_people pp

@@ -100,3 +100,8 @@ compression:
   never_compress:
     - gopro
     - drone
+
+app:
+  # The family app (stages/13_app): the names on the "Who are you?" screen, in
+  # order. Real names go in YOUR profile, never in this file.
+  players: []
