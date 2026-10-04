@@ -613,26 +613,11 @@ def blocked_index():
     global _BLOCKED
     if _BLOCKED is not None:
         return _BLOCKED
-    _BLOCKED = defaultdict(set)
-    if not os.path.exists(BLOCKLIST):
+    from blocklist import read_blocklist
+    _BLOCKED, bad, present = read_blocklist(BLOCKLIST)
+    if not present:
         log(f"  no-reingest list ABSENT at {BLOCKLIST} - nothing is blocked")
         return _BLOCKED
-    bad = 0
-    with open(BLOCKLIST, newline="", encoding="utf-8") as f:
-        for row in csv.reader(f):
-            if not row or row[0].strip().lower() in ("hash", ""):
-                continue
-            h = row[0].strip().lower()
-            # A size in the Hash column is what a broken writer produced once
-            # (learning 60). Count them rather than trusting them.
-            if len(h) != 64:
-                bad += 1
-                continue
-            try:
-                size = int(row[1]) if len(row) > 1 and str(row[1]).isdigit() else -1
-            except (TypeError, ValueError):
-                size = -1
-            _BLOCKED[size].add(h)
     n = sum(len(v) for v in _BLOCKED.values())
     log(f"  no-reingest list: {n} hash(es) across {len(_BLOCKED)} size(s)")
     if bad:

@@ -89,6 +89,9 @@ OUT = os.path.join(MS.AUDIT, "library.db")
 # Fields a human or a geocoder may override, resolved into one value per file.
 RESOLVED = ["kind", "people", "subject", "keep", "sensitivity", "setting",
             "place", "region", "country", "era", "person", "event",
+            # a human's "roughly 1985" for a photograph with no clock - kept
+            # BESIDE files.year, never written over it (ingest_game_answers)
+            "approx_year",
             # DERIVED, never asserted: who may see this photograph. `family`
             # when it holds someone who also appears in Communal, `private`
             # otherwise, and always `private` inside Personal\Intimate. See

@@ -59,6 +59,7 @@ import csv
 import datetime as dt
 import io
 import os
+import shutil
 import threading
 
 import os as _os, sys as _sys
@@ -69,6 +70,30 @@ COLS = ["when", "scope", "target", "field", "value", "confidence", "who", "note"
 SCOPES = ("file", "folder", "origin", "cluster", "all")
 
 _LOCK = threading.Lock()
+
+# A second copy of the journal, off the library disk. It is the only data in the
+# project compute cannot reproduce, and until 2026-09-15 it lived on one drive.
+# Every writer passes this as an ARGUMENT default, never reads it directly: the
+# test suite once copied a two-row fixture over the 1,508-row live backup
+# because the path was a constant nobody could point elsewhere (2026-09-17).
+BACKUP = r"G:\My Drive\Personal\Family\Photo library - answers backup"
+
+
+def backup_journal(journal_path: str, backup_dir: str) -> bool:
+    """Copy the journal off-disk. Loud, never fatal: the answer IS recorded.
+
+    One function for every writer, because the phone-game ingest wrote to the
+    journal for a week without ever refreshing this copy - the stage invariant
+    "every --apply refreshes the off-disk backup" was true of one writer only.
+    """
+    try:
+        os.makedirs(backup_dir, exist_ok=True)
+        shutil.copyfile(journal_path, os.path.join(backup_dir, JOURNAL))
+        print("backed up the journal to {}".format(backup_dir))
+        return True
+    except OSError as e:
+        print("WARNING: journal NOT backed up to {}: {}".format(backup_dir, e))
+        return False
 
 
 class Journal:

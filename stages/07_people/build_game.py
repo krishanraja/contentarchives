@@ -83,6 +83,123 @@ def known_names(answers: str) -> list:
     return [name for name, _ in n.most_common()]
 
 
+def load_groups(merges: str, assign: str, video_assign: str):
+    """(cluster -> merge group, group -> every face row with a bbox)."""
+    group_of = {}
+    if os.path.exists(merges):
+        for r in csv.DictReader(io.open(merges, encoding="utf-8", newline="")):
+            group_of[r["cluster"]] = r["group"]
+    clusters = collections.defaultdict(list)
+    for path in (assign, video_assign):
+        if not os.path.exists(path):
+            continue
+        for r in csv.DictReader(io.open(path, encoding="utf-8",
+                                        errors="replace", newline="")):
+            if r.get("bbox"):
+                clusters[group_of.get(r["cluster"], r["cluster"])].append(r)
+    return group_of, clusters
+
+
+def verdicts(answers: str, group_of: dict) -> dict:
+    """group -> (field, value) of the LATEST person/question/refusal row.
+
+    THE LATEST ANSWER WINS, BECAUSE THE JOURNAL IS ORDERED AND A PERSON MAY
+    CHANGE THEIR MIND.
+
+    This collapsed the journal to "has this cluster ANY answer" and excluded
+    it. That makes an append-only, chronological record behave like a set:
+    the first verdict is permanent, and appending a correction does nothing.
+
+    Krish did exactly that on 2026-09-24. 57 rows he had not named in rounds
+    27 and 28 were recorded as declined under his own standing rule, and he
+    then said they should go to Bharti's game instead. Appending
+    needs_identifying=Bharti would have LOOKED like routing them to her while
+    the decline kept them out - a correction that reads as applied and is not.
+
+    So the last answer for a merge group decides. A decline still excludes -
+    that is what "stop resending me batches I have refused" means - but a
+    LATER `needs_identifying` supersedes it and the cluster goes to that
+    person's queue.
+    """
+    verdict = {}
+    for r in csv.DictReader(io.open(answers, encoding="utf-8", newline="")):
+        if r.get("field") in ("person", "needs_identifying", "unidentifiable"):
+            verdict[group_of.get(r["target"], r["target"])] = (
+                r["field"], r.get("value") or "")
+    return verdict
+
+
+def wanted(v, handed_to: str = "") -> bool:
+    """Should a group with this verdict be asked? Never asked, or handed to us."""
+    if v is None:
+        return True
+    mine = (handed_to or "").strip().lower()
+    return bool(v[0] == "needs_identifying" and mine
+                and v[1].strip().lower() == mine)
+
+
+def select_queue(clusters: dict, verdict: dict, known: set, sides: dict,
+                 communal: bool, handed_to: str = "", allowed=None) -> list:
+    """[(group, faces)] still to ask, largest first. Pure: no files, no images.
+
+    `communal` picks the side by majority of the group's photographs - NOT by
+    who is playing, so a relative in the archives app is never shown Krish's
+    side however they introduce themselves. `allowed` (a set of hashes) drops
+    every face outside it BEFORE the group is ranked or capped, so a group
+    that is mostly Communal still cannot carry one Personal photograph into a
+    shared view.
+    """
+    out = []
+    for g, faces in clusters.items():
+        if not wanted(verdict.get(g), handed_to):
+            continue
+        if not PS.is_recordable(g, known):
+            continue
+        hs = {r["hash"] for r in faces}
+        if is_majority_communal(hs, sides) != communal:
+            continue
+        if allowed is not None:
+            faces = [r for r in faces if r["hash"] in allowed]
+            if not faces:
+                continue
+        out.append((g, faces))
+    out.sort(key=lambda kv: -len({r["hash"] for r in kv[1]}))
+    return out
+
+
+def pick_faces(faces, thumbs: str, frames: str, min_share: float,
+               size_of=None):
+    """Best faces first, one per photograph, each a SUBJECT not a bystander.
+
+    Yields (row, image path). `size_of(path) -> (w, h)` is injectable so a test
+    needs no images on disk.
+    """
+    seen = set()
+    for r in sorted(faces, key=lambda x: -float(x.get("det_score") or 0)):
+        h = r["hash"]
+        if h in seen:
+            continue
+        p = (os.path.join(frames, h[:2], r["image"] + ".jpg")
+             if r.get("image") else os.path.join(thumbs, h[:2], h + ".jpg"))
+        if size_of is None and not os.path.exists(p):
+            continue
+        if min_share > 0:
+            frame = (size_of or _image_size)(p)
+            if not PS.is_subject(r["bbox"], frame, min_share):
+                continue
+        seen.add(h)
+        yield r, p
+
+
+def _image_size(p):
+    try:
+        from PIL import Image
+        with Image.open(p) as im:
+            return im.size
+    except Exception:                                            # noqa: BLE001
+        return None
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(
         description=__doc__,
@@ -114,61 +231,14 @@ def main() -> int:
         print("  what produced rows full of strangers.")
         return 1
 
-    group_of = {}
-    for r in csv.DictReader(io.open(a.merges, encoding="utf-8", newline="")):
-        group_of[r["cluster"]] = r["group"]
-
-    clusters = collections.defaultdict(list)
-    for path in (a.assign, a.video_assign):
-        if not os.path.exists(path):
-            continue
-        for r in csv.DictReader(io.open(path, encoding="utf-8",
-                                        errors="replace", newline="")):
-            if r.get("bbox"):
-                clusters[group_of.get(r["cluster"], r["cluster"])].append(r)
+    group_of, clusters = load_groups(a.merges, a.assign, a.video_assign)
     print("face groups: {:,}".format(len(clusters)))
 
     if not os.path.exists(a.answers):
         print("STOPPING: no answers file at {}".format(a.answers))
         print("  Proceeding would re-ask every question already answered.")
         return 1
-    # THE LATEST ANSWER WINS, BECAUSE THE JOURNAL IS ORDERED AND A PERSON MAY
-    # CHANGE THEIR MIND.
-    #
-    # This collapsed the journal to "has this cluster ANY answer" and excluded
-    # it. That makes an append-only, chronological record behave like a set:
-    # the first verdict is permanent, and appending a correction does nothing.
-    #
-    # Krish did exactly that on 2026-09-24. 57 rows he had not named in rounds
-    # 27 and 28 were recorded as declined under his own standing rule, and he
-    # then said they should go to Bharti's game instead. Appending
-    # needs_identifying=Bharti would have LOOKED like routing them to her while
-    # the decline kept them out - a correction that reads as applied and is not.
-    #
-    # So the last answer for a merge group decides. A decline still excludes -
-    # that is what "stop resending me batches I have refused" means - but a
-    # LATER `needs_identifying` supersedes it and the cluster goes to that
-    # person's queue.
-    verdict = {}
-    for r in csv.DictReader(io.open(a.answers, encoding="utf-8", newline="")):
-        if r.get("field") in ("person", "needs_identifying", "unidentifiable"):
-            verdict[group_of.get(r["target"], r["target"])] = (
-                r["field"], r.get("value") or "")
-    mine = (a.who or "").strip().lower()
-    keep = {}
-    for g, v in clusters.items():
-        f = verdict.get(g)
-        if f is None:
-            keep[g] = v                                   # never asked
-        elif f[0] == "needs_identifying" and mine and f[1].strip().lower() == mine:
-            keep[g] = v                                   # handed to THIS person
-    superseded = sum(1 for g in clusters
-                     if verdict.get(g, ("", ""))[0] == "needs_identifying")
-    clusters = keep
-    print("unanswered: {:,}{}".format(
-        len(clusters),
-        "  (including {:,} handed to {} after an earlier answer)".format(
-            superseded, a.who) if superseded and mine else ""))
+    verdict = verdicts(a.answers, group_of)
 
     known = PS.known_clusters(a.tags)
     if not known:
@@ -176,8 +246,6 @@ def main() -> int:
         print("  Every row would be unrecordable, or - worse - look fine and")
         print("  record nothing. An empty filter is worse than no filter.")
         return 1
-    clusters = {g: v for g, v in clusters.items() if PS.is_recordable(g, known)}
-    print("recordable: {:,}".format(len(clusters)))
 
     import sqlite3
     sides, years = {}, {}
@@ -199,17 +267,10 @@ def main() -> int:
 
     # Krish gets everything that is NOT majority Communal; Bharti gets the
     # inverse. Neither is shown the other's side.
-    want_communal = (a.who == "bharti")
-    picked = {}
-    for g, faces in clusters.items():
-        hs = {r["hash"] for r in faces}
-        if is_majority_communal(hs, sides) == want_communal:
-            picked[g] = faces
-    print("{}'s side: {:,} groups".format(a.who, len(picked)))
+    ranked = select_queue(clusters, verdict, known, sides,
+                          communal=(a.who == "bharti"), handed_to=a.who)
+    print("{}'s side: {:,} groups".format(a.who, len(ranked)))
 
-    # Largest first, so the earliest batches buy the most.
-    ranked = sorted(picked.items(),
-                    key=lambda kv: -len({r["hash"] for r in kv[1]}))
     start = (a.batch - 1) * a.size
     rows, manifest = [], []
     for g, faces in ranked[start:]:
@@ -218,30 +279,14 @@ def main() -> int:
         hs = {r["hash"] for r in faces}
         ys = sorted(y for y in (years.get(h) for h in hs) if y)
         span = "{}-{}".format(ys[0], ys[-1]) if ys else ""
-        seen, imgs = set(), []
-        for r in sorted(faces, key=lambda x: -float(x["det_score"])):
-            if len(imgs) >= 9 or r["hash"] in seen:
-                continue
-            h = r["hash"]
-            p = (os.path.join(a.frames, h[:2], r["image"] + ".jpg")
-                 if r.get("image")
-                 else os.path.join(a.thumbs, h[:2], h + ".jpg"))
-            if not os.path.exists(p):
-                continue
-            if a.min_face_share > 0:
-                try:
-                    from PIL import Image
-                    with Image.open(p) as im:
-                        frame = im.size
-                except Exception:                                # noqa: BLE001
-                    frame = None
-                if not PS.is_subject(r["bbox"], frame, a.min_face_share):
-                    continue
-            b64 = PS.crop(p, r["bbox"], h)
+        imgs = []
+        for r, p in pick_faces(faces, a.thumbs, a.frames, a.min_face_share):
+            b64 = PS.crop(p, r["bbox"], r["hash"])
             if not b64:
                 continue
-            seen.add(h)
-            imgs.append((h, r.get("image") or "", r["face_index"], b64))
+            imgs.append((r["hash"], r.get("image") or "", r["face_index"], b64))
+            if len(imgs) >= 9:
+                break
         if not imgs:
             continue
         rows.append({"cid": g, "photos": len(hs), "span": span, "imgs": imgs})

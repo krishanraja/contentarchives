@@ -37,6 +37,7 @@ sys.path.insert(0, ROOT)
 import stagepath  # noqa: E402,F401
 
 import ingest_game_answers as G                                  # noqa: E402
+import build_game as BG                                          # noqa: E402
 from answers import Journal                                      # noqa: E402
 
 FAILURES = []
@@ -65,14 +66,18 @@ def fixture(d):
     return store
 
 
-def run(rows, store, cursor, who="krish", apply=True):
+def run(rows, store, cursor, who="krish", apply=True, extra=()):
     p = os.path.join(os.path.dirname(cursor), "rows.json")
     io.open(p, "w", encoding="utf-8").write(json.dumps(rows))
     argv = sys.argv
     try:
+        # --backup ALWAYS points at the temp dir: the default is the live G:
+        # copy, and on 2026-09-17 a test run overwrote it with a fixture.
         sys.argv = ["ingest_game_answers.py", "--rows", p, "--store", store,
                     "--tags", os.path.join(store, "content_tags.csv"),
-                    "--cursor", cursor, "--who", who] + (["--apply"] if apply else [])
+                    "--cursor", cursor, "--who", who,
+                    "--backup", os.path.join(os.path.dirname(cursor), "backup")
+                    ] + list(extra) + (["--apply"] if apply else [])
         return G.main()
     finally:
         sys.argv = argv
@@ -186,14 +191,20 @@ def main():
         ("c3", "person", "Anya"),
         ("c4", "needs_identifying", "Krish"),      # somebody else's queue
     ]
-    verdict = {}
-    for cid, field, value in journal:
-        verdict[cid] = (field, value)
+    # The REAL selection, not a restatement of it: this section once re-wrote
+    # the verdict loop inline, so a change to build_game.py would not have
+    # been noticed here.
+    jp = os.path.join(d, "verdict-journal.csv")
+    with io.open(jp, "w", encoding="utf-8", newline="") as fh:
+        w = csv.writer(fh)
+        w.writerow(["when", "scope", "target", "field", "value", "confidence",
+                    "who", "note"])
+        for cid, field, value in journal:
+            w.writerow(["x", "cluster", cid, field, value, "1.00", "krish", ""])
+    verdict = BG.verdicts(jp, {})
 
     def hers(cid):
-        f = verdict.get(cid)
-        return bool(f and f[0] == "needs_identifying"
-                    and f[1].strip().lower() == "bharti")
+        return BG.wanted(verdict.get(cid), "bharti") and cid in verdict
 
     check("a decline that was never revisited stays out", hers("c1"), False)
     check("a decline SUPERSEDED by 'for Bharti' reaches her game", hers("c2"), True)
@@ -207,6 +218,67 @@ def main():
     check("  and the superseded verdict is still IN the journal",
           [f for c, f, _ in journal if c == "c2"],
           ["unidentifiable", "needs_identifying"])
+
+    print()
+    print("7. structured app rows: a whitelist, a share set, and their own who")
+    allowed = os.path.join(d, "allowed.txt")
+    io.open(allowed, "w", encoding="utf-8").write("hok\n")
+    status = os.path.join(d, "status.json")
+    rows = [
+        {"id": "app-1", "scope": "cluster", "target": "c2", "field": "person",
+         "value": "lauren", "who": "bharti"},
+        {"id": "app-2", "scope": "file", "target": "hok", "field": "place",
+         "value": "Goa", "who": "bhasker"},
+        {"id": "app-3", "scope": "file", "target": "hnot", "field": "place",
+         "value": "Goa", "who": "bhasker"},
+        {"id": "app-4", "scope": "file", "target": "hok", "field": "sensitivity",
+         "value": "none", "who": "bhasker"},
+        {"id": "app-5", "scope": "cluster", "target": "c3",
+         "field": "unidentifiable", "value": "mixed", "who": "bharti"},
+        {"id": "app-6", "scope": "cluster", "target": "c3",
+         "field": "unidentifiable", "value": "whatever", "who": "bharti"},
+    ]
+    check("it exits 0", run(rows, store, cursor,
+                            extra=["--allowed", allowed, "--status-out", status]), 0)
+    got = [(r["scope"], r["target"], r["field"], r["value"], r["who"])
+           for r in Journal(store).all_rows()]
+    check("a person row is folded and recorded under ITS player",
+          ("cluster", "c2", "person", "Lauren", "bharti") in got, True)
+    check("a place lands on the one photograph, under its player",
+          ("file", "hok", "place", "Goa", "bhasker") in got, True)
+    check("a place for a photo OUTSIDE the share set is refused",
+          any(t == "hnot" for _, t, _, _, _ in got), False)
+    check("'sensitivity = none' is refused - a human may not unhide a photo",
+          any(f == "sensitivity" for _, _, f, _, _ in got), False)
+    check("'mixed' is an allowed verdict",
+          ("cluster", "c3", "unidentifiable", "mixed", "bharti") in got, True)
+    st = json.load(io.open(status, encoding="utf-8"))
+    check("the caller is told which rows were refused, and why",
+          (st["app-3"]["status"], st["app-4"]["status"], st["app-6"]["status"],
+           st["app-1"]["status"]),
+          ("refused", "refused", "refused", "ingested"))
+    check("the backup went to the temp dir, never G:",
+          os.path.exists(os.path.join(d, "backup", "answers.csv")), True)
+
+    print()
+    print("7b. roughly what year: a year or a decade, nothing else")
+    rows = [{"id": "app-y1", "scope": "file", "target": "hok",
+             "field": "approx_year", "value": "1980s", "who": "bharti"},
+            {"id": "app-y2", "scope": "file", "target": "hok",
+             "field": "approx_year", "value": "ages ago", "who": "bharti"}]
+    run(rows, store, cursor, extra=["--allowed", allowed])
+    got = [(r["target"], r["field"], r["value"]) for r in Journal(store).all_rows()]
+    check("a decade is recorded", ("hok", "approx_year", "1980s") in got, True)
+    check("prose is refused", ("hok", "approx_year", "ages ago") in got, False)
+
+    print()
+    print("8. folding works in every script, and never folds two names into ''")
+    check("Devanagari names keep distinct keys",
+          G.fold("आशा") != G.fold("सीता") and G.fold("आशा") != "", True)
+    check("case and spacing still fold", G.fold(" Asha  Raja ") == G.fold("asha raja"),
+          True)
+    check("an all-punctuation name never folds onto anything",
+          G.canonical("--", {"": "Lauren"}), ("--", False))
 
     print()
     if FAILURES:
