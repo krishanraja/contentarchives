@@ -47,6 +47,14 @@ describe("the daily Drive sync", () => {
     expect(rows.map((x) => [x.hash, x.drive_id])).toEqual([["h1", "d1"], ["h2", "d2"]]);
   });
 
+  it("before the first seed, nothing is classified, whatever is on Drive", async () => {
+    if (!ok) return;
+    const files = [f("dz", "Media/Communal/2020/z.jpg")];
+    const r = await syncDrive(db, { ...deps(files), classify: async () => { throw new Error("must not be asked"); } });
+    expect([r.seeded, r.added, r.waiting]).toEqual([false, 0, 1]);
+    await db`insert into snapshots (kind) values ('seed')`;
+  });
+
   it("without a classifier key, new files WAIT - nothing is shown unjudged", async () => {
     if (!ok) return;
     const files = [f("d1", "Media/Communal/2001/renamed.jpg", "AAA"), f("d2", "Media/Communal/2002/b.jpg"),
@@ -90,12 +98,23 @@ describe("the daily Drive sync", () => {
     expect((await db`select drive_id from photos order by drive_id`).map((x) => x.drive_id)).toEqual(["d1", "d3"]);
   });
 
+  it("a seeded row takes its file over from a row the cloud added by itself", async () => {
+    if (!ok) return;
+    await db`insert into photos (hash, drive_id, rel_path, source) values ('drive:d9', 'd9', 'Media/Communal/2021/x.jpg', 'cloud')`;
+    await db`insert into photos (hash, rel_path, md5, source) values ('h9', 'Media/Communal/2021/x.jpg', 'f9', 'seed')`;
+    const files = [f("d1", "Media/Communal/2001/renamed.jpg", "AAA"), f("d3", "Media/Communal/2020/new.jpg"),
+      f("d9", "Media/Communal/2021/x.jpg", "F9")];
+    const r = await syncDrive(db, { ...deps(files), classify: null });
+    expect([r.bound, r.replaced]).toEqual([1, 1]);
+    expect((await db`select hash from photos where drive_id = 'd9'`).map((x) => x.hash)).toEqual(["h9"]);
+  });
+
   it("a broken listing removes NOTHING", async () => {
     if (!ok) return;
     const many = Array.from({ length: 30 }, (_, i) => ({ hash: `m${i}`, drive_id: `m${i}` }));
     await db`insert into photos ${db(many)}`;
     const r = await syncDrive(db, { ...deps([]), classify: null });
     expect(r.refusedRemoval).toMatch(/refusing/);
-    expect((await db`select count(*)::int n from photos`)[0].n).toBe(32);
+    expect((await db`select count(*)::int n from photos`)[0].n).toBe(33);
   });
 });

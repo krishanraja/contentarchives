@@ -166,7 +166,7 @@ create table sync_state (
 
 -- Names as the family sees them right now: the latest live app answer for a
 -- group since the last seed, else the seeded name.
-create view group_names as
+create view group_names with (security_invoker = true) as
 with wm as (
   select coalesce(max(watermark), 'epoch'::timestamptz) as t
   from snapshots where kind = 'seed'
@@ -183,7 +183,7 @@ select c.group_id,
 from clusters c left join latest l on l.group_id = c.group_id
 group by c.group_id, l.field, l.value;
 
-create view photo_people as
+create view photo_people with (security_invoker = true) as
 select p.hash, unnest(p.people) as name from photos p
 union
 select ch.hash, g.name from cluster_hashes ch

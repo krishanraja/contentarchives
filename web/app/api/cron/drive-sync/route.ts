@@ -5,7 +5,8 @@ import { classify, embed, hasGemini } from "@/lib/gemini";
 import { syncDrive } from "@/lib/sync";
 import { need } from "@/lib/env";
 
-export const maxDuration = 300;
+// 60s fits every Vercel plan; the sync stops adding at 50s and resumes tomorrow.
+export const maxDuration = 60;
 
 // Vercel Cron calls this daily with `Authorization: Bearer $CRON_SECRET`.
 export async function GET(req: NextRequest) {
@@ -18,8 +19,8 @@ export async function GET(req: NextRequest) {
     image: (f) => thumbnail(f.id, 1024),
     classify: hasGemini() ? classify : null,
     embed: hasGemini() ? (t) => embed(t, "RETRIEVAL_DOCUMENT") : null,
-    budget: 60,
-    deadline: started + 240_000,
+    budget: 15,
+    deadline: started + 50_000,
   });
   return NextResponse.json(report);
 }

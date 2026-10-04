@@ -23,14 +23,15 @@ export type Deps = {
 
 export type Report = {
   listed: number; bound: number; removed: number; added: number; held: number;
-  waiting: number; refusedRemoval: string | null;
+  waiting: number; refusedRemoval: string | null; replaced: number; seeded: boolean;
 };
 
 const YEAR_DIR = /(?:^|\/)((?:18|19|20)\d\d)(?:\/|$)/;
 
 export async function syncDrive(db: postgres.Sql, d: Deps): Promise<Report> {
   const files = await d.list();
-  const r: Report = { listed: files.length, bound: 0, removed: 0, added: 0, held: 0, waiting: 0, refusedRemoval: null };
+  const r: Report = { listed: files.length, bound: 0, removed: 0, added: 0, held: 0, waiting: 0,
+    refusedRemoval: null, replaced: 0, seeded: false };
   const byId = new Map(files.map((f) => [f.id, f]));
 
   // 1. bind
@@ -38,13 +39,23 @@ export async function syncDrive(db: postgres.Sql, d: Deps): Promise<Report> {
   if (unbound.length) {
     const byMd5 = new Map(files.filter((f) => f.md5Checksum).map((f) => [f.md5Checksum!.toLowerCase(), f]));
     const byPath = new Map(files.map((f) => [f.relPath.toLowerCase(), f]));
-    const taken = new Set((await db`select drive_id from photos where drive_id is not null`).map((x) => x.drive_id));
+    const holders = new Map((await db`select drive_id, source, hash from photos where drive_id is not null`)
+      .map((x) => [x.drive_id as string, { source: x.source as string, hash: x.hash as string }]));
     for (const u of unbound) {
       const f = (u.md5 && byMd5.get(String(u.md5).toLowerCase())) || (u.rel_path && byPath.get(String(u.rel_path).toLowerCase()));
-      if (f && !taken.has(f.id)) {
-        await db`update photos set drive_id = ${f.id}, updated_at = now() where hash = ${u.hash}`;
-        taken.add(f.id); r.bound++;
+      if (!f) continue;
+      const holder = holders.get(f.id);
+      // A row the cloud described by itself gives way to the seed's row for
+      // the same file: the seed carries faces, names and the library's
+      // knowledge. A SEED row holding the file is never displaced.
+      if (holder && holder.source !== "cloud") continue;
+      if (holder) {
+        await db`delete from photos where hash = ${holder.hash}`;
+        r.replaced++;
       }
+      await db`update photos set drive_id = ${f.id}, updated_at = now() where hash = ${u.hash}`;
+      holders.set(f.id, { source: "seed", hash: u.hash });
+      r.bound++;
     }
   }
 
@@ -67,7 +78,12 @@ export async function syncDrive(db: postgres.Sql, d: Deps): Promise<Report> {
   ]);
   const fresh = files.filter((f) => !seen.has(f.id));
   r.waiting = fresh.length;
-  if (!d.classify) return r;                 // no key: they wait, nothing is shown unjudged
+  // NOTHING IS CLASSIFIED BEFORE THE FIRST SEED. Before it, every one of
+  // ~24,000 Communal files looks "new": the cron would start describing the
+  // whole library at Gemini's price, a few dozen a day, and every row it made
+  // would duplicate one the seed is about to bring with faces and names.
+  r.seeded = (await db`select 1 from snapshots where kind = 'seed' limit 1`).length > 0;
+  if (!r.seeded || !d.classify) return r;    // they wait; nothing is shown unjudged
   const now = d.now || Date.now;
   for (const f of fresh.slice(0, d.budget)) {
     if (d.deadline && now() > d.deadline) break;
