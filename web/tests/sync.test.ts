@@ -20,7 +20,12 @@ beforeAll(async () => {
     const dir = path.join(__dirname, "../supabase");
     await db.unsafe(readFileSync(path.join(dir, "test/shim.sql"), "utf8"));
     await db.unsafe(readFileSync(path.join(dir, "migrations/0001_archives.sql"), "utf8"));
-  } catch { ok = false; }
+  } catch (e) {
+    // A database test that cannot reach its database must FAIL, not pass
+    // vacuously: a run with Postgres down once reported these six as green.
+    ok = false;
+    if (!process.env.SKIP_PG) throw new Error("no Postgres for the sync tests (set SKIP_PG=1 to skip on purpose): " + e);
+  }
 });
 afterAll(async () => { if (db) await db.end(); });
 
@@ -49,9 +54,10 @@ describe("the daily Drive sync", () => {
 
   it("before the first seed, nothing is classified, whatever is on Drive", async () => {
     if (!ok) return;
-    const files = [f("dz", "Media/Communal/2020/z.jpg")];
+    const files = [f("d1", "Media/Communal/2001/renamed.jpg", "AAA"), f("d2", "Media/Communal/2002/b.jpg"),
+      f("dz", "Media/Communal/2020/z.jpg")];
     const r = await syncDrive(db, { ...deps(files), classify: async () => { throw new Error("must not be asked"); } });
-    expect([r.seeded, r.added, r.waiting]).toEqual([false, 0, 1]);
+    expect([r.seeded, r.added, r.waiting, r.removed]).toEqual([false, 0, 1, 0]);
     await db`insert into snapshots (kind) values ('seed')`;
   });
 

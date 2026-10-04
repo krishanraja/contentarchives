@@ -71,6 +71,21 @@ export async function listTree(rootId: string, prefix: string): Promise<DriveFil
   return out;
 }
 
+// The folder itself, before anything is listed in it. A listing of a folder
+// the service account cannot see comes back EMPTY, not as an error - so "0
+// files" would read as "nothing on Drive" when the truth is "not shared".
+export async function folderInfo(id: string): Promise<{ ok: true; name: string; owner?: string } | { ok: false; error: string }> {
+  const u = new URL("https://www.googleapis.com/drive/v3/files/" + id);
+  u.searchParams.set("fields", "id, name, mimeType, owners(emailAddress), driveId");
+  u.searchParams.set("supportsAllDrives", "true");
+  const r = await fetch(u, { headers: { authorization: `Bearer ${await driveToken()}` } });
+  if (r.status === 404) return { ok: false, error: "the service account cannot see this folder - it is not shared with it, or the id is wrong" };
+  if (!r.ok) return { ok: false, error: `drive ${r.status}: ${(await r.text()).slice(0, 200)}` };
+  const j = await r.json();
+  if (j.mimeType !== FOLDER) return { ok: false, error: `${j.name} is not a folder` };
+  return { ok: true, name: j.name, owner: j.owners?.[0]?.emailAddress };
+}
+
 // Drive's own rendering at the size asked for. Works for HEIC and video,
 // which is why this is tried before downloading the original.
 export async function thumbnail(fileId: string, px: number): Promise<Buffer | null> {
