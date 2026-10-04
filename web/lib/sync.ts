@@ -107,7 +107,7 @@ export async function syncDrive(db: postgres.Sql, d: Deps): Promise<Report> {
         values (${"drive:" + f.id}, ${f.id}, ${f.relPath}, ${f.md5Checksum || null}, ${media},
           ${y ? Number(y[1]) : null}, ${v.place ? String(v.place).slice(0, 80) : null}, ${desc},
           ${v.objects || null}, ${v.activity || null}, ${v.occasion || null}, ${v.mood || null},
-          ${vec ? `[${vec.join(",")}]` : null}::vector, 'cloud')
+          ${vec ? `[${vec.join(",")}]` : null}::extensions.vector, 'cloud')
         on conflict (hash) do nothing`;
       r.added++;
     }
