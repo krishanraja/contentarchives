@@ -79,7 +79,12 @@ export async function folderInfo(id: string): Promise<{ ok: true; name: string; 
   u.searchParams.set("fields", "id, name, mimeType, owners(emailAddress), driveId");
   u.searchParams.set("supportsAllDrives", "true");
   const r = await fetch(u, { headers: { authorization: `Bearer ${await driveToken()}` } });
-  if (r.status === 404) return { ok: false, error: "the service account cannot see this folder - it is not shared with it, or the id is wrong" };
+  if (r.status === 404) {
+    // The account's EMAIL, never its key: it is what Krish has to share with.
+    let who = "the service account";
+    try { who = JSON.parse(need("GOOGLE_SERVICE_ACCOUNT_JSON")).client_email || who; } catch { /* named generically */ }
+    return { ok: false, error: `${who} cannot see folder ${id} - share it with that email as Viewer, or check the id` };
+  }
   if (!r.ok) return { ok: false, error: `drive ${r.status}: ${(await r.text()).slice(0, 200)}` };
   const j = await r.json();
   if (j.mimeType !== FOLDER) return { ok: false, error: `${j.name} is not a folder` };
