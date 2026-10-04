@@ -29,6 +29,7 @@ unattended. Not a stage on the belt: the rails the belt runs on.
 | `guards/arm.ps1` | run a chain as a scheduled task; reap orphans first |
 | `guards/rearm_when.ps1` | re-arm a chain when a log says so |
 | `guards/paths.py` | every library path in one place |
+| `guards/blocklist.py` | PURGED-HASHES.csv, one reader for ingest and the archives app |
 | `contentarchives/__init__.py` | the reusable package root |
 
 ## Tests

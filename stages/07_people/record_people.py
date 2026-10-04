@@ -44,12 +44,9 @@ _sys.path.insert(0, _os.path.dirname(_os.path.dirname(_os.path.dirname(_os.path.
 import stagepath  # noqa: E402,F401  - puts every stage, guards/ and the package root on sys.path
 HERE = os.path.dirname(os.path.abspath(__file__))
 
-from answers import Journal                                      # noqa: E402
+from answers import BACKUP, Journal, backup_journal              # noqa: E402
 
 TAGS = r"D:\_enrichment\content_tags.csv"
-# A second copy of the journal, off the library disk. It is the only data in the
-# project compute cannot reproduce, and until 2026-09-15 it lived on one drive.
-BACKUP = r"G:\My Drive\Personal\Family\Photo library - answers backup"
 LINE = re.compile(r"^\s*(c\d+)\s*[=:\t ]\s*(.+?)\s*$")
 
 
@@ -298,13 +295,7 @@ def main() -> int:
     print()
     print("recorded {} names, {} questions, {} unidentifiable, {} declined to {}".format(
         len(pairs), len(unknown), len(unreadable), len(declined), j.path))
-    try:
-        os.makedirs(a.backup, exist_ok=True)
-        shutil.copyfile(j.path, os.path.join(a.backup, "answers.csv"))
-        print("backed up the journal to {}".format(a.backup))
-    except OSError as e:
-        # loud, not fatal: the answer IS recorded, it just has one copy
-        print("WARNING: journal NOT backed up to {}: {}".format(BACKUP, e))
+    backup_journal(j.path, a.backup)
     print("rebuild the index to see them on the photographs:")
     print("    python stages/08_index/build_db.py")
     return 0

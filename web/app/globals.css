@@ -1,0 +1,216 @@
+/* archives - fun to look at, impossible to get lost in.
+   The floor (tested in e2e/floor.spec.ts): body text >= 20px, every control
+   >= 56px tall, ink-on-colour contrast >= AA, nothing that needs a swipe. */
+
+:root {
+  --cream: #fff6e9;
+  --paper: #ffffff;
+  --ink: #1e1433;
+  --ink-soft: #4a3f5c;          /* 8.9:1 on cream */
+  --sun: #ffc93c;
+  --tomato: #ff6a45;
+  --pink: #ff9ccf;
+  --mint: #4fe0a5;
+  --sky: #7cc4ff;
+  --grape: #b9a3ff;
+  --line: 3px solid var(--ink);
+  --pop: 5px 5px 0 var(--ink);
+  --pop-press: 2px 2px 0 var(--ink);
+  --r: 22px;
+  --tap: 64px;
+  --body: 21px;
+  --gutter: 18px;
+  --col: 560px;
+  color-scheme: light;
+}
+
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+body {
+  margin: 0;
+  background: var(--cream);
+  color: var(--ink);
+  font-family: var(--font-body), "Atkinson Hyperlegible", system-ui, sans-serif;
+  font-size: var(--body);
+  line-height: 1.45;
+  min-height: 100dvh;
+  overflow-x: hidden;
+}
+/* playful dotted paper, very faint so photos still lead */
+body::before {
+  content: ""; position: fixed; inset: 0; z-index: -1; pointer-events: none;
+  background-image: radial-gradient(rgba(30, 20, 51, 0.07) 1.5px, transparent 1.6px);
+  background-size: 22px 22px;
+}
+
+h1, h2, h3, .display {
+  font-family: var(--font-display), "Fredoka", system-ui, sans-serif;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  line-height: 1.1;
+  margin: 0;
+}
+h1 { font-size: 40px; }
+h2 { font-size: 30px; }
+h3 { font-size: 24px; }
+p { margin: 0; }
+
+.page {
+  width: 100%;
+  max-width: var(--col);
+  margin: 0 auto;
+  padding: 16px var(--gutter) calc(48px + env(safe-area-inset-bottom));
+  display: flex; flex-direction: column; gap: 22px;
+}
+
+/* ---------- top bar: always one obvious way home ---------- */
+.bar {
+  position: sticky; top: 0; z-index: 20;
+  background: var(--cream);
+  padding: calc(10px + env(safe-area-inset-top)) var(--gutter) 10px;
+  border-bottom: var(--line);
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+}
+.bar .title { font-family: var(--font-display), system-ui; font-weight: 600; font-size: 24px; }
+.bar-inner { width: 100%; max-width: var(--col); margin: 0 auto; display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+
+/* ---------- buttons ---------- */
+.btn {
+  appearance: none; border: var(--line); border-radius: var(--r);
+  min-height: var(--tap); padding: 12px 22px;
+  font: 700 22px/1.15 var(--font-body), system-ui, sans-serif;
+  color: var(--ink); background: var(--paper);
+  box-shadow: var(--pop);
+  display: inline-flex; align-items: center; justify-content: center; gap: 12px;
+  text-decoration: none; cursor: pointer; text-align: center;
+  transition: transform .08s ease, box-shadow .08s ease;
+}
+.btn:active { transform: translate(3px, 3px); box-shadow: var(--pop-press); }
+.btn:focus-visible, a:focus-visible, input:focus-visible { outline: 4px solid var(--grape); outline-offset: 3px; }
+.btn.block { width: 100%; }
+.btn.sun { background: var(--sun); }
+.btn.tomato { background: var(--tomato); }
+.btn.pink { background: var(--pink); }
+.btn.mint { background: var(--mint); }
+.btn.sky { background: var(--sky); }
+.btn.grape { background: var(--grape); }
+.btn.quiet { box-shadow: none; background: transparent; border-color: transparent; text-decoration: underline; text-underline-offset: 5px; font-weight: 700; }
+.btn.small { min-height: 56px; font-size: 20px; padding: 8px 18px; }
+.btn[disabled] { opacity: .55; }
+.btn svg { width: 28px; height: 28px; flex: none; }
+
+/* ---------- big home tiles ---------- */
+.tile {
+  display: grid; grid-template-columns: 76px 1fr; align-items: center; gap: 16px;
+  padding: 22px; border: var(--line); border-radius: 28px; box-shadow: var(--pop);
+  color: var(--ink); text-decoration: none; min-height: 132px;
+  transition: transform .08s ease, box-shadow .08s ease;
+}
+.tile:active { transform: translate(3px, 3px); box-shadow: var(--pop-press); }
+.tile .icon {
+  width: 76px; height: 76px; border-radius: 50%; border: var(--line);
+  background: var(--paper); display: grid; place-items: center;
+}
+.tile .icon svg { width: 40px; height: 40px; }
+.tile h2 { font-size: 32px; }
+.tile p { font-size: 20px; margin-top: 4px; color: var(--ink); }
+.count {
+  display: inline-block; margin-top: 8px; padding: 2px 12px; border-radius: 999px;
+  background: var(--ink); color: var(--paper); font-weight: 700; font-size: 18px;
+}
+
+/* ---------- inputs ---------- */
+.field {
+  width: 100%; min-height: 72px; padding: 14px 20px;
+  border: var(--line); border-radius: var(--r); background: var(--paper);
+  font: 400 26px/1.2 var(--font-body), system-ui, sans-serif; color: var(--ink);
+  box-shadow: inset 0 3px 0 rgba(30, 20, 51, 0.08);
+}
+.field::placeholder { color: #6f6580; }
+label.big { font-family: var(--font-display), system-ui; font-weight: 600; font-size: 26px; display: block; margin-bottom: 10px; }
+
+/* ---------- chips ---------- */
+.chips { display: flex; flex-wrap: wrap; gap: 12px; }
+.chip {
+  min-height: 56px; padding: 8px 18px; border: var(--line); border-radius: 999px;
+  background: var(--paper); box-shadow: 3px 3px 0 var(--ink);
+  font: 700 20px/1.1 var(--font-body), system-ui; color: var(--ink);
+  display: inline-flex; align-items: center; gap: 10px; cursor: pointer; text-decoration: none;
+}
+.chip:active { transform: translate(2px, 2px); box-shadow: 1px 1px 0 var(--ink); }
+.chip img { width: 44px; height: 44px; border-radius: 50%; border: 2px solid var(--ink); object-fit: cover; margin-left: -8px; }
+
+/* ---------- photo grid ---------- */
+.grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.grid a, .shot {
+  display: block; position: relative; aspect-ratio: 1; border-radius: 18px; overflow: hidden;
+  border: var(--line); background: var(--grape); box-shadow: 3px 3px 0 var(--ink);
+}
+.grid img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.grid a { color: var(--ink); }
+.badge {
+  font-family: var(--font-body), system-ui, sans-serif; color: var(--ink);
+  position: absolute; left: 8px; bottom: 8px; padding: 2px 10px; border-radius: 999px;
+  background: var(--sun); border: 2px solid var(--ink); font-weight: 700; font-size: 16px;
+}
+
+.sentence {
+  font-family: var(--font-display), system-ui; font-weight: 600; font-size: 24px;
+  background: var(--sun); border: var(--line); border-radius: 18px; padding: 12px 16px;
+  box-shadow: 3px 3px 0 var(--ink);
+}
+
+.card {
+  background: var(--paper); border: var(--line); border-radius: 26px;
+  box-shadow: var(--pop); padding: 18px; display: flex; flex-direction: column; gap: 16px;
+}
+.muted { color: var(--ink-soft); }
+.center { text-align: center; }
+.stack { display: flex; flex-direction: column; gap: 14px; }
+.row { display: flex; gap: 12px; }
+.row > * { flex: 1; }
+
+/* ---------- the big photo with a ring around the face ---------- */
+.hero { position: relative; border: var(--line); border-radius: 22px; overflow: hidden; background: var(--ink); box-shadow: var(--pop); }
+.hero img { display: block; width: 100%; height: auto; max-height: 62dvh; object-fit: contain; background: var(--ink); }
+.hero .ring {
+  position: absolute; border: 5px solid var(--sun); border-radius: 50%;
+  box-shadow: 0 0 0 4px var(--ink), 0 0 0 9999px rgba(30, 20, 51, 0.35);
+  pointer-events: none;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .hero .ring { animation: pulse 1.8s ease-in-out infinite; }
+  @keyframes pulse { 50% { transform: scale(1.06); } }
+}
+.samples { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+.samples img { width: 100%; aspect-ratio: 1; object-fit: cover; border-radius: 50%; border: var(--line); background: var(--grape); }
+
+/* ---------- undo bar and celebrations ---------- */
+.undo {
+  position: fixed; left: 50%; transform: translateX(-50%); z-index: 50;
+  bottom: calc(16px + env(safe-area-inset-bottom));
+  width: min(calc(100% - 2 * var(--gutter)), calc(var(--col) - 2 * var(--gutter)));
+  background: var(--ink); color: var(--paper); border-radius: 22px; padding: 12px 12px 12px 20px;
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  font-weight: 700; box-shadow: 5px 5px 0 var(--tomato);
+}
+.undo .btn { min-height: 56px; background: var(--sun); box-shadow: none; }
+.yay {
+  background: var(--mint); border: var(--line); border-radius: 26px; padding: 26px 20px;
+  text-align: center; box-shadow: var(--pop);
+}
+.yay .big { font-family: var(--font-display), system-ui; font-weight: 600; font-size: 56px; line-height: 1; }
+.confetti { position: fixed; inset: 0; pointer-events: none; z-index: 60; overflow: hidden; }
+.confetti i { position: absolute; top: -20px; width: 12px; height: 18px; border: 2px solid var(--ink); border-radius: 3px; }
+@media (prefers-reduced-motion: no-preference) {
+  .confetti i { animation: fall 1.6s cubic-bezier(.2,.6,.4,1) forwards; }
+  @keyframes fall { to { transform: translateY(110dvh) rotate(540deg); } }
+}
+@media (prefers-reduced-motion: reduce) { .confetti { display: none; } }
+
+.notice {
+  background: var(--sky); border: var(--line); border-radius: 20px; padding: 14px 16px;
+  box-shadow: 3px 3px 0 var(--ink);
+}
+.error { background: var(--tomato); }
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }

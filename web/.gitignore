@@ -1,0 +1,11 @@
+node_modules/
+.next/
+.vercel/
+.env*
+!.env.example
+fixtures/media/
+test-results/
+playwright-report/
+next-env.d.ts
+*.tsbuildinfo
+review/

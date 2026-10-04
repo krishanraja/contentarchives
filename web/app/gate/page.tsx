@@ -1,0 +1,29 @@
+import { headers } from "next/headers";
+import { inAppBrowser } from "@/lib/gate";
+import GateForm from "./GateForm";
+
+export default async function Gate() {
+  const ua = (await headers()).get("user-agent") || "";
+  return (
+    <main className="page" style={{ paddingTop: 40 }}>
+      <div className="center stack" style={{ gap: 10 }}>
+        <div aria-hidden="true" style={{ fontSize: 0 }}>
+          <svg viewBox="0 0 120 90" width="150" height="112">
+            <rect x="8" y="14" width="74" height="60" rx="10" fill="#ff9ccf" stroke="#1e1433" strokeWidth="4" transform="rotate(-8 45 44)" />
+            <rect x="36" y="10" width="74" height="60" rx="10" fill="#ffc93c" stroke="#1e1433" strokeWidth="4" transform="rotate(7 73 40)" />
+            <circle cx="66" cy="34" r="8" fill="#fff" stroke="#1e1433" strokeWidth="4" />
+            <path d="M44 62l16-16 12 10 10-8 18 16" fill="none" stroke="#1e1433" strokeWidth="4" strokeLinejoin="round" />
+          </svg>
+        </div>
+        <h1>Family Archives</h1>
+        <p className="muted">All our photos, in one place.</p>
+      </div>
+      {inAppBrowser(ua) && (
+        <div className="notice">
+          <strong>Tip:</strong> tap the <strong>⋯</strong> menu and choose <strong>Open in Chrome</strong> or <strong>Open in Safari</strong>. Then it will remember you next time.
+        </div>
+      )}
+      <GateForm />
+    </main>
+  );
+}

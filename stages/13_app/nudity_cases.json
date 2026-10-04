@@ -1,0 +1,19 @@
+{
+  "_why": "ONE table of cases for the nudity rule, read by tests/test_app_share_set.py (Python, the seed) AND web/tests/share.test.ts (TypeScript, the Drive sync). Two implementations of a publication rule drift; one table makes the drift a failing test. Krish, 2026-10-04: no sensitive nudity - babies, armpits and a genuine family moment are fine, adult nudity never ships without his per-file release.",
+  "cases": [
+    {"name": "ordinary", "sensitivity": "none", "sens": {}, "released": false, "shared": true},
+    {"name": "never classified", "sensitivity": "", "sens": {}, "released": false, "shared": false},
+    {"name": "intimate", "sensitivity": "intimate", "sens": {}, "released": false, "shared": false},
+    {"name": "intimate even if released", "sensitivity": "intimate", "sens": {}, "released": true, "shared": false},
+    {"name": "adult full nudity", "sensitivity": "none", "sens": {"nudity": "full", "subject_age": "adult", "sexual": "no"}, "released": false, "shared": false},
+    {"name": "unclear age partial", "sensitivity": "none", "sens": {"nudity": "partial", "subject_age": "unclear", "sexual": "no"}, "released": false, "shared": false},
+    {"name": "adult and child", "sensitivity": "private-family", "sens": {"nudity": "partial", "subject_age": "both", "sexual": "no"}, "released": false, "shared": false},
+    {"name": "sexual even if released", "sensitivity": "none", "sens": {"nudity": "full", "subject_age": "adult", "sexual": "yes"}, "released": true, "shared": false},
+    {"name": "baby in the bath", "sensitivity": "private-family", "sens": {"nudity": "full", "subject_age": "child", "sexual": "no"}, "released": false, "shared": true},
+    {"name": "private-family no verdict", "sensitivity": "private-family", "sens": {}, "released": false, "shared": false},
+    {"name": "private-family verdict none", "sensitivity": "private-family", "sens": {"nudity": "none", "subject_age": "child", "sexual": "no"}, "released": false, "shared": true},
+    {"name": "birth released by Krish", "sensitivity": "none", "sens": {"nudity": "partial", "subject_age": "adult", "sexual": "no"}, "released": true, "shared": true},
+    {"name": "unknown nudity word", "sensitivity": "none", "sens": {"nudity": "some"}, "released": false, "shared": false},
+    {"name": "unknown sensitivity word", "sensitivity": "risky", "sens": {}, "released": false, "shared": false}
+  ]
+}
