@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import postgres from "postgres";
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { syncDrive, type Deps } from "../lib/sync";
 import type { DriveFile } from "../lib/drive";
@@ -19,7 +19,8 @@ beforeAll(async () => {
     db = postgres(ADMIN.replace(/\/[^/]*$/, "/" + NAME), { max: 2, prepare: false, onnotice: () => {} });
     const dir = path.join(__dirname, "../supabase");
     await db.unsafe(readFileSync(path.join(dir, "test/shim.sql"), "utf8"));
-    await db.unsafe(readFileSync(path.join(dir, "migrations/0001_archives.sql"), "utf8"));
+    for (const m of readdirSync(path.join(dir, "migrations")).sort())
+      await db.unsafe(readFileSync(path.join(dir, "migrations", m), "utf8"));
   } catch (e) {
     // A database test that cannot reach its database must FAIL, not pass
     // vacuously: a run with Postgres down once reported these six as green.

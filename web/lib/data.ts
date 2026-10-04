@@ -36,7 +36,7 @@ export async function search(q: string, offset = 0) {
     select s.hash, s.score, s.total, ph.media, ph.year, ph.approx_year, ph.place,
            ph.width, ph.height
     from search_photos(
-      ${vec ? `[${vec.join(",")}]` : null}::vector,
+      ${vec ? `[${vec.join(",")}]` : null}::extensions.vector,
       ${!vec && p.rest ? p.rest : null},
       ${p.people.length ? p.people : null}::text[],
       ${p.place}, ${p.yearFrom}, ${p.yearTo}, 60, ${offset}) s
