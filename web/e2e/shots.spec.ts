@@ -1,0 +1,38 @@
+import { test } from "@playwright/test";
+
+// Screens for a human to look at - not a test of anything.
+test("screenshots", async ({ page }, info) => {
+  test.skip(info.project.name !== "390" || !process.env.SHOTS);
+  const out = process.env.SHOTS!;
+  await page.goto("/gate");
+  await page.screenshot({ path: `${out}/01-gate.png`, fullPage: true });
+  await page.fill("#code", "archives");
+  await page.click("text=Open");
+  await page.waitForURL("**/who");
+  await page.screenshot({ path: `${out}/02-who.png`, fullPage: true });
+  await page.click("text=Grandma");
+  await page.waitForURL((u) => u.pathname === "/");
+  await page.screenshot({ path: `${out}/03-home.png`, fullPage: true });
+  await page.click("text=Find photos");
+  await page.waitForLoadState("networkidle");
+  await page.screenshot({ path: `${out}/04-find.png`, fullPage: true });
+  await page.fill("#q", "Ravi in Goa");
+  await page.click("button:has-text('Search')");
+  await page.waitForURL("**/find?q=*");
+  await page.waitForLoadState("networkidle");
+  await page.waitForFunction(() => [...document.images].every((i) => i.complete));
+  await page.screenshot({ path: `${out}/05-results.png`, fullPage: true });
+  await page.locator(".grid a").first().click();
+  await page.waitForLoadState("networkidle");
+  await page.screenshot({ path: `${out}/06-photo.png`, fullPage: true });
+  await page.goto("/help");
+  await page.waitForSelector("text=Is this");
+  await page.waitForLoadState("networkidle");
+  await page.screenshot({ path: `${out}/07-who-is-this.png`, fullPage: true });
+  await page.click("text=No");
+  await page.screenshot({ path: `${out}/08-choose.png`, fullPage: true });
+  await page.goto("/story");
+  await page.waitForSelector("text=Where was this taken?");
+  await page.waitForLoadState("networkidle");
+  await page.screenshot({ path: `${out}/09-where.png`, fullPage: true });
+});

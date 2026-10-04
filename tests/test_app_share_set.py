@@ -125,6 +125,17 @@ def main():
           len(shared) + sum(held.values()), len(CASES))
 
     print()
+    print("the SHARED case table (also read by the cloud's TypeScript rule)")
+    import json
+    cases = json.load(open(os.path.join(os.path.dirname(HERE), "stages",
+                                        "13_app", "nudity_cases.json"),
+                           encoding="utf-8"))["cases"]
+    for c in cases:
+        check("table: " + c["name"],
+              S.nudity_hold(c["sensitivity"], c["sens"], c["released"]) == "",
+              c["shared"])
+
+    print()
     print("a LATER nudity verdict wins over an earlier one")
     db.execute("INSERT INTO tags VALUES (?,?,?,?,?,?)",
                (ids["an ordinary Communal photograph"], "nudity", "full",
