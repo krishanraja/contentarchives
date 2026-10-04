@@ -4,15 +4,16 @@ import { sign, verify } from "../lib/session";
 
 describe("the family code", () => {
   it("ignores case and spaces", () => {
-    expect(codeMatches(" archives ", "ARCHIVES")).toBe(true);
-    expect(codeMatches("Arch ives", "ARCHIVES")).toBe(true);
+    // a made-up code: the real one lives only in Vercel's environment
+    expect(codeMatches(" sunflower ", "SUNFLOWER")).toBe(true);
+    expect(codeMatches("Sun flower", "SUNFLOWER")).toBe(true);
   });
   it("refuses anything else, and an empty expected code", () => {
-    expect(codeMatches("ARCHIVE", "ARCHIVES")).toBe(false);
+    expect(codeMatches("SUNFLOWE", "SUNFLOWER")).toBe(false);
     expect(codeMatches("", "")).toBe(false);
   });
   it("normalises full-width letters a phone keyboard may produce", () => {
-    expect(normalise("ＡＲＣＨＩＶＥＳ")).toBe("ARCHIVES");
+    expect(normalise("ＳＵＮＦＬＯＷＥＲ")).toBe("SUNFLOWER");
   });
 });
 

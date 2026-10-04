@@ -6,7 +6,7 @@ test("screenshots", async ({ page }, info) => {
   const out = process.env.SHOTS!;
   await page.goto("/gate");
   await page.screenshot({ path: `${out}/01-gate.png`, fullPage: true });
-  await page.fill("#code", "archives");
+  await page.fill("#code", "sunflower");
   await page.click("text=Open");
   await page.waitForURL("**/who");
   await page.screenshot({ path: `${out}/02-who.png`, fullPage: true });

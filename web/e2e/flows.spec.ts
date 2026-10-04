@@ -17,7 +17,7 @@ test("a wrong code is refused kindly, the right one lets you in", async ({ page 
   await page.fill("#code", "not it");
   await page.click("button:has-text('Open')");
   await expect(page.getByText("That's not it")).toBeVisible();
-  await page.fill("#code", "  Archives ");
+  await page.fill("#code", "  Sunflower ");
   await page.click("button:has-text('Open')");
   await page.waitForURL("**/who");
   await floor(page, "who");

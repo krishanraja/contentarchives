@@ -6,7 +6,7 @@ export const db = postgres(process.env.DATABASE_URL || "postgres://postgres:pw@1
 
 export async function signIn(page: Page, name = "Grandma") {
   await page.goto("/gate");
-  await page.fill("#code", "archives");
+  await page.fill("#code", "sunflower");
   await page.click("button:has-text('Open')");
   await page.waitForURL("**/who");
   await page.click(`button:has-text('${name}')`);
