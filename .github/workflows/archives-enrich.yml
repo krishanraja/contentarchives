@@ -1,0 +1,135 @@
+# The family app's index, built from Google Drive alone - no PC, no D:.
+#
+# stages/13_app/cloud_enrich.py is the ONE writer of archives.krishraja.com's
+# index. It lists the Communal folder through the read-only service account,
+# describes new files with the library's own prompts, holds anything that
+# must not be shown, finds faces, groups people, rebuilds the naming queue and
+# writes a receipt. Ruling (Krish, 2026-10-04): no step may depend on D: or
+# any PC.
+#
+# THIS REPOSITORY IS PUBLIC, AND SO IS THIS LOG. The worker prints numbers
+# only (tests/test_app_cloud.py fails if a path, name or description reaches
+# stdout). Every identifier - even the Drive folder id - is a secret here.
+#
+# Secrets (Settings > Secrets and variables > Actions):
+#   DATABASE_URL                  Supabase transaction pooler (IPv4; runners have no IPv6)
+#   GOOGLE_SERVICE_ACCOUNT_JSON   the archives-reader key (Viewer on Communal only)
+#   GOOGLE_API_KEY_ARCHIVES       the app's own capped Gemini key
+#   DRIVE_COMMUNAL_FOLDER_ID      the Communal folder
+#
+# The daily run is OFF until repository variable ARCHIVES_ENRICH is "on"
+# (Settings > Secrets and variables > Actions > Variables). Set it to
+# anything else to pause the nightly writer without a commit. A manual run
+# (Actions > Archives enrich > Run workflow) always works.
+#
+# Limits, each a stop rather than a kill - in-flight files finish, then the
+# run still groups faces, rebuilds the queue and writes its receipt:
+#   budget      most new files per run (manual input; nightly 5000)
+#   SPEND_CAP   dollars of Gemini per run, from the tokens Gemini reports
+#   MAX_MINUTES GitHub kills a job at 6 h; the worker stops starting work first
+#
+# Cron is UTC: 18:17 UTC is 04:17 Brisbane.
+
+name: Archives enrich
+
+on:
+  schedule:
+    - cron: "17 18 * * *"
+  workflow_dispatch:
+    inputs:
+      budget:
+        description: "Most new files to describe this run"
+        required: false
+        default: "300"
+      workers:
+        description: "Files in flight at once"
+        required: false
+        default: "16"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: archives-enrich
+  cancel-in-progress: false
+
+jobs:
+  # The writer never touches the live index unless its own tests pass on
+  # this exact commit, against a real Postgres with the app's migrations.
+  test:
+    if: ${{ github.event_name == 'workflow_dispatch' || vars.ARCHIVES_ENRICH == 'on' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_PASSWORD: pw
+        ports: ["54329:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres" --health-interval 5s
+          --health-timeout 5s --health-retries 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: stages/13_app/requirements-cloud.txt
+      - run: pip install -r stages/13_app/requirements-cloud.txt
+      - name: the worker's tests
+        env:
+          TEST_PG_DSN: postgresql://postgres:pw@127.0.0.1:54329/postgres
+        run: python tests/test_app_cloud.py
+      - run: python tests/test_app_share_set.py
+      - run: python tests/test_stage_contracts.py
+
+  enrich:
+    needs: test
+    runs-on: ubuntu-latest
+    timeout-minutes: 355
+    env:
+      GEONAMES_DIR: ${{ github.workspace }}/.geonames
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: stages/13_app/requirements-cloud.txt
+      - run: pip install -r stages/13_app/requirements-cloud.txt
+
+      - name: face model cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.insightface/models
+          key: insightface-buffalo_l-v1
+
+      - name: GeoNames cache
+        id: geo
+        uses: actions/cache@v4
+        with:
+          path: .geonames
+          key: geonames-v1
+
+      - name: GeoNames (offline place names from GPS)
+        if: steps.geo.outputs.cache-hit != 'true'
+        run: |
+          mkdir -p "$GEONAMES_DIR"
+          base=https://download.geonames.org/export/dump
+          curl -fsSL --retry 4 -o "$GEONAMES_DIR/cities1000.zip" "$base/cities1000.zip"
+          curl -fsSL --retry 4 -o "$GEONAMES_DIR/admin1.txt" "$base/admin1CodesASCII.txt"
+          curl -fsSL --retry 4 -o "$GEONAMES_DIR/countryInfo.txt" "$base/countryInfo.txt"
+
+      - name: build the index from Drive
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
+          GOOGLE_API_KEY_ARCHIVES: ${{ secrets.GOOGLE_API_KEY_ARCHIVES }}
+          DRIVE_COMMUNAL_FOLDER_ID: ${{ secrets.DRIVE_COMMUNAL_FOLDER_ID }}
+          DRIVE_REL_PREFIX: Media/Communal
+          BUDGET: ${{ inputs.budget || '5000' }}
+          WORKERS: ${{ inputs.workers || '16' }}
+          SPEND_CAP_USD: "60"
+          MAX_MINUTES: "320"
+        run: python stages/13_app/cloud_enrich.py

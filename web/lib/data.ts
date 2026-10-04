@@ -95,11 +95,8 @@ export async function photo(hash: string): Promise<(PhotoRow & { people: string[
 export async function counts() {
   const db = sql();
   const [r] = await db`select
-      (select count(*)::int from queue q where not exists (
-         select 1 from group_names g where g.group_id = q.group_id and g.name is not null)
-       and not exists (select 1 from answers a where a.scope = 'cluster'
-         and a.target = q.group_id and a.status in ('new','ingested')
-         and a.at > coalesce((select max(watermark) from snapshots where kind='seed'),'epoch'))) faces,
+      (select count(*)::int from queue q join group_names g on g.group_id = q.group_id
+         where not g.answered) faces,
       (select count(*)::int from photos where not hidden and media = 'photo'
          and (place is null or (year is null and approx_year is null))) story,
       (select count(*)::int from photos where not hidden) photos`;
@@ -111,13 +108,12 @@ export async function counts() {
 export async function nextFace(who: string, after: string[] = []) {
   const db = sql();
   const [q] = await db`
-    select q.* from queue q
+    select q.*, f.cluster_id as hero_cluster from queue q
     join faces f on f.key = q.hero_face
     join photos p on p.hash = f.hash and not p.hidden
-    where not exists (select 1 from skips s where s.who = ${who} and s.group_id = q.group_id)
-      and not exists (select 1 from answers a where a.scope = 'cluster'
-            and a.target = q.group_id and a.status in ('new','ingested')
-            and a.at > coalesce((select max(watermark) from snapshots where kind='seed'),'epoch'))
+    join group_names g on g.group_id = q.group_id
+    where not g.answered
+      and not exists (select 1 from skips s where s.who = ${who} and s.group_id = q.group_id)
       and q.group_id <> all(${after}::text[])
     order by q.rank limit 1`;
   if (!q) return null;
@@ -135,6 +131,7 @@ export async function nextFace(who: string, after: string[] = []) {
   const suggestions = (Array.isArray(raw) ? raw : []) as { name: string; face: string; score: number }[];
   return {
     group: q.group_id as string,
+    cluster: (q.hero_cluster as string | null) || (q.group_id as string),
     photos: q.photo_count as number,
     hero,
     samples: (q.sample_faces as string[]).map((k) => byKey.get(k)).filter(Boolean),
@@ -179,7 +176,7 @@ export async function nextStory(who: string, after: string[] = [], only: string 
 
 export type AnswerIn = {
   id: string; kind: "person" | "mixed" | "place" | "year";
-  group?: string; hashes?: string[]; value: string; client_at?: string;
+  group?: string; cluster?: string; hashes?: string[]; value: string; client_at?: string;
 };
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -207,10 +204,14 @@ export async function saveAnswer(who: string, a: AnswerIn): Promise<{ labelled: 
   const value = a.value.trim().replace(/\s+/g, " ");
   return db.begin(async (tx) => {
     if (a.kind === "person" || a.kind === "mixed") {
-      const [g] = await tx`select 1 from clusters where group_id = ${a.group!} limit 1`;
-      if (!g) throw new Error("no such face group");
+      // The answer names the CLUSTER the person was shown - frozen, never
+      // renumbered - so a later merge of groups cannot detach it.
+      const [c] = a.cluster
+        ? await tx`select cluster_id from clusters where cluster_id = ${a.cluster} and group_id = ${a.group!}`
+        : await tx`select cluster_id from clusters where group_id = ${a.group!} order by n desc, cluster_id limit 1`;
+      if (!c) throw new Error("no such face group");
       await tx`insert into answers (id, client_at, who, scope, target, field, value)
-        values (${a.id}, ${a.client_at || null}, ${who}, 'cluster', ${a.group!},
+        values (${a.id}, ${a.client_at || null}, ${who}, 'cluster', ${c.cluster_id},
                 ${a.kind === "person" ? "person" : "unidentifiable"},
                 ${a.kind === "person" ? value : "mixed"})
         on conflict (id) do nothing`;

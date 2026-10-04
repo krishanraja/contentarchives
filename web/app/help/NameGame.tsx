@@ -8,7 +8,7 @@ import { send, uuid } from "@/components/outbox";
 
 type Face = { key: string; bbox: number[] };
 type Sugg = { name: string; face: string; score: number };
-type Q = { group: string; photos: number; hero: Face; samples: Face[]; suggestions: Sugg[]; ask: Sugg | null } | null;
+type Q = { group: string; cluster: string; photos: number; hero: Face; samples: Face[]; suggestions: Sugg[]; ask: Sugg | null } | null;
 
 // "Nani" is a different person depending on who is speaking. Ask for a name.
 const RELATION = new Set(["nani", "nana", "dadi", "dada", "mama", "mami", "masi", "mausi", "chacha",
@@ -46,7 +46,7 @@ export default function NameGame() {
   async function answer(kind: "person" | "mixed", value: string) {
     if (!q) return;
     const id = uuid();
-    const r = await send({ id, kind, group: q.group, value });
+    const r = await send({ id, kind, group: q.group, cluster: q.cluster, value });
     if (!r.ok && r.error && !r.error.startsWith("offline")) { setErr(r.error); return; }
     setSeen((s) => [...s, q.group]);
     if (kind === "person") setDone({ name: value, n: r.labelled ?? q.photos, id, group: q.group });

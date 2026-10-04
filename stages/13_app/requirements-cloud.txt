@@ -1,0 +1,21 @@
+# What stages/13_app/cloud_enrich.py needs on a GitHub runner - and nothing
+# from D:. Installed by .github/workflows/archives-enrich.yml.
+#
+# PINNED to the set proven together on Python 3.12 (2026-10-04): the writer
+# runs unattended, so a release upstream must not change it overnight.
+# insightface's face alignment calls a scikit-image function marked for
+# removal - an unpinned upgrade would break every face silently.
+PyYAML==6.0.3
+numpy==2.5.3
+pillow==12.3.0
+pillow_heif==1.8.0
+requests==2.34.2
+google-auth==2.59.1        # the read-only service account (Drive)
+psycopg[binary]==3.3.6     # the index (Supabase, transaction pooler)
+#
+# faces: insightface's buffalo_l weights (w600k_r50), the model faces_embed.py
+# uses on the library machine, so a face means the same thing everywhere
+insightface==2.1
+onnxruntime==1.30.0
+opencv-python-headless==5.0.0.93
+scikit-image==0.26.0

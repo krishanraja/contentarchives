@@ -72,7 +72,7 @@ async function main() {
       const cy = 330 + rnd(i * 3 + k) * 60;
       svg += face(cx, cy, r, PEOPLE[pIdx]);
       const key = `${hash}::${k}`;
-      faces.push({ key, hash, group_id: `g${pIdx + 1}`, bbox: [(cx - r) / W, (cy - r * 1.3) / H, (cx + r) / W, (cy + r) / H],
+      faces.push({ key, hash, group_id: `g${pIdx + 1}`, cluster_id: `c${pIdx + 1}`, bbox: [(cx - r) / W, (cy - r * 1.3) / H, (cx + r) / W, (cy + r) / H],
                    only_face: uniq.length === 1, frame: null, score: 0.9 });
       ch.push({ cluster_id: `c${pIdx + 1}`, group_id: `g${pIdx + 1}`, hash });
       clusterFaces.set(pIdx, [...(clusterFaces.get(pIdx) || []), key]);
@@ -95,7 +95,8 @@ async function main() {
     });
   }
   await db`insert into photos ${db(photos)}`;
-  const clusters = PEOPLE.map((p, i) => ({ cluster_id: `c${i + 1}`, group_id: `g${i + 1}`, name: i < 6 ? p[0] : null }));
+  const clusters = PEOPLE.map((p, i) => ({ cluster_id: `c${i + 1}`, group_id: `g${i + 1}`, name: i < 6 ? p[0] : null,
+    n: (clusterFaces.get(i) || []).length }));
   await db`insert into clusters ${db(clusters)}`;
   await db`insert into cluster_hashes ${db(ch)} on conflict do nothing`;
   await db`insert into faces ${db(faces)}`;
