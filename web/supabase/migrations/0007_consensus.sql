@@ -23,13 +23,11 @@ language sql immutable parallel safe set search_path = pg_catalog as $$
   select btrim(regexp_replace(lower(normalize(coalesce(t, ''), NFKC)), '[^[:alnum:]]+', ' ', 'g'))
 $$;
 
-drop view if exists group_contest;
-drop view if exists photo_people;
-drop view if exists group_names;
-drop view if exists group_votes;
+-- Every view is replaced in place (group_names keeps its columns and gains
+-- "contested" at the end), so nothing is dropped and this file can run twice.
 
 -- each person's latest answer on a face group (on any of its clusters)
-create view group_votes with (security_invoker = true) as
+create or replace view group_votes with (security_invoker = true) as
 with wm as (select coalesce(max(watermark), 'epoch'::timestamptz) as t from snapshots where kind = 'seed'),
 latest as (
   select distinct on (c.group_id, a.who) c.group_id, a.who, a.field, a.value, a.at
@@ -43,7 +41,7 @@ select group_id, who, field, value, at,
             when field = 'unidentifiable' then '#unidentifiable' end as k
 from latest;
 
-create view group_names with (security_invoker = true) as
+create or replace view group_names with (security_invoker = true) as
 with spell as (
   select group_id, k, value, count(*) as c, min(at) as f
   from group_votes where k is not null group by group_id, k, value
@@ -83,7 +81,7 @@ from groups g
 left join top on top.group_id = g.group_id
 left join asked on asked.group_id = g.group_id;
 
-create view photo_people with (security_invoker = true) as
+create or replace view photo_people with (security_invoker = true) as
 select p.hash, unnest(p.people) as name from photos p
 union
 select ch.hash, g.name from cluster_hashes ch
@@ -91,7 +89,7 @@ select ch.hash, g.name from cluster_hashes ch
   where g.name is not null;
 
 -- the answers that are in the running on a contested face, for the next person
-create view group_contest with (security_invoker = true) as
+create or replace view group_contest with (security_invoker = true) as
 with spell as (
   select group_id, k, value, count(*) as c, min(at) as f
   from group_votes where k is not null and k <> '#unidentifiable' group by group_id, k, value
