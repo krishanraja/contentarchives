@@ -18,6 +18,16 @@ export default function WhoPicker({ names }: { names: string[] }) {
     if (r.ok) window.location.href = "/";
     else setBusy(false);
   }
+  const nameForm = (
+    <form className="card" method="post" action="/api/who" onSubmit={pick}>
+      <label className="big" htmlFor="me">Your first name</label>
+      <input id="me" name="name" className="field" autoComplete="given-name" autoCapitalize="words" enterKeyHint="done" placeholder="Your first name" minLength={2} required />
+      <button className="btn block mint">That's me</button>
+    </form>
+  );
+  // No names set up: the family is not a list we know, so just ask - one box,
+  // no extra tap. Names set up (players): one tap each, and "Someone else".
+  if (!names.length) return nameForm;
   return (
     <div className="stack">
       {names.map((n, i) => (
@@ -28,11 +38,7 @@ export default function WhoPicker({ names }: { names: string[] }) {
       ))}
       <details className="stack">
         <summary className="btn block">Someone else</summary>
-        <form className="card" method="post" action="/api/who" onSubmit={pick}>
-          <label className="big" htmlFor="me">Your name</label>
-          <input id="me" name="name" className="field" autoComplete="given-name" autoCapitalize="words" enterKeyHint="done" placeholder="Your first name" minLength={2} required />
-          <button className="btn block mint">That's me</button>
-        </form>
+        {nameForm}
       </details>
     </div>
   );

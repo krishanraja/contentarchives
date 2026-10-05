@@ -42,12 +42,37 @@ test("the code and a name work before the page's script has arrived", async ({ b
   await page.fill("#me", "Cousin Tara");
   await page.click("button:has-text('That')");
   await page.waitForURL((u) => u.pathname === "/");
-  await expect(page.getByText("Cousin Tara", { exact: false })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Hello, Cousin Tara!" })).toBeVisible();
   await page.goto("/find");
   await page.fill("#q", "Asha");
   await page.click("button:has-text('Search')");
   await expect(page.locator(".sentence")).toContainText("of Asha Raja");
   await ctx.close();
+});
+
+test("with no names set up, it simply asks your name; and a shared phone can change person", async ({ page }) => {
+  const saved = await db`select name, sort from players`;
+  await db`delete from players`;
+  try {
+    await page.goto("/gate");
+    await page.fill("#code", "sunflower");
+    await page.click("button:has-text('Open')");
+    await page.waitForURL("**/who");
+    await expect(page.getByRole("heading", { name: "Hello! What's your name?" })).toBeVisible();
+    await expect(page.locator("summary")).toHaveCount(0);           // no extra tap to reach the box
+    await page.fill("#me", "Aunty Usha");
+    await page.click("button:has-text('That')");
+    await page.waitForURL((u) => u.pathname === "/");
+    await expect(page.getByRole("heading", { name: "Hello, Aunty Usha!" })).toBeVisible();
+    await floor(page, "home-named");
+    await page.click("text=Not Aunty Usha? Tap here");
+    await page.waitForURL("**/who");
+    await page.fill("#me", "Dadi");
+    await page.click("button:has-text('That')");
+    await expect(page.getByRole("heading", { name: "Hello, Dadi!" })).toBeVisible();
+  } finally {
+    for (const p of saved) await db`insert into players (name, sort) values (${p.name}, ${p.sort}) on conflict do nothing`;
+  }
 });
 
 test("nothing is reachable without the code", async ({ request }) => {

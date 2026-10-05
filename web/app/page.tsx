@@ -29,6 +29,8 @@ export default async function Home() {
         <span><h2>Where and when?</h2><p>Tell us where a photo was taken, or roughly what year.</p>
           {c.story > 0 && <span className="count">{c.story.toLocaleString("en-GB")} photos to place</span>}</span>
       </Link>
+      {/* a phone or tablet passed around the family: the next person says who they are */}
+      {who && <Link href="/who" className="btn block quiet">Not {cap(who)}? Tap here</Link>}
     </main>
   );
 }
