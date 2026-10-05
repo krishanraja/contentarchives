@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { describe as sentence, parseQuery } from "../lib/search";
+import type { Parsed } from "../lib/search";
 
 const PEOPLE = ["Asha Raja", "Ravi Raja", "Meera Shah", "Asha Patel"];
 const PLACES = ["Goa", "Lake District", "Delhi"];
@@ -37,5 +38,25 @@ describe("parseQuery", () => {
     const p = parseQuery("Meera Shah Goa 1998", PEOPLE, PLACES);
     expect(sentence(p, 48)).toBe("48 photos of Meera Shah in Goa from 1998");
     expect(sentence(parseQuery("1980s", PEOPLE, PLACES), 1)).toBe("1 photo from the 1980s");
+  });
+});
+
+describe("the sentence above the results", () => {
+  const p = (o: Partial<Parsed>): Parsed => ({ people: [], place: null, yearFrom: null, yearTo: null, rest: "", ...o });
+  it("a meaning search never claims the whole library looks like the words", () => {
+    const s = sentence(p({ rest: "beach" }), 22752, "meaning");
+    expect(s).toBe("Photos that look most like “beach”, closest first");
+    expect(s).not.toContain("22,752");
+  });
+  it("a meaning search inside a filter says both", () => {
+    expect(sentence(p({ rest: "wedding", yearFrom: 1998, yearTo: 1998 }), 300, "meaning"))
+      .toBe("Photos that look most like “wedding” from 1998, closest first");
+  });
+  it("a filter search still counts what it found", () => {
+    expect(sentence(p({ people: ["Asha Raja"] }), 48, "filters")).toBe("48 photos of Asha Raja");
+    expect(sentence(p({ yearFrom: 1990, yearTo: 1999 }), 1, "filters")).toBe("1 photo from the 1990s");
+  });
+  it("a word search (no meaning) counts its matches", () => {
+    expect(sentence(p({ rest: "goa" }), 12, "words")).toBe("12 photos that look like “goa”");
   });
 });

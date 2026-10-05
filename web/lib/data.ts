@@ -44,7 +44,7 @@ export async function search(q: string, offset = 0) {
   const total = rows.length ? Number(rows[0].total) : 0;
   return {
     parsed: p, mode, total,
-    sentence: describe(p, total),
+    sentence: describe(p, total, mode),
     cards: rows.map((r) => ({
       hash: r.hash, media: r.media, year: r.year, approx_year: r.approx_year,
       place: r.place, width: r.width, height: r.height,

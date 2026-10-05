@@ -75,12 +75,16 @@ export function parseQuery(q: string, people: string[], places: string[]): Parse
 }
 
 // One plain sentence a person can read: "48 photos of Bharti in Goa, 1998".
-export function describe(p: Parsed, total: number): string {
-  const n = total === 1 ? "1 photo" : `${total.toLocaleString("en-GB")} photos`;
+export function describe(p: Parsed, total: number, mode = "filters"): string {
+  // A meaning search ranks EVERY photo by how close it is, so its "total" is the
+  // whole library - "22,752 photos that look like beach" told a grandparent
+  // nothing. It says what it is doing instead: closest first.
+  const ranked = mode === "meaning" && !!p.rest;
+  const n = ranked ? "Photos" : total === 1 ? "1 photo" : `${total.toLocaleString("en-GB")} photos`;
   const parts = [n];
   if (p.people.length) parts.push("of " + p.people.join(" and "));
-  if (p.rest) parts.push(`that look like “${p.rest}”`);
+  if (p.rest) parts.push(ranked ? `that look most like “${p.rest}”` : `that look like “${p.rest}”`);
   if (p.place) parts.push("in " + p.place);
   if (p.yearFrom) parts.push(p.yearFrom === p.yearTo ? `from ${p.yearFrom}` : `from the ${p.yearFrom}s`);
-  return parts.join(" ");
+  return parts.join(" ") + (ranked ? ", closest first" : "");
 }
