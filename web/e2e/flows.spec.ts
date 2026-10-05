@@ -75,6 +75,28 @@ test("with no names set up, it simply asks your name; and a shared phone can cha
   }
 });
 
+test("a phone asking for the desktop page still gets the phone page", async ({ browser }) => {
+  // Krish's phone: 412 px wide, Chrome laying pages out 1,040 px wide ("Desktop site")
+  const ctx = await browser.newContext({ viewport: { width: 1040, height: 2253 }, screen: { width: 412, height: 892 },
+    hasTouch: true, isMobile: false });
+  const page = await ctx.newPage();
+  await page.goto("/gate");
+  const fit = await page.evaluate(() => ({ zoom: Number(getComputedStyle(document.documentElement).zoom),
+    over: document.documentElement.scrollWidth - document.documentElement.clientWidth }));
+  expect(fit.zoom).toBeCloseTo(1040 / 412, 2);          // laid out at the phone's own width
+  expect(fit.over).toBeLessThanOrEqual(0);              // and nothing runs off the side
+  await ctx.close();
+  // a computer, and a phone that lays out at its own width, are left alone
+  for (const opts of [{ viewport: { width: 1280, height: 800 } },
+                      { viewport: { width: 412, height: 892 }, screen: { width: 412, height: 892 }, hasTouch: true, isMobile: true }]) {
+    const c = await browser.newContext(opts);
+    const p = await c.newPage();
+    await p.goto("/gate");
+    expect(await p.evaluate(() => getComputedStyle(document.documentElement).zoom)).toBe("1");
+    await c.close();
+  }
+});
+
 test("nothing is reachable without the code", async ({ request }) => {
   for (const u of ["/", "/find", "/api/search?q=a", `/img/t/${"0".repeat(63)}1`, "/api/face/next"]) {
     const r = await request.get(u, { maxRedirects: 0 });
