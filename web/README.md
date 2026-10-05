@@ -24,7 +24,8 @@ the merge groups people decided, every answer in the journal) arrives once as
 `archives-library.sqlite` in Krish's Drive, shared with the service account only,
 and the worker imports it (`stages/13_app/LIBRARY-EXPORT.md`). From then on
 Supabase is the system of record. A photo is shown only when `photos.visible`:
-bound to a Drive file and not hidden.
+bound to a Drive file and not hidden. A face seen only in a video is shown on a
+frame of its own, pulled from Drive and judged before anyone sees it (`frames`).
 
 **Nothing depends on D: or any PC.** Ruling (Krish, 2026-10-04): the index is
 built from Drive in the cloud. When the library machine is connected it can
@@ -50,9 +51,9 @@ npm run e2e                      # Playwright at 360 / 390 / 430 px: floor, axe,
 - **The index**: `.github/workflows/archives-enrich.yml`. Secrets it needs (GitHub →
   Settings → Secrets and variables → Actions): `DATABASE_URL` (Supabase transaction
   pooler), `GOOGLE_SERVICE_ACCOUNT_JSON`, `GOOGLE_API_KEY_ARCHIVES`,
-  `DRIVE_COMMUNAL_FOLDER_ID`. A manual run takes a file budget; the nightly run is
-  off until the repository variable `ARCHIVES_ENRICH` is `on`, and setting it to
-  anything else pauses it without a commit. Each run stops at `SPEND_CAP_USD` ($60)
+  `DRIVE_COMMUNAL_FOLDER_ID`. A manual run takes a file budget; the nightly run
+  (04:17 Brisbane) is on, and setting the repository variable `ARCHIVES_ENRICH` to
+  `off` pauses it without a commit. Each run stops at `SPEND_CAP_USD` ($60)
   or `MAX_MINUTES`, then still rebuilds the queue and writes a receipt to
   `snapshots` (`kind = 'drive-sync'`: counts, dollars, seconds).
 - **The public log prints numbers only.** The repository is public, so no path,

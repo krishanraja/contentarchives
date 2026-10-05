@@ -107,6 +107,7 @@ SUBJECT_SHARE = 0.12                       # people_sheet.SUBJECT_SHARE
 SUGGEST_MIN = 0.40
 FACE_PX, VIEW_PX = 512, 1024
 MAX_QUEUE = 5000
+FRAME_PX, FRAME_MATCH = 960, 0.50          # a video frame's size; the same person, found again in it
 BUNDLE_NAME, BUNDLE_FORMAT = "archives-library.sqlite", "1"     # LIBRARY-EXPORT.md
 DESC_DIM, FACE_DIM = 768, 512
 LIBRARY_FIELDS = ("person", "unidentifiable", "needs_identifying")
@@ -139,6 +140,13 @@ def cloud_hold(media: str, v: dict) -> str:
         return "not a photograph"
     sens = {k: str(v.get(k) or "").lower() for k in ("nudity", "subject_age", "sexual")}
     return nudity_hold(str(v.get("sensitivity") or "").lower(), sens, False)
+
+
+def frame_ok(v: dict) -> bool:
+    """seed_index.frame_ok: a video frame is shown only with its OWN verdict,
+    and only if it clears the same nudity rule as a photograph."""
+    sens = {k: str(v.get(k) or "").lower() for k in ("nudity", "subject_age", "sexual")}
+    return bool(sens["nudity"]) and nudity_hold("none", sens, False) == ""
 
 
 # ------------------------------------------------------------ the world ----
@@ -213,6 +221,30 @@ class Drive:
         if md5 and h.hexdigest() != md5.lower():
             raise RuntimeError("download does not match Drive's md5")
 
+    def frame(self, fid: str, ms: int, px: int = FRAME_PX):
+        """ONE frame of a video on Drive, at `ms`, as a JPEG no wider than `px`.
+        ffmpeg reads only the byte ranges it needs, so a two-hour tape is not
+        downloaded to show one face. The token never reaches the log."""
+        import subprocess
+        import threading
+        from google.auth.transport.requests import Request
+        lock = self.__dict__.setdefault("_lock", threading.Lock())
+        with lock:
+            cr = self.s.credentials
+            if not cr.valid:
+                cr.refresh(Request())
+            token = cr.token
+        url = "https://www.googleapis.com/drive/v3/files/{}?alt=media&supportsAllDrives=true".format(fid)
+        cmd = ["ffmpeg", "-nostdin", "-loglevel", "error",
+               "-headers", "Authorization: Bearer {}\r\n".format(token),
+               "-ss", "{:.3f}".format(ms / 1000.0), "-i", url, "-frames:v", "1",
+               "-vf", "scale='min({},iw)':-2".format(px), "-q:v", "4", "-f", "image2", "-c:v", "mjpeg", "pipe:1"]
+        try:
+            r = subprocess.run(cmd, capture_output=True, timeout=180)
+        except (OSError, subprocess.SubprocessError):
+            return None
+        return r.stdout if r.returncode == 0 and r.stdout[:2] == b"\xff\xd8" else None
+
     def image(self, fid: str, px: int):
         r = self.s.get("https://www.googleapis.com/drive/v3/files/" + fid,
                        params={"fields": "thumbnailLink", "supportsAllDrives": "true"}, timeout=60)
@@ -246,6 +278,19 @@ class Gemini:
                 usd += (tin * CL.IN_PER_M + tout * CL.OUT_PER_M) / 1e6
                 out.update(CL.parse(txt))
             return out, usd
+        finally:
+            os.unlink(path)
+
+    def sensitivity(self, jpeg: bytes):
+        """The library's sensitivity pass alone (classify_live's SENS_PROMPT, its
+        own output budget), for a video frame about to be shown."""
+        CL = self.CL
+        with tempfile.NamedTemporaryFile(suffix=".jpg", delete=False) as fh:
+            fh.write(jpeg)
+            path = fh.name
+        try:
+            txt, tin, tout = CL.call([path], self.key, prompt=CL.SENS_PROMPT, max_out=200)
+            return CL.parse(txt), (tin * CL.IN_PER_M + tout * CL.OUT_PER_M) / 1e6
         finally:
             os.unlink(path)
 
@@ -356,10 +401,11 @@ def when(f: dict):
 
 class Worker:
     def __init__(self, db, drive, gemini, faces, geo, folder, prefix,
-                 budget=300, cap_usd=60.0, workers=8, max_minutes=None):
+                 budget=300, cap_usd=60.0, workers=8, max_minutes=None, frames=0):
         self.db, self.drive, self.gemini, self.faces, self.geo = db, drive, gemini, faces, geo
         self.folder, self.prefix = folder, prefix
         self.budget, self.cap, self.workers = budget, cap_usd, workers
+        self.frames_per_run = frames
         # A DEADLINE, NOT A KILL: GitHub ends a job at 6 h, and a killed run
         # never reaches group(), rebuild() or its receipt - the parts the app
         # reads. Past the deadline nothing new starts, exactly like the cap.
@@ -452,6 +498,7 @@ class Worker:
         self.process(files)
         self.save_clusters()
         self.group()
+        self.frames()
         self.rebuild()
         receipt = dict(self.c, spent_usd=round(self.spent, 4), seconds=int(time.time() - t0),
                        errors=sum(self.errors.values()))
@@ -577,6 +624,9 @@ class Worker:
         # faces, the clusters they make, and the cluster -> photo map
         import numpy as np
         group_of = dict(src.execute("select cluster_id, group_id from clusters").fetchall())
+        # a library box on a VIDEO was measured on the library's own frame grab,
+        # not the frame Drive shows: kept for the record, never drawn
+        videos = {h for (h,) in src.execute("select hash from photos where media = 'video'")}
         sums, cnt, ch = {}, collections.Counter(), set()
         fq = ("insert into faces (key, hash, cluster_id, group_id, bbox, only_face, score, share, "
               "measured_w, measured_h, embedding) values (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s::extensions.vector) "
@@ -599,7 +649,7 @@ class Worker:
             box = [round(float(x), 5) for x in (x1, y1, x2, y2)] if None not in (x1, y1, x2, y2) else None
             boxed += box is not None
             batch.append((key, h, cid, g, box, bool(only), det,
-                          share if box is not None else None,
+                          share if box is not None and h not in videos else None,
                           tw if box is not None else None, th if box is not None else None, vec(v)))
             if len(batch) >= 1000:
                 with db.cursor() as cur:
@@ -763,6 +813,11 @@ class Worker:
                 with db.cursor() as cur:
                     cur.executemany("update faces set share = null where key = %s", turned)
             self.c["faces_turned"] += len(turned)
+        # a library box on a video is on a frame Drive does not show: never drawn
+        # (self-healing: corrects any row imported before this rule existed)
+        r = db.execute("update faces f set share = null from photos p where p.hash = f.hash "
+                       "and p.source = 'seed' and p.media = 'video' and f.frame is null and f.share is not null")
+        self.c["video_boxes_cleared"] += r.rowcount if r.rowcount and r.rowcount > 0 else 0
         db.commit()
         if binds or self.c["held_library"] or self.c["unbound"]:
             say("library bound", bound=len(binds), unbound=self.c["unbound"], held=self.c["held_library"],
@@ -886,6 +941,133 @@ class Worker:
         self.db.commit()
         self.c["added"] += 1
 
+    # -- video faces: a frame of their own -------------------------------
+    def frames(self):
+        """A face seen only in a video is shown on a frame of its own: pulled
+        from the video on Drive at the library's timestamp, the same person
+        found in it again by embedding (so the ring is on the right face), and
+        judged by the library's sensitivity pass. Shown only if it passes;
+        every attempt is recorded, so no frame is judged twice. One face per
+        group per run - the group's best - for the groups the queue would ask
+        if it had a face to show: flagged first, then the most photographed."""
+        if self.frames_per_run <= 0 or self.faces is None or not hasattr(self.drive, "frame"):
+            return
+        import numpy as np
+        db = self.db
+        rows = db.execute("""
+            with g as (select group_id, name, answered, flagged from group_names),
+            pc as (
+              select f.group_id, count(distinct f.hash) as photos,
+                     bool_or(coalesce(f.share, 0) >= %s
+                             and not (p.source = 'seed' and p.media = 'video' and f.frame is null)) as askable
+              from faces f join photos p on p.hash = f.hash and p.visible
+              where f.group_id is not null group by f.group_id),
+            want as (
+              select pc.group_id, g.flagged, pc.photos from pc join g using (group_id)
+              where not pc.askable
+                and ((not g.answered and (g.flagged or pc.photos >= 2)) or g.name is not null))
+            select distinct on (w.flagged, w.photos, w.group_id)
+                   f.key, p.drive_id, f.embedding::text, w.group_id
+            from want w
+            join faces f on f.group_id = w.group_id
+            join photos p on p.hash = f.hash and p.visible and p.media = 'video' and p.source = 'seed'
+            left join frames fr on fr.key = f.key
+            where f.frame is null and f.embedding is not null
+              and split_part(f.key, ':', 2) ~ '_t[0-9]+$'
+              and (fr.key is null or fr.status = 'error')
+            order by w.flagged desc, w.photos desc, w.group_id, f.score desc nulls last""",
+            (SUBJECT_SHARE,)).fetchall()
+        todo = rows[:self.frames_per_run]
+        self.c["frames_wanted"] = len(rows)
+        if not todo:
+            return
+        import threading
+        lock = threading.Lock()
+
+        def look(row):
+            key, fid, emb, _g = row
+            ms = int(re.search(r"_t(\d+)$", key.split(":")[1]).group(1))
+            jpeg = self.drive.frame(fid, ms)
+            if not jpeg:
+                return key, "error", None, None, 0.0
+            from PIL import Image
+            with Image.open(io.BytesIO(jpeg)) as im:
+                w, h = im.size
+            with lock:                                   # one detector, shared
+                found = self.faces.detect(jpeg)
+            want = parse_vec(emb)
+            best = max(found, key=lambda fc: float(np.dot(fc["emb"], want)), default=None)
+            if best is None or float(np.dot(best["emb"], want)) < FRAME_MATCH:
+                return key, "noface", None, (w, h), 0.0
+            try:
+                v, usd = self.gemini.sensitivity(jpeg)
+            except RuntimeError as e:
+                if str(e).startswith("BLOCKED"):
+                    return key, "held", {"blocked": "yes"}, (w, h), 0.0
+                raise
+            verdict = {k: str(v.get(k) or "")[:20] for k in ("nudity", "subject_age", "sexual")}
+            if not frame_ok(v):
+                return key, "held", verdict, (w, h), usd
+            return key, "ok", verdict, (w, h, jpeg, best, len(found)), usd
+
+        done, fr_rows, face_rows = 0, [], []
+
+        def flush():
+            with db.cursor() as cur:
+                if fr_rows:
+                    cur.executemany(
+                        "insert into frames (key, status, jpeg, w, h, verdict) values (%s,%s,%s,%s,%s,%s::jsonb) "
+                        "on conflict (key) do update set status = excluded.status, jpeg = excluded.jpeg, "
+                        "w = excluded.w, h = excluded.h, verdict = excluded.verdict, at = now()", fr_rows)
+                if face_rows:
+                    cur.executemany(
+                        "update faces set frame = %s, bbox = %s, share = %s, only_face = %s, "
+                        "measured_w = %s, measured_h = %s where key = %s", face_rows)
+            db.commit()
+            fr_rows.clear()
+            face_rows.clear()
+
+        with cf.ThreadPoolExecutor(max_workers=self.workers) as pool:
+            futs, it = {}, iter(todo)
+            for row in it:
+                futs[pool.submit(look, row)] = row
+                if len(futs) >= self.workers * 2:
+                    break
+            while futs:
+                fut = next(cf.as_completed(futs))
+                futs.pop(fut)
+                try:
+                    key, status, verdict, extra, usd = fut.result()
+                except Exception as e:                           # noqa: BLE001
+                    self.errors["frame_" + type(e).__name__] += 1
+                    key, status, verdict, extra, usd = None, None, None, None, 0.0
+                self.spent += usd
+                if key:
+                    self.c["frames_" + status] += 1
+                    if status == "ok":
+                        w, h, jpeg, best, n = extra
+                        fr_rows.append((key, "ok", jpeg, w, h, json.dumps(verdict)))
+                        face_rows.append((key, [round(x, 5) for x in best["bbox"]], round(best["share"], 4),
+                                          n == 1, w, h, key))
+                    else:
+                        wh = extra or (None, None)
+                        fr_rows.append((key, status, None, wh[0], wh[1], json.dumps(verdict or {})))
+                done += 1
+                if done % 50 == 0:
+                    flush()
+                if done % 200 == 0:
+                    say("frames", done=done, of=len(todo), shown=self.c["frames_ok"],
+                        held=self.c["frames_held"], spent_usd=self.spent)
+                if self.spent >= self.cap or (self.deadline is not None and time.time() >= self.deadline):
+                    self.c["frames_stopped"] = 1
+                    continue                               # in flight finish; nothing new starts
+                nxt = next(it, None)
+                if nxt is not None:
+                    futs[pool.submit(look, nxt)] = nxt
+        flush()
+        say("frames", done=done, wanted=len(rows), shown=self.c["frames_ok"], held=self.c["frames_held"],
+            noface=self.c["frames_noface"], failed=self.c["frames_error"])
+
     # -- people ------------------------------------------------------------
     def group(self):
         """Clusters -> people. The library's groups were decided by people
@@ -965,7 +1147,8 @@ class Worker:
         for key, h, g, score, share, only in db.execute(
                 "select f.key, f.hash, f.group_id, f.score, coalesce(f.share, 0), f.only_face "
                 "from faces f join photos p on p.hash = f.hash and p.visible "
-                "where f.group_id is not null").fetchall():
+                "where f.group_id is not null "
+                "and not (p.source = 'seed' and p.media = 'video' and f.frame is null)").fetchall():
             faces[g].append((key, h, float(score or 0), float(share), bool(only)))
         photos = {g: len({h for _, h, _, _, _ in fs}) for g, fs in faces.items()}
 
@@ -1044,6 +1227,8 @@ def main() -> int:
     ap.add_argument("--workers", type=int, default=int(os.environ.get("WORKERS", "8")))
     ap.add_argument("--max-minutes", type=float,
                     default=float(os.environ["MAX_MINUTES"]) if os.environ.get("MAX_MINUTES") else None)
+    ap.add_argument("--frames", type=int, default=int(os.environ.get("FRAMES_PER_RUN", "1500")),
+                    help="most video faces given a judged frame of their own this run")
     ap.add_argument("--no-faces", action="store_true")
     a = ap.parse_args()
     need = ["DATABASE_URL", "GOOGLE_SERVICE_ACCOUNT_JSON", "GOOGLE_API_KEY_ARCHIVES",
@@ -1059,7 +1244,8 @@ def main() -> int:
                None if a.no_faces else Faces(), load_geocoder(),
                os.environ["DRIVE_COMMUNAL_FOLDER_ID"],
                os.environ.get("DRIVE_REL_PREFIX", "Media/Communal"),
-               budget=a.budget, cap_usd=a.cap_usd, workers=a.workers, max_minutes=a.max_minutes)
+               budget=a.budget, cap_usd=a.cap_usd, workers=a.workers, max_minutes=a.max_minutes,
+               frames=a.frames)
     w.run()
     return 0
 

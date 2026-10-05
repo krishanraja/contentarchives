@@ -3,6 +3,7 @@ import path from "node:path";
 import sharp from "sharp";
 import { imageSource } from "./env";
 import { download, thumbnail } from "./drive";
+import { sql } from "./db";
 
 // Private object storage: Supabase Storage in production, a folder in tests.
 // It holds only derived bytes - video face frames from the seed and resized
@@ -24,6 +25,13 @@ export async function getObject(key: string): Promise<Buffer | null> {
     headers: { authorization: `Bearer ${s.key}`, apikey: s.key },
   });
   return r.ok ? Buffer.from(await r.arrayBuffer()) : null;
+}
+
+// A video face's own frame: stored only after the library's sensitivity pass
+// cleared THAT frame (stages/13_app/cloud_enrich.py frames(), migration 0005).
+export async function frameBytes(key: string): Promise<Buffer | null> {
+  const [r] = await sql()`select jpeg from frames where key = ${key} and status = 'ok'`;
+  return r?.jpeg ? Buffer.from(r.jpeg as Uint8Array) : null;
 }
 
 export async function putObject(key: string, body: Buffer): Promise<void> {

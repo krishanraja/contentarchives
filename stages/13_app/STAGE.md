@@ -67,6 +67,12 @@ nudity in this".
   faces have never been judged frame by frame, so they group and find people and
   are never drawn
 - a photo is shown only when `visible`: bound to a Drive file and not hidden
+- a library box on a VIDEO was measured on the library's own frame grab, not the
+  frame Drive shows: never drawn
+- a video face is shown only on a frame of its own: pulled from the video on Drive
+  at the library's timestamp, the same person found in it again by embedding, and
+  cleared by the library's sensitivity pass on THAT frame; every attempt is kept
+  (`frames`), so no frame is judged twice and a held one is never shown
 
 ## Code
 | file | role |

@@ -127,5 +127,9 @@ the rest are already folded into `photos` by `build_db`.
   group decides, as in `build_game.verdicts`: `needs_identifying` ("ask someone
   else") keeps the face in the queue and asks it first;
 - a face is drawn only when its box was measured on a picture the shape Drive
-  shows; video faces (never judged frame by frame) and box-less faces group and
-  find people, and are never drawn.
+  shows. A library box on a video was measured on the library's own frame grab,
+  so it is never drawn; box-less faces group and find people only;
+- a video face (`image` = `{hash}_t{ms}`) the queue needs is given a frame of its
+  own: the cloud pulls that one frame from the video on Drive, finds the same
+  person in it by embedding, and shows it only if the library's sensitivity pass
+  clears THAT frame (`frames`, migration 0005).

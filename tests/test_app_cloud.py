@@ -306,7 +306,10 @@ def write_bundle(path, broken=False):
     clusters = {"c1": "g1", "c2": "g1",      # people merged these two, though the faces differ
                 "c3": "g3", "c4": "g4",      # people kept these apart, though the faces are alike
                 "c5": "g5",      # someone seen only in a video
-                "c6": "g6"}      # unnamed, and in MORE photos than the face the library flagged
+                "c6": "g6",      # unnamed, and in MORE photos than the face the library flagged
+                "c7": "g7",      # flagged, seen only in a video: its frame is clean
+                "c8": "g8",      # flagged, video only: its best frame is not clean, its next one is
+                "c9": "g9"}      # flagged, video only: the person is not found in the frame
     for c, g in clusters.items():
         db.execute("insert into clusters values (?, ?)", (c, g))
     faces = [  # key, hash, image, idx, cluster, box, thumb, share, only, emb
@@ -317,8 +320,13 @@ def write_bundle(path, broken=False):
         ("b5::0", "b5", "", 0, "c3", (.3, .2, .6, .6), (400, 300), .3, 1, unit(54, C3, .2)),
         ("b6::0", "b6", "", 0, "c3", (.3, .2, .6, .6), (400, 300), .3, 1, unit(55, C3, .2)),
         ("b7::0", "b7", "", 0, "c4", (.3, .2, .6, .6), (400, 300), .3, 1, unit(56, C3, .2)),
-        ("b8:f1:0", "b8", "f1", 0, "c5", None, None, None, 1, unit(57)),               # video
-        ("b8:f2:0", "b8", "f2", 0, "c5", None, None, None, 1, unit(58, unit(57), .2)),
+        ("b8:b8_t1000:0", "b8", "b8_t1000", 0, "c5", None, None, None, 1, unit(57)),               # video
+        ("b8:b8_t2000:0", "b8", "b8_t2000", 0, "c5", None, None, None, 1, unit(58, unit(57), .2)),
+        ("b8:b8_t3000:0", "b8", "b8_t3000", 0, "c7", None, None, None, 1, unit(70)),
+        ("b8:b8_t5000:0", "b8", "b8_t5000", 0, "c8", None, None, None, 1, unit(71)),
+        ("b8:b8_t6000:0", "b8", "b8_t6000", 0, "c8", None, None, None, 1, unit(72, unit(71), .2)),
+        ("b8:b8_t7000:0", "b8", "b8_t7000", 0, "c9", None, None, None, 1, unit(73)),
+        ("b8::0", "b8", "", 0, "c5", (.3, .2, .6, .6), (400, 300), .3, 1, unit(63, unit(57), .2)),  # library's own frame grab
         ("b1::1", "b1", "", 1, "c6", (.6, .2, .9, .6), (400, 300), .3, 0, unit(60, unit(59), .2)),
         ("b3::1", "b3", "", 1, "c6", (.6, .2, .9, .6), (400, 300), .3, 0, unit(61, unit(59), .2)),
         ("b7::1", "b7", "", 1, "c6", (.6, .2, .9, .6), (400, 300), .3, 0, unit(62, unit(59), .2)),
@@ -326,8 +334,9 @@ def write_bundle(path, broken=False):
     for key, h, img, idx, c, box, th, share, only, emb in faces:
         x1, y1, x2, y2 = box or (None,) * 4
         tw, thh = th or (None, None)
+        det = .95 if key.endswith("t5000:0") else .9       # c8's held frame is its best face
         db.execute("insert into faces values (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
-                   (key, h, img, idx, c, x1, y1, x2, y2, tw, thh, .9, share, only, blob(emb, 512)))
+                   (key, h, img, idx, c, x1, y1, x2, y2, tw, thh, det, share, only, blob(emb, 512)))
     journal = [  # when, who, scope, target, field, value
         ("2026-09-01T10:00:00", "krish", "cluster", "c1", "person", "Asha Secretname"),
         ("2026-09-02T10:00:00", "krish", "cluster", "c3", "unidentifiable", "declined"),
@@ -336,6 +345,9 @@ def write_bundle(path, broken=False):
         ("2026-09-04T10:00:00", "bharti", "cluster", "c4", "person", "Meera Secretname"),
         ("2026-09-05T10:00:00", "krish", "file", "b1", "place", "Secretville"),
         ("2026-09-06T10:00:00", "krish", "cluster", "c5", "person", "Ravi Secretname"),
+        ("2026-09-07T10:00:00", "krish", "cluster", "c7", "needs_identifying", "Bharti"),
+        ("2026-09-07T10:00:00", "krish", "cluster", "c8", "needs_identifying", "Bharti"),
+        ("2026-09-07T10:00:00", "krish", "cluster", "c9", "needs_identifying", "Bharti"),
     ]
     for w, who, sc, t, f, v in journal:
         aid = str(uuid.uuid5(uuid.NAMESPACE_URL, "journal:" + "|".join((w, who, sc, t, f, v))))
@@ -351,12 +363,40 @@ def write_bundle(path, broken=False):
     return counts
 
 
+CLEAN = {"nudity": "none", "subject_age": "adult", "sexual": "no"}
+FRAME_SPEC = {}     # the JPEG bytes of a fake frame -> what is in it
+
+
+def fake_jpeg(seed):
+    from PIL import Image
+    buf = io.BytesIO()
+    Image.new("RGB", (640, 480), ((seed * 37) % 256, (seed * 91) % 256, (seed * 13) % 256)).save(buf, "JPEG")
+    return buf.getvalue()
+
+
 class LibDrive:
     """Drive with the export shared with the account (or not yet)."""
     L = "Media/Communal/1998/"
 
     def __init__(self, bundle=None):
-        self.bundle, self.files = bundle, {}
+        self.bundle, self.files, self.frames_asked = bundle, {}, []
+        same = lambda v: [{"bbox": [.2, .2, .5, .6], "det": .9, "emb": v, "share": .3}]   # noqa: E731
+        stranger = [{"bbox": [.2, .2, .5, .6], "det": .9, "emb": unit(999), "share": .3}]
+        self.video = {   # (file, ms) -> (faces in the frame, its verdict)
+            ("d8", 1000): (same(unit(57)), CLEAN),
+            ("d8", 3000): (same(unit(70)), CLEAN),
+            ("d8", 5000): (same(unit(71)), {"nudity": "full", "subject_age": "adult", "sexual": "no"}),
+            ("d8", 6000): (same(unit(72, unit(71), .2)), CLEAN),
+            ("d8", 7000): (stranger, CLEAN),
+        }
+
+    def frame(self, fid, ms, px=960):
+        self.frames_asked.append((fid, ms))
+        if (fid, ms) not in self.video:
+            return None
+        jpeg = fake_jpeg(ms)
+        FRAME_SPEC[jpeg] = self.video[(fid, ms)]
+        return jpeg
 
     def put(self, fid, md5, rel, mime="image/jpeg", w=1024, h=768, rot=0):
         self.files[fid] = {"id": fid, "rel": rel, "mime": mime, "md5": md5, "time": None,
@@ -378,9 +418,18 @@ class LibDrive:
         shutil.copyfile(self.bundle, dest)
 
 
+class LibFaces:
+    def detect(self, jpeg):
+        return FRAME_SPEC.get(jpeg, ([], None))[0]
+
+
 class LibGemini:
     def __init__(self):
-        self.seen = []
+        self.seen, self.frames_judged = [], 0
+
+    def sensitivity(self, jpeg):
+        self.frames_judged += 1
+        return dict(FRAME_SPEC[jpeg][1]), 0.0002
 
     def classify(self, jpeg):
         self.seen.append(jpeg.decode().split(":")[1])
@@ -400,7 +449,8 @@ def library(out):
 
     def go(g=None):
         g = g or LibGemini()
-        w = CE.Worker(db, drive, g, None, None, "root", "Media/Communal", workers=1, budget=100)
+        w = CE.Worker(db, drive, g, LibFaces(), None, "root", "Media/Communal", workers=1, budget=100,
+                      frames=20)
         with contextlib.redirect_stdout(out):
             r = w.run()
         return r, g
@@ -455,8 +505,23 @@ def library(out):
                                  "select cover_face from people where cover_face is not null")}
     check("a turned thumbnail's box is never drawn",
           (q(db, "select share from faces where key = 'b2::0'")[0][0], "b2::0" in shown), (None, False))
-    check("a video face and a box-less face are never drawn",
-          bool(shown & {"b8:f1:0", "b8:f2:0", "b2::1"}), False)
+    check("a box-less face is never drawn", "b2::1" in shown, False)
+    unjudged = {k for (k,) in q(db, "select f.key from faces f join photos p on p.hash = f.hash "
+                                    "where p.media = 'video' and f.frame is null")}
+    check("a video face is never drawn without a frame of its own", bool(shown & unjudged), False)
+    fr = dict(q(db, "select key, status from frames"))
+    check("a flagged face seen only in a video is asked, on its own judged frame",
+          (fr.get("b8:b8_t3000:0"), q(db, "select hero_face from queue where group_id = %s", grp["c7"])),
+          ("ok", [("b8:b8_t3000:0",)]))
+    check("a frame that is not clean is held, never shown",
+          (fr.get("b8:b8_t5000:0"), grp["c8"] in queue,
+           q(db, "select jpeg is null from frames where key = 'b8:b8_t5000:0'")[0][0]), ("held", False, True))
+    check("a frame without the person in it is not shown", (fr.get("b8:b8_t7000:0"), grp["c9"] in queue),
+          ("noface", False))
+    check("a named person seen only in a video gets a face in People",
+          q(db, "select cover_face from people where name = 'Ravi Secretname'")[0][0], "b8:b8_t1000:0")
+    check("a library box on a video (its own frame grab, not Drive's) is never drawn",
+          (q(db, "select share from faces where key = 'b8::0'")[0][0], "b8::0" in shown), (None, False))
     check("an upright thumbnail of a turned photo keeps its box",
           q(db, "select share is not null from faces where key = 'b1::0'")[0][0], True)
     people = dict(q(db, "select name, photo_count from people"))
@@ -464,11 +529,16 @@ def library(out):
           sorted(people), ["Asha Secretname", "Dev Secretname", "Meera Secretname", "Ravi Secretname"])
     check("the journal is kept whole; its cluster answers count",
           (q(db, "select count(*) from journal")[0][0],
-           q(db, "select count(*) from answers where reason = 'the library journal'")[0][0]), (7, 6))
+           q(db, "select count(*) from answers where reason = 'the library journal'")[0][0]), (10, 9))
 
     # the same export again changes nothing and costs nothing
+    asked = len(drive.frames_asked)
     r, g = go()
     check("the same export is imported once", (g.seen, r.get("library_photos", 0)), ([], 0))
+    check("the next run tries the next frame, and judges nothing twice",
+          (drive.frames_asked[asked:], g.frames_judged), ([("d8", 6000)], 1))
+    check("so the face whose best frame was held is asked on its next one",
+          q(db, "select hero_face from queue where group_id = %s", grp["c8"]), [("b8:b8_t6000:0",)])
 
     # later: the purged file turns up, the missing photo arrives, one leaves
     drive.put("dh2", "m-h2", "Media/Communal/2020/secret-again.jpg")

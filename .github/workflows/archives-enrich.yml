@@ -17,10 +17,11 @@
 #   GOOGLE_API_KEY_ARCHIVES       the app's own capped Gemini key
 #   DRIVE_COMMUNAL_FOLDER_ID      the Communal folder
 #
-# The daily run is OFF until repository variable ARCHIVES_ENRICH is "on"
-# (Settings > Secrets and variables > Actions > Variables). Set it to
-# anything else to pause the nightly writer without a commit. A manual run
-# (Actions > Archives enrich > Run workflow) always works.
+# The daily run is ON (since 2026-10-05, after the library import was
+# verified live). To pause the nightly writer without a commit, set the
+# repository variable ARCHIVES_ENRICH to "off" (Settings > Secrets and
+# variables > Actions > Variables). A manual run (Actions > Archives enrich >
+# Run workflow) always works.
 #
 # Limits, each a stop rather than a kill - in-flight files finish, then the
 # run still groups faces, rebuilds the queue and writes its receipt:
@@ -45,6 +46,10 @@ on:
         description: "Files in flight at once"
         required: false
         default: "16"
+      frames:
+        description: "Most video faces given a judged frame of their own"
+        required: false
+        default: "1500"
 
 permissions:
   contents: read
@@ -57,7 +62,7 @@ jobs:
   # The writer never touches the live index unless its own tests pass on
   # this exact commit, against a real Postgres with the app's migrations.
   test:
-    if: ${{ github.event_name == 'workflow_dispatch' || vars.ARCHIVES_ENRICH == 'on' }}
+    if: ${{ github.event_name == 'workflow_dispatch' || vars.ARCHIVES_ENRICH != 'off' }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
     services:
@@ -99,6 +104,10 @@ jobs:
           cache-dependency-path: stages/13_app/requirements-cloud.txt
       - run: pip install -r stages/13_app/requirements-cloud.txt
 
+      # one frame per video face, read straight from Drive by byte range
+      - name: ffmpeg
+        run: command -v ffmpeg || (sudo apt-get update -q && sudo apt-get install -y -q --no-install-recommends ffmpeg)
+
       - name: face model cache
         uses: actions/cache@v4
         with:
@@ -130,6 +139,7 @@ jobs:
           DRIVE_REL_PREFIX: Media/Communal
           BUDGET: ${{ inputs.budget || '5000' }}
           WORKERS: ${{ inputs.workers || '16' }}
+          FRAMES_PER_RUN: ${{ inputs.frames || '1500' }}
           SPEND_CAP_USD: "60"
           MAX_MINUTES: "320"
         run: python stages/13_app/cloud_enrich.py
