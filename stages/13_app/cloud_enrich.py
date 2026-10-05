@@ -87,6 +87,7 @@ import hashlib
 import io
 import json
 import os
+import random
 import re
 import sqlite3
 import struct
@@ -257,13 +258,43 @@ class Drive:
         return t.content if t.status_code == 200 and t.content else None
 
 
+def err_name(e: Exception) -> str:
+    """An error's kind for the public log: its type, and its HTTP status when it
+    has one - never its message, which can carry a path or a description."""
+    m = re.match(r"HTTP (\d{3})\b", str(e))
+    return "http_" + m.group(1) if m else type(e).__name__
+
+
 class Gemini:
-    """The library's own classifier and embedder, priced at their own rates."""
+    """The library's own classifier and embedder, priced at their own rates.
+
+    ONE GATE FOR EVERY WORKER. The key's per-minute quota is shared by all the
+    threads, and a rate limit is not a verdict: the first live frame run sent
+    sixteen at once and lost 1,266 of 1,500 frames to refusals it treated as
+    final. Calls now pass a small gate, and a refusal (429) or a server error
+    (5xx) waits and tries again with growing pauses."""
+
+    RETRY = re.compile(r"HTTP (429|500|502|503|504)\b")
 
     def __init__(self, key: str):
+        import threading
         import classify_live as CL
         import embed_descriptions as ED
         self.CL, self.ED, self.key = CL, ED, key
+        self.gate = threading.Semaphore(int(os.environ.get("GEMINI_CONCURRENCY", "4")))
+        self.backoff = float(os.environ.get("GEMINI_BACKOFF", "5"))
+
+    def _call(self, paths, prompt, max_out):
+        delay = self.backoff
+        for attempt in range(6):
+            try:
+                with self.gate:
+                    return self.CL.call(paths, self.key, prompt=prompt, max_out=max_out)
+            except RuntimeError as e:
+                if attempt == 5 or not self.RETRY.match(str(e)):
+                    raise
+            time.sleep(delay + random.uniform(0, delay))
+            delay = min(delay * 2, 60.0)
 
     def classify(self, jpeg: bytes):
         CL = self.CL
@@ -274,7 +305,7 @@ class Gemini:
             out, usd = {}, 0.0
             # the same output budgets classify_live.main() gives each pass
             for prompt, max_out in ((CL.PROMPT, 800), (CL.RICH_PROMPT, 1400), (CL.SENS_PROMPT, 200)):
-                txt, tin, tout = CL.call([path], self.key, prompt=prompt, max_out=max_out)
+                txt, tin, tout = self._call([path], prompt, max_out)
                 usd += (tin * CL.IN_PER_M + tout * CL.OUT_PER_M) / 1e6
                 out.update(CL.parse(txt))
             return out, usd
@@ -289,7 +320,7 @@ class Gemini:
             fh.write(jpeg)
             path = fh.name
         try:
-            txt, tin, tout = CL.call([path], self.key, prompt=CL.SENS_PROMPT, max_out=200)
+            txt, tin, tout = self._call([path], CL.SENS_PROMPT, 200)
             return CL.parse(txt), (tin * CL.IN_PER_M + tout * CL.OUT_PER_M) / 1e6
         finally:
             os.unlink(path)
@@ -846,7 +877,7 @@ class Worker:
                     self.store(f, *fut.result())
                 except Exception as e:                           # noqa: BLE001
                     self.db.rollback()
-                    self.errors[type(e).__name__] += 1
+                    self.errors[err_name(e)] += 1
                 done += 1
                 if done % 50 == 0:
                     self.save_clusters()           # a killed run loses at most 50 files' centroids
@@ -985,6 +1016,14 @@ class Worker:
         lock = threading.Lock()
 
         def look(row):
+            try:
+                return judge_frame(row)
+            except Exception as e:                               # noqa: BLE001
+                # recorded as an error and tried again next run - never lost
+                self.errors["frame_" + err_name(e)] += 1
+                return row[0], "error", {}, None, 0.0
+
+        def judge_frame(row):
             key, fid, emb, _g = row
             ms = int(re.search(r"_t(\d+)$", key.split(":")[1]).group(1))
             jpeg = self.drive.frame(fid, ms)

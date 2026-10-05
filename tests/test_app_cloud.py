@@ -247,6 +247,36 @@ def main():
     library(out)
 
     print()
+    print("8b. a rate limit waits and tries again; a refusal does not")
+    class FakeCL:
+        def __init__(self, fails, code):
+            self.fails, self.code, self.calls = fails, code, 0
+
+        def call(self, paths, key, prompt, max_out):
+            self.calls += 1
+            if self.calls <= self.fails:
+                raise RuntimeError("HTTP {}: no".format(self.code))
+            return "{}", 10, 2
+    import threading
+    gm = CE.Gemini.__new__(CE.Gemini)
+    gm.key, gm.gate, gm.backoff = "k", threading.Semaphore(2), 0.001
+    gm.CL = FakeCL(2, 429)
+    try:
+        got = gm._call(["x"], "p", 10)
+    except RuntimeError:
+        got = "gave up"
+    check("two rate limits, then an answer", (got, gm.CL.calls), (("{}", 10, 2), 3))
+    gm.CL = FakeCL(1, 400)
+    try:
+        gm._call(["x"], "p", 10)
+        check("a refusal (400) is not retried", "retried", "raised")
+    except RuntimeError:
+        check("a refusal (400) is not retried", gm.CL.calls, 1)
+    check("the log names an error by its status, never its message",
+          (CE.err_name(RuntimeError("HTTP 429: secret-path.jpg")), CE.err_name(ValueError("secret"))),
+          ("http_429", "ValueError"))
+
+    print()
     print("9. the public log carries numbers only")
     text = out.getvalue()
     leaks = [s for s in ("secret", "Secretname", "beach", "umbrella", "Media/Communal", ".jpg")
@@ -309,7 +339,8 @@ def write_bundle(path, broken=False):
                 "c6": "g6",      # unnamed, and in MORE photos than the face the library flagged
                 "c7": "g7",      # flagged, seen only in a video: its frame is clean
                 "c8": "g8",      # flagged, video only: its best frame is not clean, its next one is
-                "c9": "g9"}      # flagged, video only: the person is not found in the frame
+                "c9": "g9",      # flagged, video only: the person is not found in the frame
+                "c10": "g10"}    # flagged, video only: the frame's judgement is rate-limited once
     for c, g in clusters.items():
         db.execute("insert into clusters values (?, ?)", (c, g))
     faces = [  # key, hash, image, idx, cluster, box, thumb, share, only, emb
@@ -326,6 +357,7 @@ def write_bundle(path, broken=False):
         ("b8:b8_t5000:0", "b8", "b8_t5000", 0, "c8", None, None, None, 1, unit(71)),
         ("b8:b8_t6000:0", "b8", "b8_t6000", 0, "c8", None, None, None, 1, unit(72, unit(71), .2)),
         ("b8:b8_t7000:0", "b8", "b8_t7000", 0, "c9", None, None, None, 1, unit(73)),
+        ("b8:b8_t8000:0", "b8", "b8_t8000", 0, "c10", None, None, None, 1, unit(74)),
         ("b8::0", "b8", "", 0, "c5", (.3, .2, .6, .6), (400, 300), .3, 1, unit(63, unit(57), .2)),  # library's own frame grab
         ("b1::1", "b1", "", 1, "c6", (.6, .2, .9, .6), (400, 300), .3, 0, unit(60, unit(59), .2)),
         ("b3::1", "b3", "", 1, "c6", (.6, .2, .9, .6), (400, 300), .3, 0, unit(61, unit(59), .2)),
@@ -348,6 +380,7 @@ def write_bundle(path, broken=False):
         ("2026-09-07T10:00:00", "krish", "cluster", "c7", "needs_identifying", "Bharti"),
         ("2026-09-07T10:00:00", "krish", "cluster", "c8", "needs_identifying", "Bharti"),
         ("2026-09-07T10:00:00", "krish", "cluster", "c9", "needs_identifying", "Bharti"),
+        ("2026-09-07T10:00:00", "krish", "cluster", "c10", "needs_identifying", "Bharti"),
     ]
     for w, who, sc, t, f, v in journal:
         aid = str(uuid.uuid5(uuid.NAMESPACE_URL, "journal:" + "|".join((w, who, sc, t, f, v))))
@@ -388,6 +421,7 @@ class LibDrive:
             ("d8", 5000): (same(unit(71)), {"nudity": "full", "subject_age": "adult", "sexual": "no"}),
             ("d8", 6000): (same(unit(72, unit(71), .2)), CLEAN),
             ("d8", 7000): (stranger, CLEAN),
+            ("d8", 8000): (same(unit(74)), "RATE LIMITED ONCE"),
         }
 
     def frame(self, fid, ms, px=960):
@@ -427,9 +461,17 @@ class LibGemini:
     def __init__(self):
         self.seen, self.frames_judged = [], 0
 
+    limited = set()
+
     def sensitivity(self, jpeg):
         self.frames_judged += 1
-        return dict(FRAME_SPEC[jpeg][1]), 0.0002
+        v = FRAME_SPEC[jpeg][1]
+        if v == "RATE LIMITED ONCE":
+            if jpeg not in LibGemini.limited:
+                LibGemini.limited.add(jpeg)
+                raise RuntimeError("HTTP 429: Resource has been exhausted")
+            v = CLEAN
+        return dict(v), 0.0002
 
     def classify(self, jpeg):
         self.seen.append(jpeg.decode().split(":")[1])
@@ -518,6 +560,8 @@ def library(out):
            q(db, "select jpeg is null from frames where key = 'b8:b8_t5000:0'")[0][0]), ("held", False, True))
     check("a frame without the person in it is not shown", (fr.get("b8:b8_t7000:0"), grp["c9"] in queue),
           ("noface", False))
+    check("a rate-limited judgement is recorded as an error, never as a verdict",
+          (fr.get("b8:b8_t8000:0"), grp["c10"] in queue), ("error", False))
     check("a named person seen only in a video gets a face in People",
           q(db, "select cover_face from people where name = 'Ravi Secretname'")[0][0], "b8:b8_t1000:0")
     check("a library box on a video (its own frame grab, not Drive's) is never drawn",
@@ -529,14 +573,16 @@ def library(out):
           sorted(people), ["Asha Secretname", "Dev Secretname", "Meera Secretname", "Ravi Secretname"])
     check("the journal is kept whole; its cluster answers count",
           (q(db, "select count(*) from journal")[0][0],
-           q(db, "select count(*) from answers where reason = 'the library journal'")[0][0]), (10, 9))
+           q(db, "select count(*) from answers where reason = 'the library journal'")[0][0]), (11, 10))
 
     # the same export again changes nothing and costs nothing
     asked = len(drive.frames_asked)
     r, g = go()
     check("the same export is imported once", (g.seen, r.get("library_photos", 0)), ([], 0))
-    check("the next run tries the next frame, and judges nothing twice",
-          (drive.frames_asked[asked:], g.frames_judged), ([("d8", 6000)], 1))
+    check("the next run tries the next frame and the errored one, and judges nothing twice",
+          (sorted(drive.frames_asked[asked:]), g.frames_judged), ([("d8", 6000), ("d8", 8000)], 2))
+    check("the errored frame, judged again, is now shown",
+          q(db, "select hero_face from queue where group_id = %s", grp["c10"]), [("b8:b8_t8000:0",)])
     check("so the face whose best frame was held is asked on its next one",
           q(db, "select hero_face from queue where group_id = %s", grp["c8"]), [("b8:b8_t6000:0",)])
 
