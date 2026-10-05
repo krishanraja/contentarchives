@@ -427,11 +427,12 @@ class Worker:
         return cid
 
     def save_clusters(self):
-        for j in sorted(self.dirty):
-            self.db.execute(
-                "insert into clusters (cluster_id, group_id, centroid, n) values (%s, %s, %s::extensions.vector, %s) "
-                "on conflict (cluster_id) do update set centroid = excluded.centroid, n = excluded.n",
-                (self.cid[j], self.cid[j], vec(self.C[j]), self.cn[j]))
+        rows = [(self.cid[j], self.cid[j], vec(self.C[j]), self.cn[j]) for j in sorted(self.dirty)]
+        if rows:
+            with self.db.cursor() as cur:            # one round trip, not one per cluster
+                cur.executemany(
+                    "insert into clusters (cluster_id, group_id, centroid, n) values (%s, %s, %s::extensions.vector, %s) "
+                    "on conflict (cluster_id) do update set centroid = excluded.centroid, n = excluded.n", rows)
         self.db.execute(
             "insert into sync_state (key, value) values ('next_cluster', %s) "
             "on conflict (key) do update set value = excluded.value", (str(self.next_id),))
@@ -664,7 +665,11 @@ class Worker:
     def bind(self, files):
         """Library rows -> their Drive files. Held first, because safety wins
         every tie; then each library photo by md5 (by path only when the library
-        knew no md5); then second copies; then the faces' shape check."""
+        knew no md5); then second copies; then the faces' shape check.
+
+        DECIDED IN MEMORY, WRITTEN IN A HANDFUL OF STATEMENTS. The database is in
+        Sydney and the runner is not: a statement per row is a Pacific round trip
+        per row, and binding 22,752 photos that way ran for over an hour."""
         db = self.db
         by_md5 = collections.defaultdict(list)
         for f in files:
@@ -674,6 +679,9 @@ class Worker:
         held = dict(db.execute("select drive_id, reason from held").fetchall())
         owner = {d: (h, src) for d, h, src in db.execute(
             "select drive_id, hash, source from photos where drive_id is not null").fetchall()}
+        seed = db.execute("select hash, lower(md5), rel_path, drive_id from photos "
+                          "where source = 'seed'").fetchall()
+        drop_cloud, let_go, new_held, binds = set(), set(), {}, {}
 
         def kind(fid):
             """Who holds this Drive file now: 'seed', 'cloud', or None."""
@@ -683,16 +691,15 @@ class Worker:
             """Free a Drive file: a cloud row for it goes, a library row lets go."""
             h, src = owner.pop(fid, (None, None))
             if src == "cloud":
-                db.execute("delete from photos where hash = %s", (h,))
+                drop_cloud.add(h)
                 self.c["replaced"] += 1
             elif src == "seed":
-                db.execute("update photos set drive_id = null, updated_at = now() where hash = %s", (h,))
+                let_go.add(h)
+                binds.pop(h, None)
 
         def hold(f, why):
             take_from(f["id"])
-            db.execute("insert into held (drive_id, rel_path, reason) values (%s, %s, %s) "
-                       "on conflict (drive_id) do update set reason = excluded.reason, at = now()",
-                       (f["id"], f["rel"], why))
+            new_held[f["id"]] = (f["rel"], why)
             held[f["id"]] = why
 
         for md5, rel, why in db.execute("select md5, rel_path, reason from library_held").fetchall():
@@ -701,38 +708,54 @@ class Worker:
                     hold(f, why)
                     self.c["held_library"] += 1
 
-        newly = []
-        for h, md5, rel in db.execute("select hash, md5, rel_path from photos "
-                                      "where source = 'seed' and drive_id is null").fetchall():
-            cands = by_md5.get(md5.lower(), []) if md5 else ([by_rel[rel]] if rel in by_rel else [])
+        for h, md5, rel, d in seed:
+            if d is not None and h not in let_go:
+                continue                                  # bound, and still is
+            cands = by_md5.get(md5, []) if md5 else ([by_rel[rel]] if rel in by_rel else [])
             cands = [f for f in cands if f["id"] not in held and kind(f["id"]) in (None, "cloud")]
             if not cands:
                 self.c["unbound"] += 1
                 continue
             f = next((x for x in cands if x["rel"] == rel), sorted(cands, key=lambda x: x["rel"])[0])
             take_from(f["id"])
-            db.execute("update photos set drive_id = %s, updated_at = now() where hash = %s", (f["id"], h))
             owner[f["id"]] = (h, "seed")
-            newly.append((h, f))
-        self.c["bound"] += len(newly)
+            binds[h] = f
+            let_go.discard(h)                             # bound again, to this file
 
         # a second copy of a library photograph is that photograph: never classified
-        seed_md5 = {r[0] for r in db.execute(
-            "select lower(md5) from photos where source = 'seed' and drive_id is not null and md5 is not null")}
+        seed_md5 = {md5 for h, md5, _, d in seed
+                    if md5 and (h in binds or (d is not None and h not in let_go))}
         for md5 in seed_md5:
             for f in by_md5.get(md5, []):
                 if f["id"] not in held and kind(f["id"]) != "seed":
                     hold(f, "duplicate")
                     self.c["duplicates"] += 1
 
+        # write: free first (drive_id is unique), then hold, then bind
+        if drop_cloud:
+            db.execute("delete from photos where hash = any(%s)", (sorted(drop_cloud),))
+        if let_go:
+            db.execute("update photos set drive_id = null, updated_at = now() where hash = any(%s)",
+                       (sorted(let_go),))
+        with db.cursor() as cur:
+            if new_held:
+                cur.executemany(
+                    "insert into held (drive_id, rel_path, reason) values (%s, %s, %s) "
+                    "on conflict (drive_id) do update set reason = excluded.reason, at = now()",
+                    [(fid, rel, why) for fid, (rel, why) in new_held.items()])
+            if binds:
+                cur.executemany("update photos set drive_id = %s, updated_at = now() where hash = %s",
+                                [(f["id"], h) for h, f in binds.items()])
+        self.c["bound"] += len(binds)
+
         # a box is drawn only on a picture the shape Drive shows
-        if newly:
-            dims = {h: upright(f) for h, f in newly}
+        if binds:
+            dims = {h: upright(f) for h, f in binds.items()}
             turned = []
             for key, h, mw, mh in db.execute(
                     "select key, hash, measured_w, measured_h from faces where hash = any(%s) "
                     "and bbox is not null and share is not null and measured_w > 0 and measured_h > 0",
-                    ([h for h, _ in newly],)).fetchall():
+                    (list(binds),)).fetchall():
                 d = dims.get(h)
                 if d and not same_shape((mw, mh), d):
                     turned.append((key,))
@@ -741,8 +764,8 @@ class Worker:
                     cur.executemany("update faces set share = null where key = %s", turned)
             self.c["faces_turned"] += len(turned)
         db.commit()
-        if newly or self.c["held_library"] or self.c["unbound"]:
-            say("library bound", bound=len(newly), unbound=self.c["unbound"], held=self.c["held_library"],
+        if binds or self.c["held_library"] or self.c["unbound"]:
+            say("library bound", bound=len(binds), unbound=self.c["unbound"], held=self.c["held_library"],
                 duplicates=self.c["duplicates"], replaced=self.c["replaced"], faces_turned=self.c["faces_turned"])
 
     def process(self, files):
@@ -840,23 +863,26 @@ class Worker:
              f.get("lat"), f.get("lon"), vec(emb) if emb is not None else None))
         faces = self.faces.detect(jpeg) if self.faces else []
         n_here = len(faces)
+        frows, crows, hrows = [], [], []
         for i, fc in enumerate(faces):
             cid = self.assign(fc["emb"], fc["det"])
             if cid is None:
                 continue
-            key = "{}::{}".format(h, i)
-            self.db.execute(
-                "insert into faces (key, hash, group_id, cluster_id, bbox, only_face, score, share, embedding) "
-                "values (%s,%s,%s,%s,%s,%s,%s,%s,%s::extensions.vector) on conflict (key) do nothing",
-                (key, h, cid, cid, [round(x, 5) for x in fc["bbox"]], n_here == 1, fc["det"],
-                 round(fc["share"], 4), vec(fc["emb"])))
-            self.db.execute(
-                "insert into clusters (cluster_id, group_id, n) values (%s, %s, 0) on conflict do nothing",
-                (cid, cid))
-            self.db.execute(
-                "insert into cluster_hashes (cluster_id, group_id, hash) values (%s,%s,%s) on conflict do nothing",
-                (cid, cid, h))
-            self.c["faces"] += 1
+            frows.append(("{}::{}".format(h, i), h, cid, cid, [round(x, 5) for x in fc["bbox"]], n_here == 1,
+                          fc["det"], round(fc["share"], 4), vec(fc["emb"])))
+            crows.append((cid, cid))
+            hrows.append((cid, cid, h))
+        if frows:
+            with self.db.cursor() as cur:            # a round trip per kind, not per face
+                cur.executemany(
+                    "insert into faces (key, hash, group_id, cluster_id, bbox, only_face, score, share, embedding) "
+                    "values (%s,%s,%s,%s,%s,%s,%s,%s,%s::extensions.vector) on conflict (key) do nothing", frows)
+                cur.executemany(
+                    "insert into clusters (cluster_id, group_id, n) values (%s, %s, 0) on conflict do nothing", crows)
+                cur.executemany(
+                    "insert into cluster_hashes (cluster_id, group_id, hash) values (%s,%s,%s) "
+                    "on conflict do nothing", hrows)
+            self.c["faces"] += len(frows)
         self.db.commit()
         self.c["added"] += 1
 
