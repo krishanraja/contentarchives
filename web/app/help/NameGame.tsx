@@ -1,7 +1,8 @@
 "use client";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import Ringed from "@/components/Ringed";
+import Shot from "@/components/Shot";
+import Fit from "@/components/Fit";
 import Undo from "@/components/Undo";
 import Confetti from "@/components/Confetti";
 import { send, uuid } from "@/components/outbox";
@@ -86,9 +87,12 @@ export default function NameGame() {
     setDone(null); setSeen((s) => s.filter((x) => x !== g)); void load(seen.filter((x) => x !== g));
   }
 
+  // Every state is one screen that never scrolls (Krish, 2026-10-05): the
+  // photo takes the room the question leaves it, and a list of names longer
+  // than its room turns like pages.
   if (done) {
     return (
-      <>
+      <div className="game middle">
         <Confetti seed={done.n} />
         <div className="yay stack" role="status">
           <p className="big">{done.n.toLocaleString("en-GB")}</p>
@@ -98,13 +102,13 @@ export default function NameGame() {
         <button className="btn block pink" onClick={() => { setDone(null); void load(seen); }}>Next face</button>
         <Link className="btn block" href="/">I'm done for now</Link>
         <Undo text={`Saved: ${done.name}`} onUndo={undo} onDone={() => undefined} />
-      </>
+      </div>
     );
   }
   if (q === undefined) return <p className="sentence" role="status">Finding a face…</p>;
   if (q === null) {
     return (
-      <div className="stack">
+      <div className="game middle">
         {err ? <p className="notice error">{err}</p>
           : skipped > 0 ? <div className="yay"><h2>That's every face for now</h2><p>The ones you didn't know come round again. Another photo of them might jog your memory.</p></div>
           : <div className="yay"><h2>All done!</h2><p>There are no more faces to name right now. Thank you so much.</p></div>}
@@ -115,93 +119,98 @@ export default function NameGame() {
     );
   }
 
+  const others = q.suggestions.filter((s) => !q.contest.some((n) => fold(n) === fold(s.name)));
+  const typedNow = typed.trim().replace(/\s+/g, " ");
   return (
-    <div className="stack" style={{ gap: 18 }}>
-      <Ringed src={faceUrl(q.hero.key, true)} bbox={q.hero.bbox} alt="A photo with one face circled" />
-      {q.samples.length > 0 && (
-        <div>
-          <p className="muted" style={{ marginBottom: 8 }}>We think these are the same person:</p>
-          <div className="samples">{q.samples.map((f) => <img key={f.key} src={faceUrl(f.key)} alt="" />)}</div>
+    <div className={`game ${mode}`}>
+      <Shot src={faceUrl(q.hero.key, true)} bbox={q.hero.bbox} alt="A photo with one face circled" />
+      {q.samples.length > 0 && mode !== "type" && (
+        <div className="samples">
+          <p className="muted">The same person?</p>
+          {q.samples.slice(0, 4).map((f) => <img key={f.key} src={faceUrl(f.key)} alt="" />)}
         </div>
       )}
-      {err && <p className="notice error" role="alert">{err}</p>}
-
-      {mode === "ask" && q.ask && (
-        <div className="card">
-          <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-            <img src={faceUrl(q.ask.face)} alt="" width={76} height={76} style={{ borderRadius: "50%", border: "3px solid var(--ink)" }} />
-            <h2>Is this {q.ask.name}?</h2>
-          </div>
-          <div className="row">
-            <button className="btn" onClick={() => setMode("choose")}>No</button>
-            <button className="btn mint" onClick={() => answer("person", q.ask!.name)}>Yes!</button>
-          </div>
-          <button className="btn block" onClick={dontKnow}>I don't know</button>
-        </div>
+      {/* right under the faces it is about */}
+      {(mode === "ask" || mode === "choose") && q.samples.length > 0 && (
+        <button className="btn block quiet notsame" onClick={() => answer("mixed", "mixed")}>These aren't all the same person</button>
       )}
+      <div className="panel">
+        {err && <p className="notice error" role="alert">{err}</p>}
 
-      {mode === "choose" && (
-        <div className="card">
-          <h2>Who is this?</h2>
-          {q.contest.length > 0 && (
-            <>
-              <p className="muted">People have said different names. Which is right?</p>
-              <div className="chips" aria-label="Names people have given">
-                {q.contest.map((n) => {
-                  const f = q.suggestions.find((s) => fold(s.name) === fold(n));
-                  return (
-                    <button key={n} className="chip" onClick={() => answer("person", n)}>
-                      {f && <img src={faceUrl(f.face)} alt="" />}{n}
+        {mode === "ask" && q.ask && (
+          <>
+            <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+              <img src={faceUrl(q.ask.face)} alt="" style={{ width: "clamp(52px, 8dvh, 76px)", aspectRatio: "1", borderRadius: "50%", border: "3px solid var(--ink)", flex: "none" }} />
+              <h2>Is this {q.ask.name}?</h2>
+            </div>
+            <div className="row">
+              <button className="btn" onClick={() => setMode("choose")}>No</button>
+              <button className="btn mint" onClick={() => answer("person", q.ask!.name)}>Yes!</button>
+            </div>
+            <button className="btn block" onClick={dontKnow}>I don't know</button>
+          </>
+        )}
+
+        {mode === "choose" && (
+          <>
+            {q.contest.length > 0
+              ? <h2>People have said different names. Which is right?</h2>
+              : <h2 className="said-above">Who is this?</h2>}
+            {(q.contest.length > 0 || others.length > 0) && (
+              <Fit label={q.contest.length ? "Names people have given" : "Names it might be"} more="More names">
+                {[
+                  ...q.contest.map((n) => {
+                    const f = q.suggestions.find((s) => fold(s.name) === fold(n));
+                    return (
+                      <button key={"c:" + n} className="chip" onClick={() => answer("person", n)}>
+                        {f && <img src={faceUrl(f.face)} alt="" />}{n}
+                      </button>
+                    );
+                  }),
+                  ...others.map((s) => (
+                    <button key={"s:" + s.name} className="chip" onClick={() => answer("person", s.name)}>
+                      <img src={faceUrl(s.face)} alt="" />{s.name}
                     </button>
-                  );
-                })}
-              </div>
-            </>
-          )}
-          {q.suggestions.filter((s) => !q.contest.some((n) => fold(n) === fold(s.name))).length > 0 && (
-            <div className="chips">
-              {q.suggestions.filter((s) => !q.contest.some((n) => fold(n) === fold(s.name))).map((s) => (
-                <button key={s.name} className="chip" onClick={() => answer("person", s.name)}>
-                  <img src={faceUrl(s.face)} alt="" />{s.name}
-                </button>
-              ))}
+                  )),
+                ]}
+              </Fit>
+            )}
+            <div className="row">
+              <button className="btn sky" onClick={() => setMode("type")}>{q.suggestions.length || q.contest.length ? "Someone else" : "Type their name"}</button>
+              <button className="btn" onClick={dontKnow}>I don't know</button>
             </div>
-          )}
-          <button className="btn block sky" onClick={() => setMode("type")}>{q.suggestions.length || q.contest.length ? "Someone else" : "Type their name"}</button>
-          <button className="btn block" onClick={dontKnow}>I don't know</button>
-        </div>
-      )}
+          </>
+        )}
 
-      {mode === "type" && (
-        <form className="card" onSubmit={(e) => { e.preventDefault(); submitTyped(); }}>
-          <label className="big" htmlFor="nm">Their name</label>
-          <input id="nm" className="field" value={typed} onChange={(e) => { setTyped(e.target.value); setWarn(""); }}
-            autoComplete="off" autoCapitalize="words" autoCorrect="off" spellCheck={false} enterKeyHint="done" placeholder="First and last name" />
-          {matches.length > 0 && (
-            <div className="chips" aria-label="Names we already know">
-              {matches.map((n) => <button type="button" key={n} className="chip" onClick={() => answer("person", n)}>{n}</button>)}
+        {mode === "type" && (
+          <form className="contents" onSubmit={(e) => { e.preventDefault(); submitTyped(); }}>
+            <label className="big" htmlFor="nm">Their name</label>
+            <input id="nm" className="field" value={typed} onChange={(e) => { setTyped(e.target.value); setWarn(""); }}
+              autoComplete="off" autoCapitalize="words" autoCorrect="off" spellCheck={false} enterKeyHint="done" placeholder="First and last name" />
+            {matches.length > 0 && (
+              <Fit key={typed} label="Names we already know" more="More names">
+                {matches.map((n) => <button type="button" key={n} className="chip" onClick={() => answer("person", n)}>{n}</button>)}
+              </Fit>
+            )}
+            {warn && <p className="notice error" role="alert">{warn}</p>}
+            <div className="row">
+              <button type="button" className="btn" onClick={() => setMode(q.ask ? "ask" : "choose")}>Go back</button>
+              <button className="btn pink">Save this name</button>
             </div>
-          )}
-          {warn && <p className="notice error" role="alert">{warn}</p>}
-          <button className="btn block pink">Save this name</button>
-          <button type="button" className="btn block" onClick={() => setMode(q.ask ? "ask" : "choose")}>Go back</button>
-        </form>
-      )}
+          </form>
+        )}
 
-      {mode === "spell" && (
-        <div className="card">
-          <h2>Did you mean {meant.length === 1 ? `${meant[0]}?` : "one of these?"}</h2>
-          <div className="chips" aria-label="Names we already know">
-            {meant.map((n) => <button key={n} className="chip" onClick={() => answer("person", n)}>{n}</button>)}
-          </div>
-          <button className="btn block" onClick={() => answer("person", typed.trim().replace(/\s+/g, " "))}>
-            No, save “{typed.trim().replace(/\s+/g, " ")}”
-          </button>
-          <button className="btn block quiet" onClick={() => setMode("type")}>Change what I typed</button>
-        </div>
-      )}
-
-      <button className="btn block quiet" onClick={() => answer("mixed", "mixed")}>These aren't all the same person</button>
+        {mode === "spell" && (
+          <>
+            <h2>Did you mean {meant.length === 1 ? `${meant[0]}?` : "one of these?"}</h2>
+            <Fit label="Names we already know" more="More names">
+              {meant.map((n) => <button key={n} className="chip" onClick={() => answer("person", n)}>{n}</button>)}
+            </Fit>
+            <button className="btn block" onClick={() => answer("person", typedNow)}>No, save “{typedNow}”</button>
+            <button className="btn block quiet" onClick={() => setMode("type")}>Change what I typed</button>
+          </>
+        )}
+      </div>
     </div>
   );
 }

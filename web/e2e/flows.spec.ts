@@ -82,13 +82,17 @@ test("a phone asking for the desktop page still gets the phone page", async ({ b
   const page = await ctx.newPage();
   await page.goto("/gate");
   const fit = await page.evaluate(() => ({ zoom: Number(getComputedStyle(document.documentElement).zoom),
-    over: document.documentElement.scrollWidth - document.documentElement.clientWidth }));
+    over: document.documentElement.scrollWidth - document.documentElement.clientWidth,
+    down: document.documentElement.scrollHeight - document.documentElement.clientHeight }));
   expect(fit.zoom).toBeCloseTo(1040 / 412, 2);          // laid out at the phone's own width
   expect(fit.over).toBeLessThanOrEqual(0);              // and nothing runs off the side
+  expect(fit.down).toBeLessThanOrEqual(1);              // or off the bottom: one screen, scaled or not
   await ctx.close();
   // a computer, and a phone that lays out at its own width, are left alone
   for (const opts of [{ viewport: { width: 1280, height: 800 } },
-                      { viewport: { width: 412, height: 892 }, screen: { width: 412, height: 892 }, hasTouch: true, isMobile: true }]) {
+                      { viewport: { width: 412, height: 892 }, screen: { width: 412, height: 892 }, hasTouch: true, isMobile: true },
+                      // an iPhone on its side reports its UPRIGHT width: still its own page, not blown up
+                      { viewport: { width: 844, height: 390 }, screen: { width: 390, height: 844 }, hasTouch: true, isMobile: true }]) {
     const c = await browser.newContext(opts);
     const p = await c.newPage();
     await p.goto("/gate");
@@ -115,9 +119,12 @@ test("find photos by a first name, a place and a year", async ({ page }) => {
   await floor(page, "results");
   await page.locator(".grid a").first().click();
   await page.waitForURL("**/photo/**");
-  await expect(page.getByRole("heading", { name: "Who" })).toBeVisible();
-  await expect(page.locator(".card")).toContainText("Ravi Raja");
+  await expect(page.locator(".caption")).toContainText("Ravi Raja");
   await floor(page, "photo");
+  await page.click("button:has-text('About this photo')");
+  await expect(page.getByRole("heading", { name: "Who" })).toBeVisible();
+  await expect(page.locator(".about")).toContainText("Ravi Raja");
+  await floor(page, "photo, about");
   await page.click("text=Back to photos");
   await expect(page.locator(".sentence")).toContainText("Ravi Raja");
   await page.fill("#q", "1990s");
@@ -229,6 +236,7 @@ test("Hide this photo removes it for everyone at once", async ({ page }) => {
   await page.locator(".grid a").first().click();
   await page.waitForURL("**/photo/**");
   const hash = decodeURIComponent(new URL(page.url()).pathname.split("/").pop()!);
+  await page.click("button:has-text('About this photo')");
   await page.click("text=This photo shouldn't be here");
   await page.click("button:has-text('Yes, hide it')");
   await expect(page.getByText("hidden for everyone")).toBeVisible();
@@ -414,4 +422,3 @@ test("places: a misspelling is caught, a second opinion is counted not written o
   for (const pg of [grandpa, meera]) await pg.context().close();
 });
 
-test.afterAll(async () => { await db.end(); });

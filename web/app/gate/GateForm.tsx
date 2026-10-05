@@ -26,7 +26,7 @@ export default function GateForm({ said = "" }: { said?: string }) {
     else setMsg("That's not it. Try again, or ask Krish.");
   }
   return (
-    <form onSubmit={go} method="post" action="/api/gate" className="card">
+    <form onSubmit={go} method="post" action="/api/gate" className="card" style={{ flex: "none" }}>
       <label className="big" htmlFor="code">Enter the family code</label>
       <input id="code" name="code" className="field"
         autoComplete="off" autoCapitalize="characters" autoCorrect="off" spellCheck={false}

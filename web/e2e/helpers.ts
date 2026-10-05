@@ -2,7 +2,9 @@ import { expect, type Page } from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
 import postgres from "postgres";
 
-export const db = postgres(process.env.DATABASE_URL || "postgres://postgres:pw@127.0.0.1:54329/arch", { prepare: false, max: 2 });
+// One connection pool for every spec file in the worker: no file ends it (the
+// next file would find it closed); it closes itself when idle.
+export const db = postgres(process.env.DATABASE_URL || "postgres://postgres:pw@127.0.0.1:54329/arch", { prepare: false, max: 2, idle_timeout: 5 });
 
 export async function signIn(page: Page, name = "Grandma") {
   await page.goto("/gate");

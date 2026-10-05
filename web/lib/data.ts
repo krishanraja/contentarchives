@@ -60,10 +60,10 @@ export async function browse() {
     db`select pp.name, count(distinct pp.hash)::int n,
               (select pe.cover_face from people pe where pe.name = pp.name) cover
        from photo_people pp join photos p on p.hash = pp.hash and p.visible
-       group by pp.name order by n desc limit 60`,
+       group by pp.name order by n desc limit 200`,
     db`select place, count(*)::int n from photos
        where place is not null and place <> '' and visible
-       group by place order by n desc limit 40`,
+       group by place order by n desc limit 120`,
     db`select (coalesce(year, nullif(substring(approx_year from 1 for 4),'')::int) / 10 * 10) decade,
               count(*)::int n
        from photos where visible

@@ -1,6 +1,14 @@
 /* archives - fun to look at, impossible to get lost in.
    The floor (tested in e2e/floor.spec.ts): body text >= 20px, every control
-   >= 56px tall, ink-on-colour contrast >= AA, nothing that needs a swipe. */
+   >= 56px tall, ink-on-colour contrast >= AA, nothing that needs a swipe.
+
+   NOTHING SCROLLS, ON ANY DEVICE (Krish, 2026-10-05; e2e/noscroll.spec.ts).
+   Every screen is exactly the height of the window: a photograph takes the
+   room the screen leaves it (.slot), a list longer than its room is turned
+   like the pages of a book (components/Fit.tsx), and spacing tightens on a
+   short screen. A phone on its side puts the photo beside the question.
+   Nothing is clipped to make it fit: if something ever did not fit, the page
+   would scroll rather than hide a button. */
 
 :root {
   --cream: #fff6e9;
@@ -21,8 +29,32 @@
   --body: 21px;
   --gutter: 18px;
   --col: 560px;
+  --gap: 18px;
+  --pad: 16px;
+  --field: 72px;
+  --h1: 40px;
+  --h2: 30px;
   color-scheme: light;
 }
+/* a shorter screen: the same screen, packed closer - never smaller than the floor */
+@media (max-height: 800px) {
+  :root { --tap: 60px; --gap: 14px; --pad: 12px; --field: 64px; --h1: 34px; --h2: 26px; }
+}
+@media (max-height: 680px) {
+  :root { --tap: 56px; --gap: 10px; --pad: 10px; --field: 58px; --h1: 30px; --h2: 24px; --gutter: 14px; }
+}
+@media (max-height: 460px) {
+  :root { --gap: 8px; --pad: 8px; --field: 56px; --h1: 26px; --h2: 22px; }
+  .sub { display: none; }
+}
+/* a phone on its side: the search and the list switch share the top row */
+@media (orientation: landscape) and (max-height: 520px) {
+  .page.find { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); max-width: 980px; }
+  .page.find > .fit { grid-column: 1 / -1; min-height: 0; }
+  .page.find > .sentence { align-self: center; }
+}
+/* "Someone else" opens in place of the list of names */
+.page:has(details[open]) > .fit { display: none; }
 
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
 html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
@@ -33,9 +65,10 @@ body {
   font-family: var(--font-body), "Atkinson Hyperlegible", system-ui, sans-serif;
   font-size: var(--body);
   line-height: 1.45;
-  min-height: 100dvh;
   overflow-x: hidden;
 }
+/* the whole app is one screen tall (layout.tsx wraps every page in it) */
+.screen { height: 100vh; height: var(--app-h, 100dvh); display: flex; flex-direction: column; }
 /* playful dotted paper, very faint so photos still lead */
 body::before {
   content: ""; position: fixed; inset: 0; z-index: -1; pointer-events: none;
@@ -50,34 +83,37 @@ h1, h2, h3, .display {
   line-height: 1.1;
   margin: 0;
 }
-h1 { font-size: 40px; }
-h2 { font-size: 30px; }
+h1 { font-size: var(--h1); }
+h2 { font-size: var(--h2); }
 h3 { font-size: 24px; }
 p { margin: 0; }
 
 .page {
+  flex: 1 1 auto; min-height: 0;
   width: 100%;
   max-width: var(--col);
   margin: 0 auto;
-  padding: 16px var(--gutter) calc(48px + env(safe-area-inset-bottom));
-  display: flex; flex-direction: column; gap: 22px;
+  padding: var(--pad) var(--gutter) calc(var(--pad) + env(safe-area-inset-bottom));
+  display: flex; flex-direction: column; gap: var(--gap);
 }
+/* a screen with little on it sits in the middle, not at the top */
+.page.middle { justify-content: center; }
 
 /* ---------- top bar: always one obvious way home ---------- */
 .bar {
-  position: sticky; top: 0; z-index: 20;
+  flex: none; z-index: 20;
   background: var(--cream);
-  padding: calc(10px + env(safe-area-inset-top)) var(--gutter) 10px;
+  padding: calc(min(10px, var(--pad)) + env(safe-area-inset-top)) var(--gutter) min(10px, var(--pad));
   border-bottom: var(--line);
   display: flex; align-items: center; justify-content: space-between; gap: 12px;
 }
-.bar .title { font-family: var(--font-display), system-ui; font-weight: 600; font-size: 24px; }
+.bar .title { font-family: var(--font-display), system-ui; font-weight: 600; font-size: 24px; text-align: right; line-height: 1.1; }
 .bar-inner { width: 100%; max-width: var(--col); margin: 0 auto; display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 
 /* ---------- buttons ---------- */
 .btn {
   appearance: none; border: var(--line); border-radius: var(--r);
-  min-height: var(--tap); padding: 12px 22px;
+  min-height: var(--tap); padding: 8px 20px;
   font: 700 22px/1.15 var(--font-body), system-ui, sans-serif;
   color: var(--ink); background: var(--paper);
   box-shadow: var(--pop);
@@ -101,47 +137,53 @@ p { margin: 0; }
 
 /* ---------- big home tiles ---------- */
 .tile {
-  display: grid; grid-template-columns: 76px 1fr; align-items: center; gap: 16px;
-  padding: 22px; border: var(--line); border-radius: 28px; box-shadow: var(--pop);
-  color: var(--ink); text-decoration: none; min-height: 132px;
+  display: grid; grid-template-columns: auto 1fr; align-items: center; gap: 16px;
+  padding: 12px 20px; border: var(--line); border-radius: 28px; box-shadow: var(--pop);
+  color: var(--ink); text-decoration: none; min-height: 0; flex: 0 1 150px;
   transition: transform .08s ease, box-shadow .08s ease;
 }
 .tile:active { transform: translate(3px, 3px); box-shadow: var(--pop-press); }
 .tile .icon {
-  width: 76px; height: 76px; border-radius: 50%; border: var(--line);
+  width: 72px; height: 72px; border-radius: 50%; border: var(--line);
   background: var(--paper); display: grid; place-items: center;
 }
 .tile .icon svg { width: 40px; height: 40px; }
-.tile h2 { font-size: 32px; }
+.tile h2 { font-size: calc(var(--h2) + 2px); }
 .tile p { font-size: 20px; margin-top: 4px; color: var(--ink); }
+.tiles { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; gap: var(--gap); justify-content: center; }
+/* a short screen keeps each tile's name and count, and leaves the sentence */
+@media (max-height: 800px) { .tile p { display: none; } }
+@media (max-height: 680px) { .tile .icon { width: 56px; height: 56px; } .tile .icon svg { width: 30px; height: 30px; } }
 .count {
-  display: inline-block; margin-top: 8px; padding: 2px 12px; border-radius: 999px;
+  display: inline-block; margin-top: 6px; padding: 2px 12px; border-radius: 999px;
   background: var(--ink); color: var(--paper); font-weight: 700; font-size: 18px;
 }
 
 /* ---------- inputs ---------- */
 .field {
-  width: 100%; min-height: 72px; padding: 14px 20px;
+  width: 100%; min-height: var(--field); padding: 10px 18px;
   border: var(--line); border-radius: var(--r); background: var(--paper);
   font: 400 26px/1.2 var(--font-body), system-ui, sans-serif; color: var(--ink);
   box-shadow: inset 0 3px 0 rgba(30, 20, 51, 0.08);
 }
 .field::placeholder { color: #6f6580; }
-label.big { font-family: var(--font-display), system-ui; font-weight: 600; font-size: 26px; display: block; margin-bottom: 10px; }
+label.big { font-family: var(--font-display), system-ui; font-weight: 600; font-size: calc(var(--h2) - 2px); display: block; margin-bottom: 6px; }
 
 /* ---------- chips ---------- */
-.chips { display: flex; flex-wrap: wrap; gap: 12px; }
+.chips { display: flex; flex-wrap: wrap; gap: 10px; align-content: flex-start; }
 .chip {
   min-height: 56px; padding: 8px 18px; border: var(--line); border-radius: 999px;
   background: var(--paper); box-shadow: 3px 3px 0 var(--ink);
   font: 700 20px/1.1 var(--font-body), system-ui; color: var(--ink);
   display: inline-flex; align-items: center; gap: 10px; cursor: pointer; text-decoration: none;
+  max-width: 100%; text-align: left;
 }
 .chip:active { transform: translate(2px, 2px); box-shadow: 1px 1px 0 var(--ink); }
 .chip img { width: 44px; height: 44px; border-radius: 50%; border: 2px solid var(--ink); object-fit: cover; margin-left: -8px; }
 
 /* ---------- photo grid ---------- */
-.grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; align-content: start; }
+@media (min-width: 480px) { .grid { grid-template-columns: repeat(3, 1fr); } }
 .grid a, .shot {
   display: block; position: relative; aspect-ratio: 1; border-radius: 18px; overflow: hidden;
   border: var(--line); background: var(--grape); box-shadow: 3px 3px 0 var(--ink);
@@ -155,51 +197,109 @@ label.big { font-family: var(--font-display), system-ui; font-weight: 600; font-
 }
 
 .sentence {
-  font-family: var(--font-display), system-ui; font-weight: 600; font-size: 24px;
-  background: var(--sun); border: var(--line); border-radius: 18px; padding: 12px 16px;
-  box-shadow: 3px 3px 0 var(--ink);
+  font-family: var(--font-display), system-ui; font-weight: 600; font-size: calc(var(--h2) - 4px);
+  background: var(--sun); border: var(--line); border-radius: 18px; padding: 8px 14px;
+  box-shadow: 3px 3px 0 var(--ink); flex: none;
 }
 
 .card {
   background: var(--paper); border: var(--line); border-radius: 26px;
-  box-shadow: var(--pop); padding: 18px; display: flex; flex-direction: column; gap: 16px;
+  box-shadow: var(--pop); padding: var(--pad); display: flex; flex-direction: column; gap: var(--gap);
 }
 .muted { color: var(--ink-soft); }
 .center { text-align: center; }
-.stack { display: flex; flex-direction: column; gap: 14px; }
+.stack { display: flex; flex-direction: column; gap: var(--gap); }
 .row { display: flex; gap: 12px; }
 .row > * { flex: 1; }
 
-/* ---------- the big photo with a ring around the face ---------- */
-.hero { position: relative; border: var(--line); border-radius: 22px; overflow: hidden; background: var(--ink); box-shadow: var(--pop); }
-.hero img { display: block; width: 100%; height: auto; max-height: 62dvh; object-fit: contain; background: var(--ink); }
-.hero .ring {
+/* ---------- the photograph: whatever room the screen leaves it ---------- */
+/* .slot takes the space left over (a list on the same screen takes up to two
+   fifths of it, components/Fit.tsx); .frame is the picture's own shape, as big
+   as fits in the slot, so the border hugs the photograph at any size */
+.slot { flex: 1 1 0; min-height: 0; container-type: size; display: grid; place-items: center; }
+.frame {
+  position: relative; overflow: hidden; background: var(--ink);
+  /* a browser without container units (iOS before 16) fills the slot instead */
+  width: 100%; height: 100%;
+  width: min(100cqw, calc(100cqh * var(--ar, 1.333))); height: min(100cqh, calc(100cqw / var(--ar, 1.333)));
+  border: var(--line); border-radius: 22px; box-shadow: var(--pop);
+}
+.frame img { display: block; width: 100%; height: 100%; object-fit: cover; }
+@supports not (width: 1cqw) { .frame img { object-fit: contain; } }
+.frame .ring {
   position: absolute; border: 5px solid var(--sun); border-radius: 50%;
   box-shadow: 0 0 0 4px var(--ink), 0 0 0 9999px rgba(30, 20, 51, 0.35);
   pointer-events: none;
 }
 @media (prefers-reduced-motion: no-preference) {
-  .hero .ring { animation: pulse 1.8s ease-in-out infinite; }
+  .frame .ring { animation: pulse 1.8s ease-in-out infinite; }
   @keyframes pulse { 50% { transform: scale(1.06); } }
 }
-.samples { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
-.samples img { width: 100%; aspect-ratio: 1; object-fit: cover; border-radius: 50%; border: var(--line); background: var(--grape); }
+/* "the same person?": a row of faces, as big as the screen can spare */
+.samples { flex: none; display: flex; align-items: center; gap: 8px; }
+.samples p { flex: 0 1 auto; font-size: 18px; line-height: 1.15; }
+.samples img { flex: none; width: clamp(40px, 7.5dvh, 72px); aspect-ratio: 1; object-fit: cover; border-radius: 50%; border: var(--line); background: var(--grape); }
+.strip { flex: none; display: flex; gap: 8px; }
+.strip img { flex: 1 1 0; min-width: 0; height: clamp(48px, 9dvh, 96px); object-fit: cover; border-radius: 14px; border: var(--line); background: var(--grape); }
+
+/* ---------- a screen with a photo: the photo, then the question ---------- */
+/* Upright, the question's parts sit directly in the column (.panel and a
+   form inside it are "contents"), so the room left after the buttons is
+   shared evenly between the photo and a list, and whatever a short list does
+   not need goes back to the photo. */
+.game { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; gap: var(--gap); }
+.game > *, .panel > *, .contents > * { flex: none; }
+.game > .slot { flex: 1 1 0; }
+.game .fit { flex: 1 1 0; }
+/* a short phone, upright, choosing a name: the photo and the names come first;
+   the other photos of the face and "not the same person" stay on the yes/no
+   question and on taller screens */
+@media (max-height: 680px) and (orientation: portrait) {
+  .game.choose > .samples, .game.choose .notsame { display: none; }
+}
+.panel, .contents { display: contents; }
+.game > .notsame { min-height: 56px; }
+.game.middle { justify-content: center; }
+.game.middle > .undo { margin-top: auto; }
+/* a phone on its side: the photo on the left, the question on the right */
+@media (orientation: landscape) and (max-height: 520px) {
+  /* the photo is held by the screen's height, so the question gets more of the width */
+  .game:has(> .slot), .game:has(> .about) { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 3fr); grid-template-rows: minmax(0, 1fr) auto auto; }
+  .game > .samples p { display: none; }
+  .game > .notsame { font-size: 18px; }
+  .game .row .btn { font-size: 20px; padding-left: 8px; padding-right: 8px; }
+  .chip.turn { padding-left: 14px; padding-right: 14px; }
+  .game > .slot, .game > .about { height: 100%; min-height: 0; grid-column: 1; grid-row: 1; }
+  .game > .about { grid-row: 1 / -1; }
+  .game > .samples { grid-column: 1; grid-row: 2; justify-content: center; }
+  .game > .notsame { grid-column: 1; grid-row: 3; }
+  .game > .panel { display: flex; flex-direction: column; gap: var(--gap); min-height: 0; height: 100%; grid-column: 2; grid-row: 1 / -1; }
+  .game > .panel > .caption { order: -1; }
+  /* the top bar already says "Who is this?" */
+  .said-above { display: none; }
+  /* a thank-you beside its buttons */
+  .game.middle:has(> .yay) { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); align-content: center; align-items: center; }
+  .game.middle > .yay { grid-column: 1; grid-row: 1 / span 3; }
+  .game.middle > :not(.yay):not(.confetti) { grid-column: 2; }
+  .game.middle > .undo { margin-top: 0; }
+  .game .fit { flex: 1 1 0; }
+  .page:has(> .game > .slot) { max-width: 980px; }
+}
 
 /* ---------- undo bar and celebrations ---------- */
+/* in the screen's own flow, at the bottom: it can never sit over a button */
 .undo {
-  position: fixed; left: 50%; transform: translateX(-50%); z-index: 50;
-  bottom: calc(16px + env(safe-area-inset-bottom));
-  width: min(calc(100% - 2 * var(--gutter)), calc(var(--col) - 2 * var(--gutter)));
-  background: var(--ink); color: var(--paper); border-radius: 22px; padding: 12px 12px 12px 20px;
+  flex: none;
+  background: var(--ink); color: var(--paper); border-radius: 22px; padding: 6px 6px 6px 18px;
   display: flex; align-items: center; justify-content: space-between; gap: 12px;
   font-weight: 700; box-shadow: 5px 5px 0 var(--tomato);
 }
 .undo .btn { min-height: 56px; background: var(--sun); box-shadow: none; }
 .yay {
-  background: var(--mint); border: var(--line); border-radius: 26px; padding: 26px 20px;
-  text-align: center; box-shadow: var(--pop);
+  background: var(--mint); border: var(--line); border-radius: 26px; padding: var(--pad) 20px;
+  text-align: center; box-shadow: var(--pop); flex: none;
 }
-.yay .big { font-family: var(--font-display), system-ui; font-weight: 600; font-size: 56px; line-height: 1; }
+.yay .big { font-family: var(--font-display), system-ui; font-weight: 600; font-size: calc(var(--h1) + 14px); line-height: 1; }
 .confetti { position: fixed; inset: 0; pointer-events: none; z-index: 60; overflow: hidden; }
 .confetti i { position: absolute; top: -20px; width: 12px; height: 18px; border: 2px solid var(--ink); border-radius: 3px; }
 @media (prefers-reduced-motion: no-preference) {
@@ -209,7 +309,7 @@ label.big { font-family: var(--font-display), system-ui; font-weight: 600; font-
 @media (prefers-reduced-motion: reduce) { .confetti { display: none; } }
 
 .notice {
-  background: var(--sky); border: var(--line); border-radius: 20px; padding: 14px 16px;
+  background: var(--sky); border: var(--line); border-radius: 20px; padding: 8px 14px;
   box-shadow: 3px 3px 0 var(--ink);
 }
 .error { background: var(--tomato); }
@@ -219,3 +319,53 @@ label.big { font-family: var(--font-display), system-ui; font-weight: 600; font-
    before the page's script arrives - it still looks and taps like a button */
 summary.btn { list-style: none; cursor: pointer; }
 summary.btn::-webkit-details-marker { display: none; }
+
+/* ---------- a list that turns like a book (components/Fit.tsx) ---------- */
+.fit { flex: 1 1 0; min-height: calc(var(--tap) + 6px); display: flex; flex-direction: column; gap: var(--gap); }
+.fit.paging { min-height: calc(2 * var(--tap) + var(--gap) + 6px); }
+.fit-box { flex: 1 1 0; min-height: 0; overflow: hidden; }
+.fit-box > * { position: relative; padding: 0 5px 5px 0; }   /* room for the chips' shadow */
+.fit-pager { flex: none; display: flex; gap: 10px; }
+/* "More ›" and "‹ Back" turn a list's pages from inside it */
+.chip.turn { background: var(--sun); }
+.chip.turn, .stack > .btn[data-turn] { flex: none; }
+.fit-pager .btn { flex: 1; }
+
+/* ---------- find: one search row, then one list at a time ---------- */
+.searchrow { display: flex; gap: 10px; flex: none; }
+.searchrow .field { flex: 1 1 auto; min-width: 0; }
+.searchrow .btn { flex: none; padding: 8px 16px; }
+.tabs { display: flex; gap: 8px; flex: none; }
+.tabs .btn { flex: 1 1 0; min-width: 0; padding: 8px 4px; font-size: 20px; }
+.tabs .btn[aria-current="page"] { background: var(--sun); }
+@media (max-height: 680px) { .hint { display: none; } }
+
+/* ---------- a photo: the picture, a line about it, and what you can do ---------- */
+.caption { flex: none; font-size: 20px; line-height: 1.3; }
+.caption p { overflow: hidden; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 1; }
+.about { flex: 1 1 0; min-height: 0; display: flex; flex-direction: column; gap: var(--gap); }
+.about-text { flex: 1 1 0; min-height: 0; overflow: hidden; display: flex; flex-direction: column; gap: 6px; }
+.about-text > * { flex: none; }
+.about h3 { font-size: 1.05em; }
+.about p { overflow: hidden; font-size: 1em; }
+.about .what { display: -webkit-box; -webkit-box-orient: vertical; }
+
+/* the gate's picture is the first thing a short screen gives up */
+@media (max-height: 460px) { .art { display: none; } }
+
+/* a photo grid whose rows were sized to fill the room (Fit cells): each
+   photo takes its row's height, cropped to it */
+.grid.sized a { aspect-ratio: auto; height: 100%; }
+
+/* two buttons side by side keep their words on as few lines as they can */
+.row .btn { padding-left: 10px; padding-right: 10px; }
+@media (max-width: 420px) { .row .btn svg { display: none; } }
+
+/* a phone on its side: the top bar lines up with the wider page under it */
+@media (orientation: landscape) and (max-height: 520px) {
+  .screen:has(.page.find) .bar-inner, .screen:has(.game > .slot) .bar-inner { max-width: 980px; }
+}
+/* the shortest screens: a slimmer top bar (after .bar, so it wins) */
+@media (max-height: 460px) {
+  .bar { padding-top: calc(2px + env(safe-area-inset-top)); padding-bottom: 2px; }
+}

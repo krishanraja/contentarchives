@@ -55,6 +55,14 @@ nudity in this".
   `fold` in `web/lib/spelling.ts`: the same key); a near miss ("Meera Sha") is
   offered as "Did you mean Meera Shah?", one tap either way, never merged silently
 - a place or year the library gave is never replaced by an app answer
+- no screen of the app scrolls, on any device (Krish, 2026-10-05): every screen is
+  one window tall, a photo takes the room its question leaves it, a list longer
+  than its room turns like pages (`web/components/Fit.tsx`), and a phone on its
+  side puts the photo beside the question. `web/e2e/noscroll.spec.ts` walks every
+  screen in every state at 14 sizes (320x568 to 1920x1080, upright and sideways):
+  nothing scrolls, every button is wholly on screen and is what a finger lands
+  on, and a photo stays big enough to recognise someone. Nothing is clipped to
+  pass: if something ever did not fit, the page would scroll, never hide a button
 - the app may write only person / unidentifiable (cluster) and place / approx_year
   (file, share-set hashes only); anything else is refused at the API AND at ingest
 - the seed reconciles; a Drive listing that looks broken removes nothing

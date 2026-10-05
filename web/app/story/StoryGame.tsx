@@ -3,6 +3,8 @@ import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import Undo from "@/components/Undo";
 import Confetti from "@/components/Confetti";
+import Shot from "@/components/Shot";
+import Fit from "@/components/Fit";
 import { send, uuid } from "@/components/outbox";
 import { close, exact } from "@/lib/spelling";
 
@@ -107,85 +109,107 @@ export default function StoryGame({ only }: { only: string | null }) {
   if (s === undefined) return <p className="sentence" role="status">Finding a photo…</p>;
   if (s === null) {
     return (
-      <div className="stack">
+      <div className="game middle">
         {err ? <p className="notice error">{err}</p> : <div className="yay"><h2>All done!</h2><p>Every photo has a place and a year. Amazing.</p></div>}
         <Link className="btn block sun" href="/">Back home</Link>
       </div>
     );
   }
 
+  // One screen per step, never scrolling (Krish, 2026-10-05): the photo takes
+  // the room the step leaves it; a list of places longer than its room turns.
+  const typedNow = place.trim().replace(/\s+/g, " ");
   return (
-    <div className="stack" style={{ gap: 18 }}>
+    <div className="game">
       {step === "thanks" && labelled > 0 && <Confetti seed={labelled} />}
-      <div className="hero"><img src={img(s.hash)} alt="A family photo" /></div>
-      {err && <p className="notice error" role="alert">{err}</p>}
+      <Shot src={img(s.hash)} alt="A family photo" />
+      <div className="panel">
+        {err && <p className="notice error" role="alert">{err}</p>}
 
-      {step === "place" && (
-        <div className="card">
-          <h2>Where was this taken?</h2>
-          {!typing && s.places.length > 0 && (
-            <div className="chips">{s.places.map((p) => <button key={p} className="chip" onClick={() => pickPlace(p)}>{p}</button>)}</div>
-          )}
-          {!typing ? (
-            <button className="btn block sky" onClick={() => setTyping(true)}>{s.places.length ? "Somewhere else" : "Type the place"}</button>
-          ) : (
-            <form className="stack" onSubmit={(e) => { e.preventDefault(); typedPlace(); }}>
-              <label className="sr" htmlFor="pl">The place</label>
-              <input id="pl" className="field" value={place} onChange={(e) => setPlace(e.target.value)} placeholder="A town, a house, a country…" autoCapitalize="words" enterKeyHint="done" />
-              <button className="btn block mint">Save this place</button>
-            </form>
-          )}
-          <button className="btn block" onClick={s.needYear ? () => { void shrug(); setStep("decade"); } : skip}>I don't know</button>
-        </div>
-      )}
+        {step === "place" && (
+          <>
+            <h2>Where was this taken?</h2>
+            {!typing ? (
+              <>
+                {s.places.length > 0 && (
+                  <Fit label="Places" more="More places">
+                    {s.places.map((p) => <button key={p} className="chip" onClick={() => pickPlace(p)}>{p}</button>)}
+                  </Fit>
+                )}
+                <div className="row">
+                  <button className="btn sky" onClick={() => setTyping(true)}>{s.places.length ? "Somewhere else" : "Type the place"}</button>
+                  <button className="btn" onClick={s.needYear ? () => { void shrug(); setStep("decade"); } : skip}>I don't know</button>
+                </div>
+              </>
+            ) : (
+              <form className="contents" onSubmit={(e) => { e.preventDefault(); typedPlace(); }}>
+                <label className="sr" htmlFor="pl">The place</label>
+                <input id="pl" className="field" value={place} onChange={(e) => setPlace(e.target.value)} placeholder="A town, a house, a country…" autoCapitalize="words" enterKeyHint="done" />
+                <div className="row">
+                  <button type="button" className="btn" onClick={s.needYear ? () => { void shrug(); setStep("decade"); } : skip}>I don't know</button>
+                  <button className="btn mint">Save this place</button>
+                </div>
+              </form>
+            )}
+          </>
+        )}
 
-      {step === "spell" && (
-        <div className="card">
-          <h2>Did you mean {meant.length === 1 ? `${meant[0]}?` : "one of these?"}</h2>
-          <div className="chips" aria-label="Places we already know">
-            {meant.map((p) => <button key={p} className="chip" onClick={() => pickPlace(p)}>{p}</button>)}
-          </div>
-          <button className="btn block" onClick={() => pickPlace(place.trim().replace(/\s+/g, " "))}>No, save “{place.trim().replace(/\s+/g, " ")}”</button>
-          <button className="btn block quiet" onClick={() => setStep("place")}>Change what I typed</button>
-        </div>
-      )}
+        {step === "spell" && (
+          <>
+            <h2>Did you mean {meant.length === 1 ? `${meant[0]}?` : "one of these?"}</h2>
+            <Fit label="Places we already know" more="More places">
+              {meant.map((p) => <button key={p} className="chip" onClick={() => pickPlace(p)}>{p}</button>)}
+            </Fit>
+            <button className="btn block" onClick={() => pickPlace(typedNow)}>No, save “{typedNow}”</button>
+            <button className="btn block quiet" onClick={() => setStep("place")}>Change what I typed</button>
+          </>
+        )}
 
-      {step === "day" && (
-        <div className="card">
-          <h2>Also label the {s.day.length} other {s.day.length === 1 ? "photo" : "photos"} from that day?</h2>
-          <div className="samples">{s.day.slice(0, 8).map((h) => <img key={h} src={img(h, "t")} alt="" style={{ borderRadius: 14 }} />)}</div>
-          <button className="btn block mint" onClick={() => savePlace([s.hash, ...s.day])}>Yes, all of them</button>
-          <button className="btn block" onClick={() => savePlace([s.hash])}>Just this one</button>
-        </div>
-      )}
+        {step === "day" && (
+          <>
+            <h2>Also label the {s.day.length} other {s.day.length === 1 ? "photo" : "photos"} from that day?</h2>
+            <div className="strip">{s.day.slice(0, 4).map((h) => <img key={h} src={img(h, "t")} alt="" />)}</div>
+            <div className="row">
+              <button className="btn" onClick={() => savePlace([s.hash])}>Just this one</button>
+              <button className="btn mint" onClick={() => savePlace([s.hash, ...s.day])}>Yes, all of them</button>
+            </div>
+          </>
+        )}
 
-      {step === "decade" && (
-        <div className="card">
-          <h2>Roughly what year?</h2>
-          <p className="muted">A guess is fine.</p>
-          <div className="chips">{DECADES.map((d) => <button key={d} className="chip" onClick={() => { setDecade(d); setStep("year"); }}>{d}s</button>)}</div>
-          <button className="btn block" onClick={() => { void shrug(); setStep("thanks"); }}>I don't know</button>
-        </div>
-      )}
+        {step === "decade" && (
+          <>
+            <h2>Roughly what year? <span className="muted" style={{ fontSize: 20, fontWeight: 400 }}>A guess is fine.</span></h2>
+            <Fit label="Decades">
+              {DECADES.map((d) => <button key={d} className="chip" onClick={() => { setDecade(d); setStep("year"); }}>{d}s</button>)}
+            </Fit>
+            <button className="btn block" onClick={() => { void shrug(); setStep("thanks"); }}>I don't know</button>
+          </>
+        )}
 
-      {step === "year" && decade && (
-        <div className="card">
-          <h2>Which year in the {decade}s?</h2>
-          <div className="chips">{Array.from({ length: 10 }, (_, i) => decade + i).filter((y) => y <= new Date().getFullYear()).map((y) => <button key={y} className="chip" onClick={() => saveYear(String(y))}>{y}</button>)}</div>
-          <button className="btn block mint" onClick={() => saveYear(`${decade}s`)}>Just “the {decade}s”</button>
-        </div>
-      )}
+        {step === "year" && decade && (
+          <>
+            <h2>Which year in the {decade}s?</h2>
+            <Fit label="Years">
+              {Array.from({ length: 10 }, (_, i) => decade + i).filter((y) => y <= new Date().getFullYear())
+                .map((y) => <button key={y} className="chip" onClick={() => saveYear(String(y))}>{y}</button>)}
+            </Fit>
+            <button className="btn block mint" onClick={() => saveYear(`${decade}s`)}>Just “the {decade}s”</button>
+          </>
+        )}
 
-      {step === "thanks" && (
-        <div className="stack">
-          <div className="yay">
-            {labelled > 0 ? (<><p className="big">{labelled}</p><h2>{labelled === 1 ? "photo" : "photos"} labelled. Thank you!</h2></>) : <h2>No problem!</h2>}
-          </div>
-          <button className="btn block mint" onClick={next}>{single ? "Do another photo" : "Next photo"}</button>
-          <Link className="btn block" href="/">I'm done for now</Link>
-        </div>
-      )}
-      {last && <Undo text={last.text} onUndo={undo} onDone={() => setLast(null)} />}
+        {step === "thanks" && (
+          <>
+            <div className="yay">
+              {labelled > 0 ? <h2><span className="big" style={{ fontSize: "1.4em" }}>{labelled}</span> {labelled === 1 ? "photo" : "photos"} labelled. Thank you!</h2> : <h2>No problem!</h2>}
+            </div>
+            <div className="row">
+              <Link className="btn" href="/">I'm done</Link>
+              <button className="btn mint" onClick={next}>{single ? "Do another" : "Next photo"}</button>
+            </div>
+          </>
+        )}
+        {last && <Undo text={last.text} onUndo={undo} onDone={() => setLast(null)} />}
+      </div>
     </div>
   );
 }
