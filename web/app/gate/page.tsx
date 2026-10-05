@@ -2,8 +2,9 @@ import { headers } from "next/headers";
 import { inAppBrowser } from "@/lib/gate";
 import GateForm from "./GateForm";
 
-export default async function Gate() {
+export default async function Gate({ searchParams }: { searchParams: Promise<{ e?: string }> }) {
   const ua = (await headers()).get("user-agent") || "";
+  const said = (await searchParams).e || "";
   return (
     <main className="page" style={{ paddingTop: 40 }}>
       <div className="center stack" style={{ gap: 10 }}>
@@ -23,7 +24,7 @@ export default async function Gate() {
           <strong>Tip:</strong> tap the <strong>⋯</strong> menu and choose <strong>Open in Chrome</strong> or <strong>Open in Safari</strong>. Then it will remember you next time.
         </div>
       )}
-      <GateForm />
+      <GateForm said={said} />
     </main>
   );
 }

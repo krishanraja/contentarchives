@@ -214,3 +214,8 @@ label.big { font-family: var(--font-display), system-ui; font-weight: 600; font-
 }
 .error { background: var(--tomato); }
 .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+/* "Someone else" on Who are you? is the browser's own disclosure, so it opens
+   before the page's script arrives - it still looks and taps like a button */
+summary.btn { list-style: none; cursor: pointer; }
+summary.btn::-webkit-details-marker { display: none; }

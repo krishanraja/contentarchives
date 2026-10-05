@@ -27,6 +27,25 @@ test("a wrong code is refused kindly, the right one lets you in", async ({ page 
   await floor(page, "home");
 });
 
+test("the code and a name work before the page's script has arrived", async ({ browser }) => {
+  // a slow phone: the page is on screen, the script is not - every tap must still work
+  const ctx = await browser.newContext({ javaScriptEnabled: false });
+  const page = await ctx.newPage();
+  await page.goto("/gate");
+  await page.fill("#code", "wrong");
+  await page.click("button:has-text('Open')");
+  await expect(page.getByText("That's not it")).toBeVisible();
+  await page.fill("#code", "sunflower");
+  await page.click("button:has-text('Open')");
+  await page.waitForURL("**/who");
+  await page.click("summary:has-text('Someone else')");
+  await page.fill("#me", "Cousin Tara");
+  await page.click("button:has-text('That')");
+  await page.waitForURL((u) => u.pathname === "/");
+  await expect(page.getByText("Cousin Tara", { exact: false })).toBeVisible();
+  await ctx.close();
+});
+
 test("nothing is reachable without the code", async ({ request }) => {
   for (const u of ["/", "/find", "/api/search?q=a", `/img/t/${"0".repeat(63)}1`, "/api/face/next"]) {
     const r = await request.get(u, { maxRedirects: 0 });
