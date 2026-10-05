@@ -1180,8 +1180,11 @@ class Worker:
         db = self.db
         names = dict(db.execute("select group_id, name from group_names where name is not null").fetchall())
         answered = {r[0] for r in db.execute("select group_id from group_names where answered").fetchall()}
-        # "needs identifying": the library said ask someone else - asked first
+        # "needs identifying": the library said ask someone else - asked first;
+        # so is a CONTESTED face (people gave different answers, level): the
+        # next person who has not answered it breaks the tie
         flagged = {r[0] for r in db.execute("select group_id from group_names where flagged").fetchall()}
+        contested = {r[0] for r in db.execute("select group_id from group_names where contested").fetchall()}
         faces = collections.defaultdict(list)
         for key, h, g, score, share, only in db.execute(
                 "select f.key, f.hash, f.group_id, f.score, coalesce(f.share, 0), f.only_face "
@@ -1216,8 +1219,10 @@ class Worker:
             M = np.stack([by_name[n] / (float(np.linalg.norm(by_name[n])) or 1.0) for n in labels])
 
         queue = []
-        for g, fs in sorted(faces.items(), key=lambda kv: (kv[0] not in flagged, -photos[kv[0]])):
-            if g in names or g in answered or (photos[g] < 2 and g not in flagged):
+        first = flagged | contested
+        for g, fs in sorted(faces.items(), key=lambda kv: (kv[0] not in first, -photos[kv[0]])):
+            # settled faces leave; a contested one has a name in the lead but stays
+            if g in answered or (photos[g] < 2 and g not in first):
                 continue
             subj = sorted((f for f in fs if f[3] >= SUBJECT_SHARE), key=lambda f: (-f[4], -f[2]))
             if not subj:

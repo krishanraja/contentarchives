@@ -4,9 +4,10 @@ import { useCallback, useEffect, useState } from "react";
 import Undo from "@/components/Undo";
 import Confetti from "@/components/Confetti";
 import { send, uuid } from "@/components/outbox";
+import { close, exact } from "@/lib/spelling";
 
 type S = { hash: string; needPlace: boolean; needYear: boolean; day: string[]; places: string[] } | null;
-type Step = "place" | "day" | "decade" | "year" | "thanks";
+type Step = "place" | "spell" | "day" | "decade" | "year" | "thanks";
 
 const img = (h: string, size = "v") => `/img/${size}/${encodeURIComponent(h)}`;
 const DECADES = [1950, 1960, 1970, 1980, 1990, 2000, 2010, 2020];
@@ -22,6 +23,8 @@ export default function StoryGame({ only }: { only: string | null }) {
   const [seen, setSeen] = useState<string[]>([]);
   const [err, setErr] = useState("");
   const [single, setSingle] = useState(only);
+  const [known, setKnown] = useState<string[]>([]);
+  const [meant, setMeant] = useState<string[]>([]);
 
   const load = useCallback(async (after: string[], one: string | null) => {
     setS(undefined); setErr(""); setPlace(""); setTyping(false); setDecade(null); setLabelled(0);
@@ -32,6 +35,20 @@ export default function StoryGame({ only }: { only: string | null }) {
     if (r) setStep(r.needPlace ? "place" : r.needYear ? "decade" : "thanks");
   }, []);
   useEffect(() => { void load([], only); }, [load, only]);
+  useEffect(() => { fetch("/api/names").then((r) => r.json()).then((j) => setKnown(j.places || [])).catch(() => undefined); }, []);
+
+  // a typed place spelled the way the family already spells it is that place;
+  // a near miss ("Naintal") is asked about, never changed without a tap
+  function typedPlace() {
+    const v = place.trim().replace(/\s+/g, " ");
+    if (v.length < 2) return;
+    const all = [...new Set([...(s?.places || []), ...known])];
+    const same = exact(v, all);
+    if (same) { pickPlace(same); return; }
+    const near = close(v, all);
+    if (near.length) { setMeant(near); setStep("spell"); return; }
+    pickPlace(v);
+  }
 
   function after() {
     if (!s) return;
@@ -67,9 +84,14 @@ export default function StoryGame({ only }: { only: string | null }) {
     setLabelled((n) => Math.max(n, 1)); setLast({ id, text: `Saved: ${v}` }); setStep("thanks");
   }
 
-  async function skip() {
+  // "I don't know" sends this photo to the back of THIS person's queue (it comes
+  // back once they have seen the rest); everyone else is still asked it
+  async function shrug() {
     if (!s) return;
     await fetch("/api/skip", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ key: "story:" + s.hash }) }).catch(() => undefined);
+  }
+  async function skip() {
+    await shrug();
     next();
   }
   function next() {
@@ -107,13 +129,24 @@ export default function StoryGame({ only }: { only: string | null }) {
           {!typing ? (
             <button className="btn block sky" onClick={() => setTyping(true)}>{s.places.length ? "Somewhere else" : "Type the place"}</button>
           ) : (
-            <form className="stack" onSubmit={(e) => { e.preventDefault(); if (place.trim().length > 1) pickPlace(place.trim()); }}>
+            <form className="stack" onSubmit={(e) => { e.preventDefault(); typedPlace(); }}>
               <label className="sr" htmlFor="pl">The place</label>
               <input id="pl" className="field" value={place} onChange={(e) => setPlace(e.target.value)} placeholder="A town, a house, a country…" autoCapitalize="words" enterKeyHint="done" />
               <button className="btn block mint">Save this place</button>
             </form>
           )}
-          <button className="btn block" onClick={s.needYear ? () => setStep("decade") : skip}>I don't know</button>
+          <button className="btn block" onClick={s.needYear ? () => { void shrug(); setStep("decade"); } : skip}>I don't know</button>
+        </div>
+      )}
+
+      {step === "spell" && (
+        <div className="card">
+          <h2>Did you mean {meant.length === 1 ? `${meant[0]}?` : "one of these?"}</h2>
+          <div className="chips" aria-label="Places we already know">
+            {meant.map((p) => <button key={p} className="chip" onClick={() => pickPlace(p)}>{p}</button>)}
+          </div>
+          <button className="btn block" onClick={() => pickPlace(place.trim().replace(/\s+/g, " "))}>No, save “{place.trim().replace(/\s+/g, " ")}”</button>
+          <button className="btn block quiet" onClick={() => setStep("place")}>Change what I typed</button>
         </div>
       )}
 
@@ -131,7 +164,7 @@ export default function StoryGame({ only }: { only: string | null }) {
           <h2>Roughly what year?</h2>
           <p className="muted">A guess is fine.</p>
           <div className="chips">{DECADES.map((d) => <button key={d} className="chip" onClick={() => { setDecade(d); setStep("year"); }}>{d}s</button>)}</div>
-          <button className="btn block" onClick={() => setStep("thanks")}>I don't know</button>
+          <button className="btn block" onClick={() => { void shrug(); setStep("thanks"); }}>I don't know</button>
         </div>
       )}
 

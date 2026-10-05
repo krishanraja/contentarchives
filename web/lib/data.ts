@@ -1,6 +1,8 @@
+import type postgres from "postgres";
 import { sql } from "./db";
 import { embed, hasGemini } from "./gemini";
 import { describe, parseQuery } from "./search";
+import { exact } from "./spelling";
 
 export type Card = {
   hash: string; media: string; year: number | null; approx_year: string | null;
@@ -105,18 +107,40 @@ export async function counts() {
 
 // ---------- the naming game ----------
 
+// Which face to ask THIS person next (Krish, 2026-10-05: a skipped face must
+// come back around, and nobody's answer overrides anybody else's):
+//  - a face they have already answered is someone else's to answer now: their
+//    one vote is in (migration 0007 counts it; nobody's replaces another's)
+//  - "I don't know" moves a face to the back of THEIR queue for 30 days - it
+//    comes back once they have seen the rest - and never out of anyone else's
+//  - a face two or more people did not know goes behind the rest (it may be a
+//    friend nobody in the family knows), still asked, never dropped
+//  - otherwise the queue's own order: flagged and contested faces first
 export async function nextFace(who: string, after: string[] = []) {
   const db = sql();
   const [q] = await db`
-    select q.*, f.cluster_id as hero_cluster from queue q
+    with mine as (
+      select distinct c.group_id from answers a join clusters c on c.cluster_id = a.target
+      where a.who = ${who} and a.scope = 'cluster' and a.status in ('new', 'ingested')
+        and a.field in ('person', 'unidentifiable')),
+    shrugs as (
+      select group_id, count(*) as n from skips where at > now() - interval '30 days' group by group_id)
+    select q.*, f.cluster_id as hero_cluster, g.contested from queue q
     join faces f on f.key = q.hero_face
     join photos p on p.hash = f.hash and p.visible
     join group_names g on g.group_id = q.group_id
+    left join skips s on s.who = ${who} and s.group_id = q.group_id and s.at > now() - interval '30 days'
+    left join shrugs sh on sh.group_id = q.group_id
     where not g.answered
-      and not exists (select 1 from skips s where s.who = ${who} and s.group_id = q.group_id)
+      and q.group_id not in (select group_id from mine)
       and q.group_id <> all(${after}::text[])
-    order by q.rank limit 1`;
+    order by (s.at is not null), s.at nulls first, coalesce(sh.n, 0) >= 2, q.rank
+    limit 1`;
   if (!q) return null;
+  // a tie: the answers in the running are offered to the next person
+  const contest = q.contested
+    ? (await db`select name from group_contest where group_id = ${q.group_id} order by n desc, name`).map((r) => r.name as string)
+    : [];
   const keys = [q.hero_face, ...(q.sample_faces as string[])];
   const faces = await db`select f.key, f.hash, f.bbox, f.frame, f.only_face, p.media,
        p.width, p.height, p.place, p.year, p.approx_year
@@ -136,8 +160,10 @@ export async function nextFace(who: string, after: string[] = []) {
     hero,
     samples: (q.sample_faces as string[]).map((k) => byKey.get(k)).filter(Boolean),
     suggestions,
-    // one strong suggestion becomes a yes/no question: "Is this Asha?"
-    ask: suggestions[0] && suggestions[0].score >= 0.65 ? suggestions[0] : null,
+    contest,
+    // one strong suggestion becomes a yes/no question: "Is this Asha?" - but not
+    // on a contested face, where the choice between the answers given is the question
+    ask: !contest.length && suggestions[0] && suggestions[0].score >= 0.65 ? suggestions[0] : null,
   };
 }
 
@@ -146,17 +172,23 @@ export async function nextFace(who: string, after: string[] = []) {
 export async function nextStory(who: string, after: string[] = [], only: string | null = null) {
   const db = sql();
   // biggest day first: one answer about a 40-photo afternoon labels 40 photos
+  // A photo comes to this person while it still needs something THEY have not
+  // answered; "I don't know" sends it to the back of their queue for 30 days.
   const [p] = only ? await db`
     select p.hash, p.place, p.year, p.approx_year, p.day_key, p.width, p.height
     from photos p where p.hash = ${only} and p.visible and p.media = 'photo'` : await db`
+    with days as (select day_key, count(*) as n from photos where day_key is not null group by day_key)
     select p.hash, p.place, p.year, p.approx_year, p.day_key, p.width, p.height
     from photos p
+    left join days d on d.day_key = p.day_key
+    left join skips s on s.who = ${who} and s.group_id = 'story:' || p.hash and s.at > now() - interval '30 days'
     where p.visible and p.media = 'photo'
-      and (p.place is null or (p.year is null and p.approx_year is null))
-      and not exists (select 1 from skips s where s.who = ${who} and s.group_id = 'story:' || p.hash)
+      and ((p.place is null and not exists (select 1 from answers a where a.who = ${who} and a.scope = 'file'
+              and a.field = 'place' and a.status in ('new', 'ingested') and a.hashes @> array[p.hash]))
+        or (p.year is null and p.approx_year is null and not exists (select 1 from answers a where a.who = ${who}
+              and a.scope = 'file' and a.field = 'approx_year' and a.status in ('new', 'ingested') and a.hashes @> array[p.hash])))
       and p.hash <> all(${after}::text[])
-    order by (select count(*) from photos d where d.day_key = p.day_key) desc nulls last,
-             p.hash
+    order by (s.at is not null), s.at nulls first, d.n desc nulls last, p.hash
     limit 1`;
   if (!p) return null;
   const day = p.day_key ? await db`select hash from photos
@@ -201,7 +233,13 @@ export function validate(a: AnswerIn): string | null {
 // photographs the answer now labels - the reward the screen shows.
 export async function saveAnswer(who: string, a: AnswerIn): Promise<{ labelled: number }> {
   const db = sql();
-  const value = a.value.trim().replace(/\s+/g, " ");
+  let value = a.value.trim().replace(/\s+/g, " ");
+  // a name or place that differs from a known one only in case, spacing or
+  // punctuation IS that one, spelled the way the family already spells it
+  if (a.kind === "person" || a.kind === "place") {
+    const v = await vocab();
+    value = exact(value, a.kind === "person" ? v.people : v.places) || value;
+  }
   return db.begin(async (tx) => {
     if (a.kind === "person" || a.kind === "mixed") {
       // The answer names the CLUSTER the person was shown - frozen, never
@@ -226,17 +264,44 @@ export async function saveAnswer(who: string, a: AnswerIn): Promise<{ labelled: 
     const ins = await tx`insert into answers (id, client_at, who, scope, target, field, value, hashes)
       values (${a.id}, ${a.client_at || null}, ${who}, 'file', ${hashes[0]}, ${field}, ${value}, ${hashes}::text[])
       on conflict (id) do nothing returning id`;
-    if (ins.length) {
-      // shown at once; the journal pull and the next seed make it permanent
-      if (field === "place")
-        await tx`update photos set place = ${value}, updated_at = now()
-                 where hash = any(${hashes}::text[]) and place is null`;
-      else
-        await tx`update photos set approx_year = ${value}, updated_at = now()
-                 where hash = any(${hashes}::text[]) and year is null and approx_year is null`;
-    }
+    if (ins.length) await settle(tx, field, hashes);
     return { labelled: hashes.length };
   });
+}
+
+// What a photo shows for a place or a year the FAMILY gave: each person's latest
+// answer is one vote, the answer most people gave wins (a tie goes to the first
+// given), spellings folded as in name_key. A second person's different answer
+// is counted, never written over the first. A place or year the LIBRARY gave
+// (no family answer matches it) is never replaced by an answer here.
+type Tx = postgres.TransactionSql;
+async function settle(tx: Tx, field: "place" | "approx_year", hashes: string[]) {
+  const col = field;
+  const familyOwned = tx`(p.${tx(col)} is null or exists (select 1 from answers o where o.scope = 'file'
+      and o.field = ${field} and o.hashes @> array[p.hash] and name_key(o.value) = name_key(p.${tx(col)})))`;
+  await tx`
+    with v as (
+      select distinct on (h, a.who) h, a.who, a.value, a.at
+      from answers a cross join lateral unnest(a.hashes) h
+      where a.scope = 'file' and a.field = ${field} and a.status in ('new', 'ingested')
+        and a.hashes && ${hashes}::text[] and h = any(${hashes}::text[])
+      order by h, a.who, a.at desc),
+    s as (select h, name_key(value) as k, value, count(*) as c, min(at) as f from v group by h, name_key(value), value),
+    t as (select h, k, sum(c) as n, min(f) as f from s group by h, k),
+    w as (select distinct on (h) h, k from t order by h, n desc, f),
+    sp as (select distinct on (h, k) h, k, value from s order by h, k, c desc, f)
+    update photos p set ${tx(col)} = sp.value, updated_at = now()
+    from w join sp on sp.h = w.h and sp.k = w.k
+    where p.hash = w.h and p.${tx(col)} is distinct from sp.value and ${familyOwned}
+      ${col === "approx_year" ? tx`and p.year is null` : tx``}`;
+  // no live family answer left (all undone): a family value goes, a library one stays
+  await tx`
+    update photos p set ${tx(col)} = null, updated_at = now()
+    where p.hash = any(${hashes}::text[]) and p.${tx(col)} is not null
+      and exists (select 1 from answers o where o.scope = 'file' and o.field = ${field}
+                  and o.hashes @> array[p.hash] and name_key(o.value) = name_key(p.${tx(col)}))
+      and not exists (select 1 from answers o where o.scope = 'file' and o.field = ${field}
+                  and o.status in ('new', 'ingested') and o.hashes @> array[p.hash])`;
 }
 
 export const UNDO_MINUTES = 10;
@@ -251,20 +316,16 @@ export async function undoAnswer(who: string, id: string): Promise<boolean> {
         and at > now() - make_interval(mins => ${UNDO_MINUTES})
       returning scope, field, value, hashes`;
     if (!a) return false;
-    if (a.scope === "file") {
-      const col = a.field === "place" ? "place" : "approx_year";
-      // put back only what this answer wrote, and only if no other live answer says the same
-      await tx`update photos p set ${tx(col)} = null, updated_at = now()
-        where p.hash = any(${a.hashes}::text[]) and ${tx(col)} = ${a.value}
-          and not exists (select 1 from answers o where o.status in ('new','ingested')
-            and o.field = ${a.field} and o.value = ${a.value} and p.hash = any(o.hashes))`;
-    }
+    // the photo shows what everyone else's answers now add up to
+    if (a.scope === "file") await settle(tx, a.field === "place" ? "place" : "approx_year", a.hashes as string[]);
     return true;
   });
 }
 
 export async function skip(who: string, key: string) {
-  await sql()`insert into skips (who, group_id) values (${who}, ${key}) on conflict do nothing`;
+  // a second "I don't know" sends it to the back of their queue again
+  await sql()`insert into skips (who, group_id) values (${who}, ${key})
+    on conflict (who, group_id) do update set at = now()`;
 }
 
 export async function hidePhoto(who: string, hash: string) {

@@ -247,4 +247,171 @@ test("an answer sent twice is stored once", async ({ page }) => {
   expect(n[0].n).toBe(1);
 });
 
+// ---- Krish, 2026-10-05: skipped faces come back around; nobody's answer
+// overrides anybody else's; a misspelling is caught.
+
+async function person(browser: import("@playwright/test").Browser, name: string) {
+  const ctx = await browser.newContext();
+  const page = await ctx.newPage();
+  await signIn(page, name);
+  return page;
+}
+const cleanSlate = async () => {
+  await db`delete from answers where scope = 'cluster'`;
+  await db`delete from skips`;
+};
+const named = async (g: string) =>
+  (await db`select name, answered, contested from group_names where group_id = ${g}`)[0];
+
+test("two people who disagree are both kept, and the next person settles it", async ({ browser }) => {
+  await cleanSlate();
+  // a family gathering: two phones open on the same face at the same time
+  const grandma = await person(browser, "Grandma");
+  const grandpa = await person(browser, "Grandpa");
+  await grandma.goto("/help");
+  await grandpa.goto("/help");
+  await expect(grandma.getByText("Is this Ravi Raja?")).toBeVisible();
+  await expect(grandpa.getByText("Is this Ravi Raja?")).toBeVisible();
+  await grandma.click("button:has-text('Yes!')");
+  await expect(grandma.getByText("now say")).toBeVisible();
+  await grandpa.click("button:has-text('No')");
+  await grandpa.click("button:has-text('Someone else')");
+  await grandpa.fill("#nm", "Kamala Raja");
+  await grandpa.click("button:has-text('Save this name')");
+  await expect(grandpa.getByText("now say")).toBeVisible();
+  // neither answer replaced the other
+  const kept = await db`select who, value, status from answers where scope = 'cluster' order by at`;
+  expect(kept).toEqual([{ who: "grandma", value: "Ravi Raja", status: "new" }, { who: "grandpa", value: "Kamala Raja", status: "new" }]);
+  // one each: the first given shows, and the face is still asked of everyone else
+  expect(await named("g7")).toEqual({ name: "Ravi Raja", answered: false, contested: true });
+
+  const meera = await person(browser, "Auntie Meera");
+  await meera.goto("/help");
+  await expect(meera.getByText("People have said different names")).toBeVisible();
+  await expect(meera.getByText(/^Is this /)).toHaveCount(0);            // the question is which, not a yes/no
+  await floor(meera, "contested");
+  await meera.click("[aria-label='Names people have given'] button:has-text('Kamala Raja')");
+  await expect(meera.getByText("now say")).toBeVisible();
+  expect(await named("g7")).toEqual({ name: "Kamala Raja", answered: true, contested: false });
+  // the two who already answered are not asked it again
+  expect((await grandma.request.get("/api/face/next").then((r) => r.json())).group).toBe("g8");
+  for (const p of [grandma, grandpa, meera]) await p.context().close();
+});
+
+test("changing your own mind replaces only your own answer", async ({ page }) => {
+  await cleanSlate();
+  await signIn(page);
+  const post = (value: string) => page.request.post("/api/answers", {
+    data: { id: crypto.randomUUID(), kind: "person", group: "g8", value } });
+  expect((await post("Meera Shah")).ok()).toBe(true);
+  expect((await post("Asha Raja")).ok()).toBe(true);
+  expect((await post("Asha Raja")).ok()).toBe(true);
+  const votes = await db`select who, value from group_votes where group_id = 'g8'`;
+  expect(votes).toEqual([{ who: "grandma", value: "Asha Raja" }]);    // one person, one vote
+  expect(await named("g8")).toEqual({ name: "Asha Raja", answered: true, contested: false });
+});
+
+test("I don't know comes back around: after the rest, and never for anyone else", async ({ page, browser }) => {
+  await cleanSlate();
+  await signIn(page, "Grandpa");
+  await page.goto("/help");
+  await expect(page.getByText("Is this Ravi Raja?")).toBeVisible();      // g7 first
+  await page.click("button:has-text(\"I don't know\")");
+  await expect(page.getByRole("heading", { name: "Who is this?" })).toBeVisible();   // g8 next
+  await page.click("button:has-text(\"I don't know\")");
+  await expect(page.getByText("That's every face for now")).toBeVisible();
+  await floor(page, "every face seen");
+  await page.click("button:has-text('Look at those again')");
+  // the first one they did not know comes back first
+  await expect(page.getByText("Is this Ravi Raja?")).toBeVisible();
+  // a later visit: the faces they skipped wait behind anything they have not seen
+  await db`insert into queue (group_id, rank, photo_count, hero_face, sample_faces, suggestions)
+           select 'g6', 5, photo_count, hero_face, '{}', '[]'::jsonb from queue where group_id = 'g8'`;
+  await db`update clusters set name = null where group_id = 'g6'`;
+  await page.goto("/help");
+  await expect(page.getByRole("heading", { name: "Who is this?" })).toBeVisible();
+  await expect(page.getByText("Is this Ravi Raja?")).toHaveCount(0);
+  await expect.poll(async () => (await page.request.get("/api/face/next").then((r) => r.json())).group).toBe("g6");
+  // Grandma never skipped anything: her queue is untouched by Grandpa's
+  const grandma = await person(browser, "Grandma");
+  expect((await grandma.request.get("/api/face/next").then((r) => r.json())).group).toBe("g7");
+  await grandma.context().close();
+  await db`delete from queue where group_id = 'g6'`;
+  await db`update clusters set name = 'Sam Kapoor' where group_id = 'g6'`;
+});
+
+test("a misspelt name is caught, and the same name typed differently is the same name", async ({ page }) => {
+  await cleanSlate();
+  await signIn(page);
+  await page.goto("/help");
+  await page.click("button:has-text('No')");
+  await page.click("button:has-text('Someone else')");
+  await page.fill("#nm", "Meera Sha");
+  await page.click("button:has-text('Save this name')");
+  await expect(page.getByText("Did you mean Meera Shah?")).toBeVisible();
+  await floor(page, "did you mean");
+  await page.click("[aria-label='Names we already know'] button:has-text('Meera Shah')");
+  await expect(page.getByText("now say")).toBeVisible();
+  // case and spacing are not spelling: stored as the family already spells it
+  const r = await page.request.post("/api/answers", { data: { id: crypto.randomUUID(), kind: "person", group: "g8", value: "  ASHA   raja " } });
+  expect(r.ok()).toBe(true);
+  const vals = await db`select value from answers where scope = 'cluster' order by at`;
+  expect(vals.map((v) => v.value)).toEqual(["Meera Shah", "Asha Raja"]);
+  // a name that is nobody's near miss is saved as typed, and "no" keeps what was typed
+  await cleanSlate();
+  await page.goto("/help");
+  await page.click("button:has-text('No')");
+  await page.click("button:has-text('Someone else')");
+  await page.fill("#nm", "Dev Sha");
+  await page.click("button:has-text('Save this name')");
+  await page.click("button:has-text('No, save')");
+  await expect(page.getByText("now say")).toBeVisible();
+  expect((await db`select value from answers where scope = 'cluster'`)[0].value).toBe("Dev Sha");
+});
+
+test("places: a misspelling is caught, a second opinion is counted not written over, the library's place stays", async ({ page, browser }) => {
+  await db`delete from answers where scope = 'file'`;
+  await db`delete from skips`;
+  await db`update photos set place = null where place = 'Nainital' or place = 'Naini Tal'`;
+  await signIn(page);
+  await page.goto("/story");
+  await expect(page.getByText("Where was this taken?")).toBeVisible();
+  await page.click("button:has-text('Somewhere else')");
+  await page.fill("#pl", "Bri ghton");
+  await page.click("button:has-text('Save this place')");
+  await expect(page.getByText("Did you mean Brighton?")).toBeVisible();
+  await page.click("[aria-label='Places we already know'] button:has-text('Brighton')");
+  const day = page.getByText(/Also label the \d+ other/);
+  await expect(day.or(page.getByText("Roughly what year?")).or(page.getByText("Thank you!"))).toBeVisible();
+  if (await day.isVisible()) await page.click("button:has-text('Just this one')");
+  await expect.poll(async () => (await db`select value from answers where field = 'place'`).map((r) => r.value)).toEqual(["Brighton"]);
+
+  // one photo, three people: first answer shows; a different one is kept but does not replace it
+  const [p] = await db`select hash from photos where place is null and visible and media = 'photo' limit 1`;
+  const grandpa = await person(browser, "Grandpa");
+  const meera = await person(browser, "Auntie Meera");
+  const say = async (pg: typeof page, value: string, hash = p.hash as string) => {
+    const id = crypto.randomUUID();
+    expect((await pg.request.post("/api/answers", { data: { id, kind: "place", hashes: [hash], value } })).ok()).toBe(true);
+    return id;
+  };
+  const place = async (hash = p.hash as string) => (await db`select place from photos where hash = ${hash}`)[0].place;
+  await say(page, "Goa");
+  expect(await place()).toBe("Goa");
+  await say(grandpa, "Mumbai");
+  expect(await place()).toBe("Goa");                                     // a tie: the first given
+  const third = await say(meera, "mumbai");
+  expect(await place()).toBe("Mumbai");                                  // two to one, one spelling
+  expect((await db`select count(*)::int n from answers where hashes @> array[${p.hash}]`)[0].n).toBe(3);
+  // taking an answer back: the photo shows what the others' answers add up to
+  expect((await meera.request.post("/api/answers/undo", { data: { id: third } })).ok()).toBe(true);
+  expect(await place()).toBe("Goa");
+
+  // the library's own place is never replaced by an answer
+  const [lib] = await db`select hash from photos where place = 'Sydney' and visible and media = 'photo' limit 1`;
+  await say(grandpa, "Delhi", lib.hash);
+  expect(await place(lib.hash)).toBe("Sydney");
+  for (const pg of [grandpa, meera]) await pg.context().close();
+});
+
 test.afterAll(async () => { await db.end(); });

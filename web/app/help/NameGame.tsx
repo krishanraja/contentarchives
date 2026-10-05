@@ -5,10 +5,11 @@ import Ringed from "@/components/Ringed";
 import Undo from "@/components/Undo";
 import Confetti from "@/components/Confetti";
 import { send, uuid } from "@/components/outbox";
+import { close, exact, fold } from "@/lib/spelling";
 
 type Face = { key: string; bbox: number[] };
 type Sugg = { name: string; face: string; score: number };
-type Q = { group: string; cluster: string; photos: number; hero: Face; samples: Face[]; suggestions: Sugg[]; ask: Sugg | null } | null;
+type Q = { group: string; cluster: string; photos: number; hero: Face; samples: Face[]; suggestions: Sugg[]; ask: Sugg | null; contest: string[] } | null;
 
 // "Nani" is a different person depending on who is speaking. Ask for a name.
 const RELATION = new Set(["nani", "nana", "dadi", "dada", "mama", "mami", "masi", "mausi", "chacha",
@@ -20,12 +21,14 @@ const faceUrl = (k: string, whole = false) => `/face/${encodeURIComponent(k)}${w
 
 export default function NameGame() {
   const [q, setQ] = useState<Q | undefined>(undefined);
-  const [mode, setMode] = useState<"ask" | "choose" | "type">("ask");
+  const [mode, setMode] = useState<"ask" | "choose" | "type" | "spell">("ask");
+  const [meant, setMeant] = useState<string[]>([]);
   const [typed, setTyped] = useState("");
   const [names, setNames] = useState<string[]>([]);
   const [warn, setWarn] = useState("");
   const [done, setDone] = useState<{ name: string; n: number; id: string; group: string } | null>(null);
   const [seen, setSeen] = useState<string[]>([]);
+  const [skipped, setSkipped] = useState(0);
   const [err, setErr] = useState("");
 
   const load = useCallback(async (after: string[]) => {
@@ -38,9 +41,9 @@ export default function NameGame() {
   useEffect(() => { void load([]); fetch("/api/names").then((r) => r.json()).then((j) => setNames(j.people || [])).catch(() => undefined); }, [load]);
 
   const matches = useMemo(() => {
-    const t = typed.trim().toLowerCase();
+    const t = fold(typed);
     if (t.length < 1) return [];
-    return names.filter((n) => n.toLowerCase().split(/\s+/).some((w) => w.startsWith(t)) || n.toLowerCase().startsWith(t)).slice(0, 6);
+    return names.filter((n) => fold(n).split(" ").some((w) => w.startsWith(t)) || fold(n).startsWith(t)).slice(0, 6);
   }, [typed, names]);
 
   async function answer(kind: "person" | "mixed", value: string) {
@@ -57,7 +60,7 @@ export default function NameGame() {
     if (!q) return;
     await fetch("/api/skip", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ key: q.group }) }).catch(() => undefined);
     const next = [...seen, q.group];
-    setSeen(next); void load(next);
+    setSeen(next); setSkipped((n) => n + 1); void load(next);
   }
 
   function submitTyped() {
@@ -67,8 +70,13 @@ export default function NameGame() {
       setWarn(`“${v}” means different people to different people. Please write their name, like “Asha Raja”.`);
       return;
     }
-    const known = names.find((n) => n.toLowerCase() === v.toLowerCase());
-    void answer("person", known || v);
+    // the same name however it is typed is that name; a near miss is ASKED
+    // about, never merged: Asha and Isha may be two people
+    const known = exact(v, names);
+    if (known) { void answer("person", known); return; }
+    const near = close(v, names);
+    if (near.length) { setMeant(near); setMode("spell"); return; }
+    void answer("person", v);
   }
 
   async function undo() {
@@ -97,7 +105,11 @@ export default function NameGame() {
   if (q === null) {
     return (
       <div className="stack">
-        {err ? <p className="notice error">{err}</p> : <div className="yay"><h2>All done!</h2><p>There are no more faces to name right now. Thank you so much.</p></div>}
+        {err ? <p className="notice error">{err}</p>
+          : skipped > 0 ? <div className="yay"><h2>That's every face for now</h2><p>The ones you didn't know come round again. Another photo of them might jog your memory.</p></div>
+          : <div className="yay"><h2>All done!</h2><p>There are no more faces to name right now. Thank you so much.</p></div>}
+        {/* the faces they did not know, oldest "I don't know" first */}
+        {!err && skipped > 0 && <button className="btn block pink" onClick={() => { setSeen([]); setSkipped(0); void load([]); }}>Look at those again</button>}
         <Link className="btn block sun" href="/">Back home</Link>
       </div>
     );
@@ -131,16 +143,31 @@ export default function NameGame() {
       {mode === "choose" && (
         <div className="card">
           <h2>Who is this?</h2>
-          {q.suggestions.length > 0 && (
+          {q.contest.length > 0 && (
+            <>
+              <p className="muted">People have said different names. Which is right?</p>
+              <div className="chips" aria-label="Names people have given">
+                {q.contest.map((n) => {
+                  const f = q.suggestions.find((s) => fold(s.name) === fold(n));
+                  return (
+                    <button key={n} className="chip" onClick={() => answer("person", n)}>
+                      {f && <img src={faceUrl(f.face)} alt="" />}{n}
+                    </button>
+                  );
+                })}
+              </div>
+            </>
+          )}
+          {q.suggestions.filter((s) => !q.contest.some((n) => fold(n) === fold(s.name))).length > 0 && (
             <div className="chips">
-              {q.suggestions.map((s) => (
+              {q.suggestions.filter((s) => !q.contest.some((n) => fold(n) === fold(s.name))).map((s) => (
                 <button key={s.name} className="chip" onClick={() => answer("person", s.name)}>
                   <img src={faceUrl(s.face)} alt="" />{s.name}
                 </button>
               ))}
             </div>
           )}
-          <button className="btn block sky" onClick={() => setMode("type")}>{q.suggestions.length ? "Someone else" : "Type their name"}</button>
+          <button className="btn block sky" onClick={() => setMode("type")}>{q.suggestions.length || q.contest.length ? "Someone else" : "Type their name"}</button>
           <button className="btn block" onClick={dontKnow}>I don't know</button>
         </div>
       )}
@@ -159,6 +186,19 @@ export default function NameGame() {
           <button className="btn block pink">Save this name</button>
           <button type="button" className="btn block" onClick={() => setMode(q.ask ? "ask" : "choose")}>Go back</button>
         </form>
+      )}
+
+      {mode === "spell" && (
+        <div className="card">
+          <h2>Did you mean {meant.length === 1 ? `${meant[0]}?` : "one of these?"}</h2>
+          <div className="chips" aria-label="Names we already know">
+            {meant.map((n) => <button key={n} className="chip" onClick={() => answer("person", n)}>{n}</button>)}
+          </div>
+          <button className="btn block" onClick={() => answer("person", typed.trim().replace(/\s+/g, " "))}>
+            No, save “{typed.trim().replace(/\s+/g, " ")}”
+          </button>
+          <button className="btn block quiet" onClick={() => setMode("type")}>Change what I typed</button>
+        </div>
       )}
 
       <button className="btn block quiet" onClick={() => answer("mixed", "mixed")}>These aren't all the same person</button>

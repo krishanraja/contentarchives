@@ -41,7 +41,20 @@ nudity in this".
 - every image byte comes from a share-set hash; a video frame only with its own verdict
 - the queue's side comes from the group's photographs, never from who is playing
 - answers carry an id made on the phone: a retry is the same row, never a second
-- "I don't know" is one player's skip, never a decline for everyone
+- "I don't know" is one player's skip, never a decline for everyone, and never
+  an exit: the face (or photo) goes to the back of THAT player's queue for 30 days
+  and comes round again once they have seen the rest; a face two or more people
+  did not know goes behind the others, still asked (Krish, 2026-10-05)
+- nobody's answer overwrites anybody else's: each person's latest answer on a face,
+  a place or a year is one vote; the most votes decide and a tie goes to the first
+  given; a tie on a face is CONTESTED and stays asked, first, of people who have
+  not answered it, with the answers in the running as the choices
+  (`web/supabase/migrations/0007_consensus.sql`; a person is never asked a face
+  they have already answered)
+- case, spacing, punctuation and Unicode form are not spelling (`name_key` in SQL,
+  `fold` in `web/lib/spelling.ts`: the same key); a near miss ("Meera Sha") is
+  offered as "Did you mean Meera Shah?", one tap either way, never merged silently
+- a place or year the library gave is never replaced by an app answer
 - the app may write only person / unidentifiable (cluster) and place / approx_year
   (file, share-set hashes only); anything else is refused at the API AND at ingest
 - the seed reconciles; a Drive listing that looks broken removes nothing
@@ -62,7 +75,7 @@ nudity in this".
   knew cannot be made again
 - the library's merge groups are pinned: the cloud never merges two of them
 - "needs identifying" is the library's "ask someone else": it keeps a face IN the
-  queue, first, until a later answer closes it (the last answer for a group decides)
+  queue, first, until an answer closes it (each person's latest answer is their vote)
 - a face is drawn only with a box measured on a picture the shape Drive shows; video
   faces have never been judged frame by frame, so they group and find people and
   are never drawn
@@ -107,7 +120,7 @@ widths, synthetic family only).
 |---|---|---|
 | 44 | every share rule is watched refusing, not only passing | `test:tests/test_app_share_set.py:nobody has seen reject is indistinguishable from no filter` |
 | 45 | embeddings and face vectors are joined by hash or (image, face_index), never by position | `code:stages/13_app/seed_index.py:never by position`, `test:tests/test_app_sync.py:joined by key, never by position`, `test:tests/test_app_export.py:carries ITS OWN embedding` |
-| 52 | "I don't know" is recorded as that player's skip, so nobody is asked twice | `code:web/lib/data.ts:export async function skip` |
+| 52 | "I don't know" is recorded as that player's skip: it never declines a face for everyone, and it comes round again for them after the rest | `code:web/lib/data.ts:export async function skip`, `test:web/e2e/flows.spec.ts:I don't know comes back around`, `test:tests/test_app_cloud.py:a tie is kept, shows the first name given, and is asked first` |
 | 57 | the cloud copy is reconciled on every run; a broken listing removes nothing | `code:stages/13_app/seed_index.py:RECONCILE, NOT APPEND`, `test:tests/test_app_cloud.py:an empty listing removed nothing` |
 | 72 | a new cluster id clears every id already handed out, even with the counter lost | `code:stages/13_app/cloud_enrich.py:A NEW ID MUST CLEAR EVERY ID ALREADY HANDED OUT`, `test:tests/test_app_cloud.py:the next id still clears every k-id` |
 | 74 | the queue uses build_game's verdicts: the latest answer per merge group decides | `test:tests/test_game_ingest.py:the latest answer wins` |

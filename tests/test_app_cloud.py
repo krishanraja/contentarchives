@@ -586,6 +586,28 @@ def library(out):
     check("so the face whose best frame was held is asked on its next one",
           q(db, "select hero_face from queue where group_id = %s", grp["c8"]), [("b8:b8_t6000:0",)])
 
+    # two relatives name the same face differently, at once: both answers count,
+    # neither replaces the other, and the face stays asked - first - until a
+    # third breaks the tie (Krish, 2026-10-05)
+    def vote(who, value):
+        db.execute("insert into answers (id, who, scope, target, field, value) values "
+                   "(gen_random_uuid(), %s, 'cluster', 'c6', 'person', %s)", (who, value))
+        db.commit()
+    vote("asha", "Kamala Secretname")
+    vote("dev", "Ravi Secretname")
+    vote("dev", "Sunil Secretname")            # Dev changes his mind: still one vote, his latest
+    go()
+    tie = q(db, "select name, answered, contested from group_names where group_id = %s", grp["c6"])
+    queue = [g for (g,) in q(db, "select group_id from queue order by rank")]
+    check("a tie is kept, shows the first name given, and is asked first",
+          (tie, queue[:1]), ([("Kamala Secretname", False, True)], [grp["c6"]]))
+    vote("meera", "sunil  secretname")         # the same name, typed differently
+    go()
+    settled = q(db, "select name, answered, contested from group_names where group_id = %s", grp["c6"])
+    check("a third answer settles it, in the spelling most used, and the face leaves the queue",
+          (settled, grp["c6"] in [g for (g,) in q(db, "select group_id from queue")]),
+          ([("Sunil Secretname", True, False)], False))
+
     # later: the purged file turns up, the missing photo arrives, one leaves
     drive.put("dh2", "m-h2", "Media/Communal/2020/secret-again.jpg")
     drive.put("d4", "m-l4", L + "secret-l4.jpg")
