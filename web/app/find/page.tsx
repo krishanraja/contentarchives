@@ -22,7 +22,8 @@ export default async function Find({ searchParams }: { searchParams: Promise<{ q
         <main className="page">
           <SearchBox initial={q} />
           <p className="sentence" role="status">{r.total ? r.sentence : `Nothing found for “${q}”. Try a name, a place or a year.`}</p>
-          <Results q={q} first={r.cards} total={r.total} />
+          {/* keyed by the words: a new search is a new grid, never the last one's photos under a new sentence */}
+          <Results key={q} q={q} first={r.cards} total={r.total} />
         </main>
       </>
     );

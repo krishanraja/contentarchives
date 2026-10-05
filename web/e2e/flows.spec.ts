@@ -78,6 +78,26 @@ test("find photos by a first name, a place and a year", async ({ page }) => {
   await expect(page.locator(".sentence")).toContainText("from the 1990s");
 });
 
+test("a second search shows its own photos, never the last search's", async ({ page }) => {
+  await signIn(page);
+  await page.goto("/find?q=Asha%20Raja");
+  await expect(page.locator(".grid a").first()).toBeVisible();
+  await page.fill("#q", "Meera Shah");
+  await page.click("button:has-text('Search')");
+  await expect(page.locator(".sentence")).toContainText("of Meera Shah");
+  // the photos themselves, not the links (the links take the new words either way)
+  const shown = await page.locator(".grid a").evaluateAll((as) =>
+    as.map((a) => decodeURIComponent((a.getAttribute("href") || "").split("/photo/")[1]?.split("?")[0] || "")));
+  const truth = await (await page.request.get("/api/search?q=" + encodeURIComponent("Meera Shah"))).json();
+  expect(shown.length).toBeGreaterThan(0);
+  expect(shown).toEqual(truth.cards.map((c: { hash: string }) => c.hash));
+  // and a search that finds nothing shows no photos at all
+  await page.fill("#q", "1871");
+  await page.click("button:has-text('Search')");
+  await expect(page.locator(".sentence")).toContainText("Nothing found");
+  await expect(page.locator(".grid a")).toHaveCount(0);
+});
+
 test("tapping a person's face finds their photos", async ({ page }) => {
   await signIn(page);
   await page.goto("/find");
