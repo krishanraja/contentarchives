@@ -51,6 +51,22 @@ nudity in this".
   enters git: it carries family names and face embeddings and the repo is public
 - a held-out file is NAMED in the export, not merely counted, so the cloud can
   keep it out; its reason is a category word and never a description
+- the cloud imports the export once per distinct file and is then the system of
+  record: nothing reads a local drive again (Krish, 2026-10-05)
+- held wins every tie: a Drive file matching anything the library held out is
+  held unseen, now and whenever it reappears (`library_held`); a second copy of a
+  library photograph is held as a duplicate, never classified
+- a library photo binds to Drive by MD5; by path only when the library knew no md5,
+  because a changed file under the same name is a different file and is judged afresh
+- a library row whose file leaves Drive is unbound, never deleted: what the library
+  knew cannot be made again
+- the library's merge groups are pinned: the cloud never merges two of them
+- "needs identifying" is the library's "ask someone else": it keeps a face IN the
+  queue, first, until a later answer closes it (the last answer for a group decides)
+- a face is drawn only with a box measured on a picture the shape Drive shows; video
+  faces have never been judged frame by frame, so they group and find people and
+  are never drawn
+- a photo is shown only when `visible`: bound to a Drive file and not hidden
 
 ## Code
 | file | role |

@@ -34,6 +34,35 @@ EACH RUN
      way to keep them true.
   6. a receipt in `snapshots`: counts and dollars spent.
 
+THE LIBRARY, ONCE (Krish, 2026-10-05: "never reliant on a local machine or
+external drive again")
+
+Everything the library machine learned about these photographs - descriptions,
+places, dates, faces, the merge groups people decided, every answer in the
+journal - arrives ONCE as archives-library.sqlite (stages/13_app/
+LIBRARY-EXPORT.md), a file in Krish's Drive shared with this account alone. It
+is imported once per distinct file; after that this database is the system of
+record and nothing reads a local drive again.
+
+  - a library photo binds to its Drive file by MD5. By path only when the
+    library knew no md5: a file whose bytes changed under the same name is a
+    different file, and is judged afresh rather than inheriting a verdict
+  - held is safety: a Drive file matching anything the library held out is held
+    without being classified, shown or re-judged, now and whenever it reappears
+    (library_held), and it wins every tie
+  - a library row replaces a cloud-classified row for the same file; a second
+    copy of a library photograph is held as a duplicate, never classified
+  - a library row whose file leaves Drive is unbound, not deleted: what the
+    library knew is kept, and it re-binds when the file comes back
+  - the library's merge groups are pinned: the cloud never merges two of them,
+    and its own clusters may join one
+  - the journal is kept whole (`journal`), and its cluster answers flow through
+    `answers` like the app's own. "needs_identifying" means "ask someone else",
+    so it keeps a face IN the queue, first
+  - a face is drawn only with a box measured on a picture the shape Drive
+    shows; video faces and box-less faces group and find people, and are never
+    drawn
+
 THE LOG IS PUBLIC
 
 This runs in a public repository, so stdout carries COUNTS ONLY: never a path,
@@ -54,10 +83,13 @@ import argparse
 import collections
 import concurrent.futures as cf
 import datetime as dt
+import hashlib
 import io
 import json
 import os
 import re
+import sqlite3
+import struct
 import sys
 import tempfile
 import time
@@ -75,6 +107,12 @@ SUBJECT_SHARE = 0.12                       # people_sheet.SUBJECT_SHARE
 SUGGEST_MIN = 0.40
 FACE_PX, VIEW_PX = 512, 1024
 MAX_QUEUE = 5000
+BUNDLE_NAME, BUNDLE_FORMAT = "archives-library.sqlite", "1"     # LIBRARY-EXPORT.md
+DESC_DIM, FACE_DIM = 768, 512
+LIBRARY_FIELDS = ("person", "unidentifiable", "needs_identifying")
+# The journal's 'when' is the library machine's local clock, written without a
+# zone. That machine is in Brisbane, which keeps no daylight saving.
+JOURNAL_TZ = dt.timezone(dt.timedelta(hours=10))
 YEAR_DIR = re.compile(r"(?:^|/)((?:18|19|20)\d\d)(?:/|$)")
 
 
@@ -108,7 +146,7 @@ def cloud_hold(media: str, v: dict) -> str:
 class Drive:
     """Google Drive as the read-only service account. Sees Communal only."""
     FIELDS = ("nextPageToken, files(id, name, mimeType, md5Checksum, "
-              "imageMediaMetadata(time, location, width, height), "
+              "imageMediaMetadata(time, location, width, height, rotation), "
               "videoMediaMetadata(width, height))")
 
     def __init__(self, sa_json: str):
@@ -143,11 +181,37 @@ class Drive:
                                     "md5": f.get("md5Checksum"), "time": im.get("time"),
                                     "lat": loc.get("latitude"), "lon": loc.get("longitude"),
                                     "w": im.get("width") or vm.get("width"),
-                                    "h": im.get("height") or vm.get("height")})
+                                    "h": im.get("height") or vm.get("height"),
+                                    "rot": im.get("rotation") or 0})
                 token = j.get("nextPageToken") or ""
                 if not token:
                     break
         return out
+
+    def find(self, name: str):
+        """The newest file of that name this account can see - which is only
+        what has been shared with it: Communal, and the library export."""
+        r = self.s.get("https://www.googleapis.com/drive/v3/files", params={
+            "q": "name = '{}' and trashed = false".format(name.replace("'", "\\'")),
+            "fields": "files(id, md5Checksum, size, modifiedTime)", "orderBy": "modifiedTime desc",
+            "pageSize": 10, "supportsAllDrives": "true", "includeItemsFromAllDrives": "true"}, timeout=60)
+        r.raise_for_status()
+        fs = r.json().get("files", [])
+        return fs[0] if fs else None
+
+    def download(self, fid: str, dest: str, md5: str = None) -> None:
+        """The whole file, streamed to disk, checked against Drive's own md5."""
+        h = hashlib.md5()
+        with self.s.get("https://www.googleapis.com/drive/v3/files/" + fid,
+                        params={"alt": "media", "supportsAllDrives": "true"},
+                        stream=True, timeout=600) as r:
+            r.raise_for_status()
+            with open(dest, "wb") as fh:
+                for chunk in r.iter_content(1 << 20):
+                    fh.write(chunk)
+                    h.update(chunk)
+        if md5 and h.hexdigest() != md5.lower():
+            raise RuntimeError("download does not match Drive's md5")
 
     def image(self, fid: str, px: int):
         r = self.s.get("https://www.googleapis.com/drive/v3/files/" + fid,
@@ -229,6 +293,37 @@ def load_geocoder():
 
 
 # ----------------------------------------------------------------- helpers --
+
+def upright(f: dict):
+    """(width, height) as Drive shows the picture: its stored size turned by the
+    rotation Drive reports. None when Drive does not say."""
+    w, h = f.get("w"), f.get("h")
+    if not w or not h:
+        return None
+    return (int(h), int(w)) if int(f.get("rot") or 0) % 2 else (int(w), int(h))
+
+
+def same_shape(a, b, tol: float = 0.03) -> bool:
+    """The same aspect ratio within 3%: a thumbnail is the picture scaled, never
+    cropped, so a box in fractions of one is a box in fractions of the other
+    only when this holds."""
+    import math
+    return abs(math.log((a[0] / float(a[1])) / (b[0] / float(b[1])))) <= tol
+
+
+def blob_vec(b: bytes, dim: int):
+    """A float32 little-endian blob of exactly `dim`, or None."""
+    import numpy as np
+    if not b or len(b) != 4 * dim:
+        return None
+    return np.frombuffer(b, dtype="<f4").astype(np.float32)
+
+
+def journal_time(when: str):
+    """The journal's local, zone-less 'when' as an instant."""
+    t = dt.datetime.fromisoformat(str(when).strip().replace("Z", "+00:00"))
+    return t if t.tzinfo else t.replace(tzinfo=JOURNAL_TZ)
+
 
 def vec(v) -> str:
     return "[" + ",".join("{:.6f}".format(float(x)) for x in v) + "]"
@@ -350,6 +445,8 @@ class Worker:
         self.c["listed"] = len(files)
         say("listed", files=len(files))
         self.reconcile(files)
+        self.import_library()
+        self.bind(files)
         self.load_clusters()
         self.process(files)
         self.save_clusters()
@@ -374,10 +471,279 @@ class Worker:
             self.c["refused_removal"] = len(gone)
             say("refused removal", gone=len(gone), known=len(known))
         elif gone:
-            self.db.execute("delete from photos where drive_id = any(%s)", (gone,))
+            # what the cloud made is made again if the file returns; what the
+            # LIBRARY knew can never be made again, so it is unbound, not lost
+            self.db.execute("delete from photos where drive_id = any(%s) and source = 'cloud'", (gone,))
+            self.db.execute("update photos set drive_id = null, updated_at = now() "
+                            "where drive_id = any(%s) and source = 'seed'", (gone,))
             self.c["removed"] = len(gone)
-        self.db.execute("delete from held where not (drive_id = any(%s))", (list(ids),))
+        if files:
+            self.db.execute("delete from held where not (drive_id = any(%s))", (list(ids),))
         self.db.commit()
+
+    # -- the library, once (LIBRARY-EXPORT.md) ---------------------------
+    def state(self, key: str):
+        r = self.db.execute("select value from sync_state where key = %s", (key,)).fetchone()
+        return r[0] if r else None
+
+    def set_state(self, key: str, value: str) -> None:
+        self.db.execute("insert into sync_state (key, value) values (%s, %s) "
+                        "on conflict (key) do update set value = excluded.value", (key, value))
+
+    def import_library(self):
+        """Import the library export once per distinct file. A file that is not
+        what it says it is stops the run: half an import is worse than none."""
+        if not hasattr(self.drive, "find"):
+            return
+        meta = self.drive.find(BUNDLE_NAME)
+        if not meta:
+            say("library export", found=0)
+            return
+        if meta.get("md5Checksum") and self.state("library_export") == meta["md5Checksum"]:
+            say("library export", found=1, already_imported=1)
+            return
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, "library.sqlite")
+            self.drive.download(meta["id"], path, meta.get("md5Checksum"))
+            src = sqlite3.connect("file:{}?mode=ro".format(path), uri=True)
+            try:
+                self.import_bundle(src)
+            finally:
+                src.close()
+        self.set_state("library_export", meta.get("md5Checksum") or "")
+        self.db.commit()
+
+    def import_bundle(self, src) -> dict:
+        db = self.db
+        m = dict(src.execute("select key, value from meta").fetchall())
+        if m.get("format") != BUNDLE_FORMAT:
+            raise RuntimeError("library export is not format " + BUNDLE_FORMAT)
+        n = {t: src.execute("select count(*) from " + t).fetchone()[0]
+             for t in ("photos", "held", "clusters", "faces", "answers")}
+        claimed = json.loads(m.get("counts") or "{}")
+        bad = [t for t in n if t in claimed and int(claimed[t]) != n[t]]
+        if bad:
+            raise RuntimeError("library export counts disagree with its own meta")
+        say("library export", photos=n["photos"], held=n["held"], clusters=n["clusters"],
+            faces=n["faces"], answers=n["answers"])
+
+        # held: kept for good, so a file that reaches Drive later is held unseen
+        rows = []
+        for h, md5, rel, why in src.execute("select hash, md5, rel_path, reason from held"):
+            md5 = (md5 or "").lower() or None
+            key = "md5:" + md5 if md5 else ("path:" + rel if rel else "hash:" + h)
+            rows.append((key, h, md5, rel, why))
+        with db.cursor() as cur:
+            cur.executemany(
+                "insert into library_held (key, hash, md5, rel_path, reason) values (%s,%s,%s,%s,%s) "
+                "on conflict (key) do update set hash = excluded.hash, rel_path = excluded.rel_path, "
+                "reason = excluded.reason", rows)
+        db.commit()
+
+        # photos: everything the library knew; drive_id and hidden are not
+        # touched, so a binding and a person's "hide this" both survive
+        cols = ("hash, md5, rel_path, media, taken_at, year, approx_year, place, region, country, "
+                "description, objects, activity, occasion, mood, people, day_key, width, height, embedding")
+        q = ("insert into photos (" + cols + ", source) values (" + ",".join(["%s"] * 19) +
+             ", %s::extensions.vector, 'seed') on conflict (hash) do update set " +
+             ", ".join("{0} = excluded.{0}".format(c.strip()) for c in cols.split(",")[1:-1]) +
+             ", embedding = coalesce(excluded.embedding, photos.embedding), source = 'seed', updated_at = now()")
+        batch, done = [], 0
+        for r in src.execute("select " + cols + " from photos"):
+            r = list(r)
+            r[1] = (r[1] or "").lower() or None
+            r[4] = r[4] or None
+            try:
+                r[15] = [str(x) for x in json.loads(r[15] or "[]")]
+            except ValueError:
+                r[15] = []
+            v = blob_vec(r[19], DESC_DIM)
+            r[19] = vec(v) if v is not None else None
+            batch.append(r)
+            if len(batch) >= 500:
+                with db.cursor() as cur:
+                    cur.executemany(q, batch)
+                db.commit()
+                done += len(batch)
+                batch = []
+        if batch:
+            with db.cursor() as cur:
+                cur.executemany(q, batch)
+            db.commit()
+            done += len(batch)
+        self.c["library_photos"] = done
+
+        # faces, the clusters they make, and the cluster -> photo map
+        import numpy as np
+        group_of = dict(src.execute("select cluster_id, group_id from clusters").fetchall())
+        sums, cnt, ch = {}, collections.Counter(), set()
+        fq = ("insert into faces (key, hash, cluster_id, group_id, bbox, only_face, score, share, "
+              "measured_w, measured_h, embedding) values (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s::extensions.vector) "
+              "on conflict (key) do update set hash = excluded.hash, cluster_id = excluded.cluster_id, "
+              "group_id = excluded.group_id, bbox = excluded.bbox, only_face = excluded.only_face, "
+              "score = excluded.score, share = excluded.share, measured_w = excluded.measured_w, "
+              "measured_h = excluded.measured_h, embedding = excluded.embedding")
+        batch, done, boxed = [], 0, 0
+        for (key, h, cid, x1, y1, x2, y2, tw, th, det, share, only, emb) in src.execute(
+                "select key, hash, cluster_id, x1, y1, x2, y2, thumb_w, thumb_h, det, share, only_face, "
+                "embedding from faces"):
+            v = blob_vec(emb, FACE_DIM)
+            if v is None:
+                self.c["library_faces_bad"] += 1
+                continue
+            sums[cid] = sums[cid] + v if cid in sums else v.copy()
+            cnt[cid] += 1
+            g = group_of.get(cid, cid)
+            ch.add((cid, g, h))
+            box = [round(float(x), 5) for x in (x1, y1, x2, y2)] if None not in (x1, y1, x2, y2) else None
+            boxed += box is not None
+            batch.append((key, h, cid, g, box, bool(only), det,
+                          share if box is not None else None,
+                          tw if box is not None else None, th if box is not None else None, vec(v)))
+            if len(batch) >= 1000:
+                with db.cursor() as cur:
+                    cur.executemany(fq, batch)
+                db.commit()
+                done += len(batch)
+                batch = []
+        if batch:
+            with db.cursor() as cur:
+                cur.executemany(fq, batch)
+            db.commit()
+            done += len(batch)
+        self.c["library_faces"] = done
+        self.c["library_faces_boxed"] = boxed
+
+        crow = []
+        for cid, g in group_of.items():
+            if cid in sums:
+                c = sums[cid] / (float(np.linalg.norm(sums[cid])) or 1.0)
+                crow.append((cid, g, vec(c), int(cnt[cid])))
+            else:
+                crow.append((cid, g, None, 0))
+        with db.cursor() as cur:
+            cur.executemany(
+                "insert into clusters (cluster_id, group_id, pinned, centroid, n) "
+                "values (%s, %s, true, %s::extensions.vector, %s) on conflict (cluster_id) do update set "
+                "group_id = excluded.group_id, pinned = true, "
+                "centroid = coalesce(excluded.centroid, clusters.centroid), n = excluded.n", crow)
+            cur.executemany(
+                "insert into cluster_hashes (cluster_id, group_id, hash) values (%s, %s, %s) "
+                "on conflict (cluster_id, hash) do update set group_id = excluded.group_id", sorted(ch))
+        db.commit()
+        self.c["library_clusters"] = len(crow)
+        self.c["library_groups"] = len(set(group_of.values()))
+
+        # the journal, whole; its cluster answers through `answers`
+        jrows, arows = [], []
+        for (aid, at, who, scope, target, field, value, conf, note) in src.execute(
+                "select id, at, who, scope, target, field, value, confidence, note from answers order by rowid"):
+            try:
+                t = journal_time(at)
+            except ValueError:
+                self.c["journal_bad_time"] += 1
+                continue
+            jrows.append((aid, t, who or "?", scope, target, field, value, conf, note))
+            if scope == "cluster" and field in LIBRARY_FIELDS and 1 <= len(value or "") <= 60:
+                arows.append((aid, t, t, who or "?", scope, target, field, value))
+        with db.cursor() as cur:
+            cur.executemany(
+                "insert into journal (id, at, who, scope, target, field, value, confidence, note) "
+                "values (%s,%s,%s,%s,%s,%s,%s,%s,%s) on conflict (id) do nothing", jrows)
+            cur.executemany(
+                "insert into answers (id, at, client_at, who, scope, target, field, value, status, reason) "
+                "values (%s,%s,%s,%s,%s,%s,%s,%s,'ingested','the library journal') on conflict (id) do nothing",
+                arows)
+        db.commit()
+        self.c["library_journal"] = len(jrows)
+        self.c["library_answers"] = len(arows)
+        say("library imported", photos=self.c["library_photos"], faces=done, boxed=boxed,
+            clusters=len(crow), journal=len(jrows), answers=len(arows))
+        return n
+
+    def bind(self, files):
+        """Library rows -> their Drive files. Held first, because safety wins
+        every tie; then each library photo by md5 (by path only when the library
+        knew no md5); then second copies; then the faces' shape check."""
+        db = self.db
+        by_md5 = collections.defaultdict(list)
+        for f in files:
+            if f.get("md5"):
+                by_md5[f["md5"].lower()].append(f)
+        by_rel = {f["rel"]: f for f in files}
+        held = dict(db.execute("select drive_id, reason from held").fetchall())
+        owner = {d: (h, src) for d, h, src in db.execute(
+            "select drive_id, hash, source from photos where drive_id is not null").fetchall()}
+
+        def kind(fid):
+            """Who holds this Drive file now: 'seed', 'cloud', or None."""
+            return owner.get(fid, (None, None))[1]
+
+        def take_from(fid):
+            """Free a Drive file: a cloud row for it goes, a library row lets go."""
+            h, src = owner.pop(fid, (None, None))
+            if src == "cloud":
+                db.execute("delete from photos where hash = %s", (h,))
+                self.c["replaced"] += 1
+            elif src == "seed":
+                db.execute("update photos set drive_id = null, updated_at = now() where hash = %s", (h,))
+
+        def hold(f, why):
+            take_from(f["id"])
+            db.execute("insert into held (drive_id, rel_path, reason) values (%s, %s, %s) "
+                       "on conflict (drive_id) do update set reason = excluded.reason, at = now()",
+                       (f["id"], f["rel"], why))
+            held[f["id"]] = why
+
+        for md5, rel, why in db.execute("select md5, rel_path, reason from library_held").fetchall():
+            for f in (by_md5.get(md5, []) if md5 else ([by_rel[rel]] if rel in by_rel else [])):
+                if held.get(f["id"]) != why:
+                    hold(f, why)
+                    self.c["held_library"] += 1
+
+        newly = []
+        for h, md5, rel in db.execute("select hash, md5, rel_path from photos "
+                                      "where source = 'seed' and drive_id is null").fetchall():
+            cands = by_md5.get(md5.lower(), []) if md5 else ([by_rel[rel]] if rel in by_rel else [])
+            cands = [f for f in cands if f["id"] not in held and kind(f["id"]) in (None, "cloud")]
+            if not cands:
+                self.c["unbound"] += 1
+                continue
+            f = next((x for x in cands if x["rel"] == rel), sorted(cands, key=lambda x: x["rel"])[0])
+            take_from(f["id"])
+            db.execute("update photos set drive_id = %s, updated_at = now() where hash = %s", (f["id"], h))
+            owner[f["id"]] = (h, "seed")
+            newly.append((h, f))
+        self.c["bound"] += len(newly)
+
+        # a second copy of a library photograph is that photograph: never classified
+        seed_md5 = {r[0] for r in db.execute(
+            "select lower(md5) from photos where source = 'seed' and drive_id is not null and md5 is not null")}
+        for md5 in seed_md5:
+            for f in by_md5.get(md5, []):
+                if f["id"] not in held and kind(f["id"]) != "seed":
+                    hold(f, "duplicate")
+                    self.c["duplicates"] += 1
+
+        # a box is drawn only on a picture the shape Drive shows
+        if newly:
+            dims = {h: upright(f) for h, f in newly}
+            turned = []
+            for key, h, mw, mh in db.execute(
+                    "select key, hash, measured_w, measured_h from faces where hash = any(%s) "
+                    "and bbox is not null and share is not null and measured_w > 0 and measured_h > 0",
+                    ([h for h, _ in newly],)).fetchall():
+                d = dims.get(h)
+                if d and not same_shape((mw, mh), d):
+                    turned.append((key,))
+            if turned:
+                with db.cursor() as cur:
+                    cur.executemany("update faces set share = null where key = %s", turned)
+            self.c["faces_turned"] += len(turned)
+        db.commit()
+        if newly or self.c["held_library"] or self.c["unbound"]:
+            say("library bound", bound=len(newly), unbound=self.c["unbound"], held=self.c["held_library"],
+                duplicates=self.c["duplicates"], replaced=self.c["replaced"], faces_turned=self.c["faces_turned"])
 
     def process(self, files):
         have = {r[0] for r in self.db.execute(
@@ -496,52 +862,69 @@ class Worker:
 
     # -- people ------------------------------------------------------------
     def group(self):
-        """Clusters -> people, by running group centroids (merge_clusters.py),
-        never joining two different names."""
+        """Clusters -> people. The library's groups were decided by people
+        (CLUSTER-MERGES.csv) and are pinned: never merged with one another.
+        Every other cluster joins the nearest group whose running centroid
+        meets it at 0.68 (chain_rounds' merge), never joining two different
+        names (merge_clusters.py's rule)."""
         import numpy as np
         rows = self.db.execute(
-            "select c.cluster_id, c.centroid::text, c.n, cn.name from clusters c "
+            "select c.cluster_id, c.centroid::text, c.n, c.pinned, c.group_id, cn.name from clusters c "
             "left join cluster_names cn on cn.cluster_id = c.cluster_id "
             "where c.centroid is not null order by c.n desc, c.cluster_id").fetchall()
-        gid, gsum, gnames, of = [], [], [], {}
-        for cid, cen, n, name in rows:
+        pinned = [r for r in rows if r[3]]
+        loose = [r for r in rows if not r[3]]
+        gidx, gid, gnames = {}, [], []
+        cap = len({r[4] for r in pinned}) + len(loose) + 1
+        G = np.zeros((cap, 512), np.float32)          # running sums, one row per group
+        for cid, cen, n, _, g, name in pinned:
+            j = gidx.get(g)
+            if j is None:
+                j = gidx[g] = len(gid)
+                gid.append(g)
+                gnames.append(set())
+            G[j] += parse_vec(cen) * max(int(n or 1), 1)
+            if name:
+                gnames[j].add(name)
+        k = len(gid)
+        Gn = G / np.maximum(np.linalg.norm(G, axis=1, keepdims=True), 1e-9)
+        of = {}
+        for cid, cen, n, _, _, name in loose:
             v = parse_vec(cen) * max(int(n or 1), 1)
-            if gsum:
-                G = np.array(gsum, dtype=np.float32)
-                G = G / np.maximum(np.linalg.norm(G, axis=1, keepdims=True), 1e-9)
-                u = v / (float(np.linalg.norm(v)) or 1.0)
-                sims = G @ u
-                order = np.argsort(-sims)
-                placed = False
-                for j in order[:5]:
+            u = v / (float(np.linalg.norm(v)) or 1.0)
+            placed = False
+            if k:
+                sims = Gn[:k] @ u
+                top = np.argpartition(-sims, min(5, k) - 1)[:5]
+                for j in top[np.argsort(-sims[top])]:
                     if sims[j] < MERGE:
                         break
                     if name and gnames[j] and name not in gnames[j]:
                         continue                  # two people with two names stay two
-                    gsum[j] = gsum[j] + v
+                    G[j] += v
+                    Gn[j] = G[j] / (float(np.linalg.norm(G[j])) or 1.0)
                     if name:
                         gnames[j].add(name)
                     of[cid] = gid[j]
                     placed = True
                     break
-                if placed:
-                    continue
-            gid.append(cid)
-            gsum.append(v)
-            gnames.append({name} if name else set())
-            of[cid] = cid
-        moved = 0
-        for cid, g in of.items():
-            r = self.db.execute("update clusters set group_id = %s where cluster_id = %s and group_id <> %s",
-                                (g, cid, g))
-            moved += r.rowcount or 0
+            if not placed:
+                G[k], Gn[k] = v, u
+                gid.append(cid)
+                gnames.append({name} if name else set())
+                of[cid] = cid
+                k += 1
+        with self.db.cursor() as cur:
+            cur.executemany("update clusters set group_id = %s where cluster_id = %s and group_id <> %s",
+                            [(g, cid, g) for cid, g in of.items()])
+            moved = cur.rowcount if cur.rowcount and cur.rowcount > 0 else 0
         self.db.execute("update cluster_hashes ch set group_id = c.group_id from clusters c "
                         "where c.cluster_id = ch.cluster_id and ch.group_id <> c.group_id")
         self.db.execute("update faces f set group_id = c.group_id from clusters c "
                         "where c.cluster_id = f.cluster_id and f.group_id is distinct from c.group_id")
         self.db.commit()
         self.c["clusters"] = len(rows)
-        self.c["groups"] = len(gid)
+        self.c["groups"] = k
         self.c["regrouped"] = moved
 
     def rebuild(self):
@@ -550,10 +933,12 @@ class Worker:
         db = self.db
         names = dict(db.execute("select group_id, name from group_names where name is not null").fetchall())
         answered = {r[0] for r in db.execute("select group_id from group_names where answered").fetchall()}
+        # "needs identifying": the library said ask someone else - asked first
+        flagged = {r[0] for r in db.execute("select group_id from group_names where flagged").fetchall()}
         faces = collections.defaultdict(list)
         for key, h, g, score, share, only in db.execute(
                 "select f.key, f.hash, f.group_id, f.score, coalesce(f.share, 0), f.only_face "
-                "from faces f join photos p on p.hash = f.hash and not p.hidden "
+                "from faces f join photos p on p.hash = f.hash and p.visible "
                 "where f.group_id is not null").fetchall():
             faces[g].append((key, h, float(score or 0), float(share), bool(only)))
         photos = {g: len({h for _, h, _, _, _ in fs}) for g, fs in faces.items()}
@@ -583,8 +968,8 @@ class Worker:
             M = np.stack([by_name[n] / (float(np.linalg.norm(by_name[n])) or 1.0) for n in labels])
 
         queue = []
-        for g, fs in sorted(faces.items(), key=lambda kv: -photos[kv[0]]):
-            if g in names or g in answered or photos[g] < 2:
+        for g, fs in sorted(faces.items(), key=lambda kv: (kv[0] not in flagged, -photos[kv[0]])):
+            if g in names or g in answered or (photos[g] < 2 and g not in flagged):
                 continue
             subj = sorted((f for f in fs if f[3] >= SUBJECT_SHARE), key=lambda f: (-f[4], -f[2]))
             if not subj:
@@ -606,11 +991,13 @@ class Worker:
             if len(queue) >= MAX_QUEUE:
                 break
 
-        people = []
-        for name in sorted(set(names.values())):
-            gs = [g for g, n in names.items() if n == name]
-            people.append((name, cover_of[name][0] if name in cover_of else None,
-                           len({h for g in gs for _, h, _, _, _ in faces.get(g, [])})))
+        # everyone named on a photograph anyone can see: by a face, or by the
+        # library's own record of who is in it
+        counts = dict(db.execute(
+            "select pp.name, count(distinct pp.hash)::int from photo_people pp "
+            "join photos p on p.hash = pp.hash and p.visible group by pp.name").fetchall())
+        people = [(name, cover_of[name][0] if name in cover_of else None, counts[name])
+                  for name in sorted(set(names.values()) | set(counts)) if counts.get(name)]
 
         db.execute("delete from queue")
         db.execute("delete from people")

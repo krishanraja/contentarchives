@@ -102,12 +102,30 @@ the rest are already folded into `photos` by `build_db`.
 
 ## What the cloud does with it (`cloud_enrich.py`)
 
-- imports it once per distinct file (its md5 is recorded in `sync_state`);
-- binds `photos` and `held` to Drive files by md5, then by `rel_path`; a library
-  row replaces a cloud-classified row for the same Drive file;
+- imports it once per distinct file (its md5 is recorded in `sync_state`), and
+  stops the run if the file's tables disagree with its own `meta` counts;
+- keeps everything it holds for good: `photos` and `faces` (with every box and
+  embedding), `clusters` (pinned, with centroids), `library_held`, and the whole
+  journal in `journal`;
+- binds `photos` and `held` to Drive files **by md5**. By `rel_path` only for a
+  row with no md5: a Drive file whose bytes differ from the library's under the
+  same name is a different file (an edit, or a replacement), so it is judged
+  afresh rather than inheriting the library's verdict. With md5 at 100% this
+  costs a classification per changed file and nothing else;
+- held wins every tie, now and later: a file matching `library_held` is held
+  without being classified, shown or re-judged, including a purged file that
+  turns up on Drive months from now;
+- a library row replaces a cloud-classified row for the same Drive file; a
+  second copy of a library photograph is held as `duplicate`;
+- a library row whose Drive file leaves is unbound, not deleted, and re-binds
+  when the file returns; until then no page shows it (`photos.visible`);
 - keeps the library's groups: two library groups are never merged by the cloud,
   and cloud clusters may join them;
-- imports the journal as `answers` with status `ingested`, so names and
-  "not the same person" verdicts flow through the same path as app answers;
-- a face whose thumbnail orientation disagrees with Drive's is used for
-  grouping and search, never as the face shown in the app.
+- imports the journal's cluster answers (`person`, `unidentifiable`,
+  `needs_identifying`) into `answers` with status `ingested`, so names and
+  verdicts flow through the same path as app answers. The last answer for a
+  group decides, as in `build_game.verdicts`: `needs_identifying` ("ask someone
+  else") keeps the face in the queue and asks it first;
+- a face is drawn only when its box was measured on a picture the shape Drive
+  shows; video faces (never judged frame by frame) and box-less faces group and
+  find people, and are never drawn.

@@ -17,7 +17,7 @@ export async function vocab() {
   const [people, places] = await Promise.all([
     db`select distinct name from photo_people where name is not null`,
     db`select place, count(*)::int n from photos
-       where place is not null and place <> '' and not hidden
+       where place is not null and place <> '' and visible
        group by place order by n desc limit 400`,
   ]);
   return { people: people.map((r) => r.name as string), places: places.map((r) => r.place as string) };
@@ -57,14 +57,14 @@ export async function browse() {
   const [people, places, years] = await Promise.all([
     db`select pp.name, count(distinct pp.hash)::int n,
               (select pe.cover_face from people pe where pe.name = pp.name) cover
-       from photo_people pp join photos p on p.hash = pp.hash and not p.hidden
+       from photo_people pp join photos p on p.hash = pp.hash and p.visible
        group by pp.name order by n desc limit 60`,
     db`select place, count(*)::int n from photos
-       where place is not null and place <> '' and not hidden
+       where place is not null and place <> '' and visible
        group by place order by n desc limit 40`,
     db`select (coalesce(year, nullif(substring(approx_year from 1 for 4),'')::int) / 10 * 10) decade,
               count(*)::int n
-       from photos where not hidden
+       from photos where visible
          and coalesce(year, nullif(substring(approx_year from 1 for 4),'')::int) is not null
        group by 1 order by 1`,
   ]);
@@ -79,15 +79,15 @@ export type PhotoRow = {
   hash: string; drive_id: string | null; media: string; taken_at: Date | null;
   year: number | null; approx_year: string | null; place: string | null;
   region: string | null; country: string | null; description: string | null;
-  occasion: string | null; width: number | null; height: number | null; hidden: boolean;
+  occasion: string | null; width: number | null; height: number | null; hidden: boolean; visible: boolean;
 };
 
 export async function photo(hash: string): Promise<(PhotoRow & { people: string[] }) | null> {
   const db = sql();
   const [p] = await db<PhotoRow[]>`select hash, drive_id, media, taken_at, year, approx_year, place,
-      region, country, description, occasion, width, height, hidden
+      region, country, description, occasion, width, height, hidden, visible
     from photos where hash = ${hash}`;
-  if (!p || p.hidden) return null;
+  if (!p || !p.visible) return null;
   const who = await db`select distinct name from photo_people where hash = ${hash} order by name`;
   return { ...p, people: who.map((r) => r.name as string) };
 }
@@ -97,9 +97,9 @@ export async function counts() {
   const [r] = await db`select
       (select count(*)::int from queue q join group_names g on g.group_id = q.group_id
          where not g.answered) faces,
-      (select count(*)::int from photos where not hidden and media = 'photo'
+      (select count(*)::int from photos where visible and media = 'photo'
          and (place is null or (year is null and approx_year is null))) story,
-      (select count(*)::int from photos where not hidden) photos`;
+      (select count(*)::int from photos where visible) photos`;
   return r as { faces: number; story: number; photos: number };
 }
 
@@ -110,7 +110,7 @@ export async function nextFace(who: string, after: string[] = []) {
   const [q] = await db`
     select q.*, f.cluster_id as hero_cluster from queue q
     join faces f on f.key = q.hero_face
-    join photos p on p.hash = f.hash and not p.hidden
+    join photos p on p.hash = f.hash and p.visible
     join group_names g on g.group_id = q.group_id
     where not g.answered
       and not exists (select 1 from skips s where s.who = ${who} and s.group_id = q.group_id)
@@ -121,7 +121,7 @@ export async function nextFace(who: string, after: string[] = []) {
   const faces = await db`select f.key, f.hash, f.bbox, f.frame, f.only_face, p.media,
        p.width, p.height, p.place, p.year, p.approx_year
      from faces f join photos p on p.hash = f.hash
-     where f.key = any(${keys}::text[]) and not p.hidden`;
+     where f.key = any(${keys}::text[]) and p.visible`;
   const byKey = new Map(faces.map((f) => [f.key as string, f]));
   const hero = byKey.get(q.hero_face);
   if (!hero) return null;
@@ -148,10 +148,10 @@ export async function nextStory(who: string, after: string[] = [], only: string 
   // biggest day first: one answer about a 40-photo afternoon labels 40 photos
   const [p] = only ? await db`
     select p.hash, p.place, p.year, p.approx_year, p.day_key, p.width, p.height
-    from photos p where p.hash = ${only} and not p.hidden and p.media = 'photo'` : await db`
+    from photos p where p.hash = ${only} and p.visible and p.media = 'photo'` : await db`
     select p.hash, p.place, p.year, p.approx_year, p.day_key, p.width, p.height
     from photos p
-    where not p.hidden and p.media = 'photo'
+    where p.visible and p.media = 'photo'
       and (p.place is null or (p.year is null and p.approx_year is null))
       and not exists (select 1 from skips s where s.who = ${who} and s.group_id = 'story:' || p.hash)
       and p.hash <> all(${after}::text[])
@@ -160,7 +160,7 @@ export async function nextStory(who: string, after: string[] = [], only: string 
     limit 1`;
   if (!p) return null;
   const day = p.day_key ? await db`select hash from photos
-      where day_key = ${p.day_key} and hash <> ${p.hash} and not hidden and place is null
+      where day_key = ${p.day_key} and hash <> ${p.hash} and visible and place is null
       order by taken_at nulls last limit 40` : [];
   const places = await db`select place, count(*)::int n from photos
       where place is not null and place <> '' group by place order by n desc limit 8`;
@@ -219,7 +219,7 @@ export async function saveAnswer(who: string, a: AnswerIn): Promise<{ labelled: 
       return { labelled: a.kind === "person" ? n.n : 0 };
     }
     // place / year: only photos the app is allowed to show
-    const ok = await tx`select hash from photos where hash = any(${a.hashes!}::text[]) and not hidden`;
+    const ok = await tx`select hash from photos where hash = any(${a.hashes!}::text[]) and visible`;
     const hashes = ok.map((r) => r.hash as string);
     if (!hashes.length) throw new Error("no such photographs");
     const field = a.kind === "place" ? "place" : "approx_year";

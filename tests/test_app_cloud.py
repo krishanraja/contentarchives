@@ -17,7 +17,13 @@ every verdict is known in advance:
   6. two clusters with different NAMES are never merged, and a name given to
      one cluster still names its group after a merge
   7. a cluster id is never reissued, even when the counter was lost (l. 72)
-  8. NOTHING but numbers reaches stdout: no path, no name, no description
+  8. the library, once (LIBRARY-EXPORT.md): bound by md5 and paid for only
+     where the library never looked; held wins every tie and holds a purged
+     file that turns up later; a changed file is judged afresh; the library's
+     groups are pinned; "needs identifying" asks first; a turned thumbnail's
+     box and a video face are never drawn; a file that leaves Drive keeps what
+     the library knew and re-binds when it returns; one import per file
+  9. NOTHING but numbers reaches stdout: no path, no name, no description
 
 A database test that cannot reach its database FAILS - a green run with
 Postgres down once reported six tests as passing that had not run.
@@ -27,7 +33,12 @@ import contextlib
 import io
 import json
 import os
+import shutil
+import sqlite3
+import struct
 import sys
+import tempfile
+import uuid
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
@@ -232,7 +243,11 @@ def main():
     check("with the counter lost, the next id still clears every k-id", w.next_id > top, True)
 
     print()
-    print("8. the public log carries numbers only")
+    print("8. the library, once")
+    library(out)
+
+    print()
+    print("9. the public log carries numbers only")
     text = out.getvalue()
     leaks = [s for s in ("secret", "Secretname", "beach", "umbrella", "Media/Communal", ".jpg")
              if s.lower() in text.lower()]
@@ -250,6 +265,244 @@ def main():
         return 1
     print("all checks passed")
     return 0
+
+
+# ------------------------------------------------------------- the library --
+
+def blob(v, dim):
+    v = np.asarray(v, dtype=np.float32)
+    assert v.shape == (dim,)
+    return struct.pack("<{}f".format(dim), *(v / np.linalg.norm(v)).tolist())
+
+
+def desc(seed):
+    return np.random.default_rng(seed).normal(size=768).astype(np.float32)
+
+
+def write_bundle(path, broken=False):
+    """A small library export, written with the WRITER's own schema."""
+    import export_library as EL
+    L = "Media/Communal/1998/"
+    db = sqlite3.connect(path)
+    db.executescript(EL.SCHEMA)
+    photos = [  # hash, md5, rel, media, people
+        ("b1", "m-l1", L + "secret-l1.jpg", "photo", ["Asha Secretname"]),
+        ("b2", "m-l2", L + "secret-l2.jpg", "photo", []),
+        ("b3", "m-l3", L + "secret-l3.jpg", "photo", []),
+        ("b4", "m-l4", L + "secret-l4.jpg", "photo", []),       # not on Drive yet
+        ("b5", None, L + "secret-l5.jpg", "photo", ["Dev Secretname"]),  # md5 unknown: by path
+        ("b6", "m-l6-old", L + "secret-l6.jpg", "photo", []),   # Drive's file changed since
+        ("b7", "m-l7", L + "secret-l7.jpg", "photo", []),       # the cloud judged it first
+        ("b8", "m-l8", L + "secret-l8.mp4", "video", []),
+    ]
+    for i, (h, md5, rel, media, people) in enumerate(photos):
+        db.execute("insert into photos (hash, md5, rel_path, media, year, description, people, embedding) "
+                   "values (?,?,?,?,?,?,?,?)", (h, md5, rel, media, 1998,
+                                                  "Secretname family at the beach", json.dumps(people),
+                                                  blob(desc(100 + i), 768)))
+    db.execute("insert into held values ('bh1', 'm-h1', ?, 'nudity')", (L + "secret-h1.jpg",))
+    db.execute("insert into held values ('bh2', 'm-h2', NULL, 'removed')")   # purged: md5 only
+    C1, C3 = unit(40), unit(41)
+    clusters = {"c1": "g1", "c2": "g1",      # people merged these two, though the faces differ
+                "c3": "g3", "c4": "g4",      # people kept these apart, though the faces are alike
+                "c5": "g5",      # someone seen only in a video
+                "c6": "g6"}      # unnamed, and in MORE photos than the face the library flagged
+    for c, g in clusters.items():
+        db.execute("insert into clusters values (?, ?)", (c, g))
+    faces = [  # key, hash, image, idx, cluster, box, thumb, share, only, emb
+        ("b1::0", "b1", "", 0, "c1", (.3, .2, .6, .6), (400, 300), .3, 1, unit(50, C1, .2)),
+        ("b3::0", "b3", "", 0, "c1", (.3, .2, .6, .6), (400, 300), .3, 1, unit(51, C1, .2)),
+        ("b2::0", "b2", "", 0, "c2", (.3, .2, .6, .6), (300, 400), .3, 1, unit(52)),   # thumb turned
+        ("b2::1", "b2", "", 1, "c3", None, None, None, 0, unit(53, C3, .2)),           # no thumbnail
+        ("b5::0", "b5", "", 0, "c3", (.3, .2, .6, .6), (400, 300), .3, 1, unit(54, C3, .2)),
+        ("b6::0", "b6", "", 0, "c3", (.3, .2, .6, .6), (400, 300), .3, 1, unit(55, C3, .2)),
+        ("b7::0", "b7", "", 0, "c4", (.3, .2, .6, .6), (400, 300), .3, 1, unit(56, C3, .2)),
+        ("b8:f1:0", "b8", "f1", 0, "c5", None, None, None, 1, unit(57)),               # video
+        ("b8:f2:0", "b8", "f2", 0, "c5", None, None, None, 1, unit(58, unit(57), .2)),
+        ("b1::1", "b1", "", 1, "c6", (.6, .2, .9, .6), (400, 300), .3, 0, unit(60, unit(59), .2)),
+        ("b3::1", "b3", "", 1, "c6", (.6, .2, .9, .6), (400, 300), .3, 0, unit(61, unit(59), .2)),
+        ("b7::1", "b7", "", 1, "c6", (.6, .2, .9, .6), (400, 300), .3, 0, unit(62, unit(59), .2)),
+    ]
+    for key, h, img, idx, c, box, th, share, only, emb in faces:
+        x1, y1, x2, y2 = box or (None,) * 4
+        tw, thh = th or (None, None)
+        db.execute("insert into faces values (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                   (key, h, img, idx, c, x1, y1, x2, y2, tw, thh, .9, share, only, blob(emb, 512)))
+    journal = [  # when, who, scope, target, field, value
+        ("2026-09-01T10:00:00", "krish", "cluster", "c1", "person", "Asha Secretname"),
+        ("2026-09-02T10:00:00", "krish", "cluster", "c3", "unidentifiable", "declined"),
+        ("2026-09-03T10:00:00", "krish", "cluster", "c3", "needs_identifying", "Bharti"),
+        ("2026-09-02T10:00:00", "krish", "cluster", "c4", "needs_identifying", "Bharti"),
+        ("2026-09-04T10:00:00", "bharti", "cluster", "c4", "person", "Meera Secretname"),
+        ("2026-09-05T10:00:00", "krish", "file", "b1", "place", "Secretville"),
+        ("2026-09-06T10:00:00", "krish", "cluster", "c5", "person", "Ravi Secretname"),
+    ]
+    for w, who, sc, t, f, v in journal:
+        aid = str(uuid.uuid5(uuid.NAMESPACE_URL, "journal:" + "|".join((w, who, sc, t, f, v))))
+        db.execute("insert into answers values (?,?,?,?,?,?,?,?,?)", (aid, w, who, sc, t, f, v, 1.0, ""))
+    counts = {t: db.execute("select count(*) from " + t).fetchone()[0]
+              for t in ("photos", "held", "clusters", "faces", "answers")}
+    if broken:
+        counts["faces"] += 1
+    db.execute("insert into meta values ('format', '1')")
+    db.execute("insert into meta values ('counts', ?)", (json.dumps(counts),))
+    db.commit()
+    db.close()
+    return counts
+
+
+class LibDrive:
+    """Drive with the export shared with the account (or not yet)."""
+    L = "Media/Communal/1998/"
+
+    def __init__(self, bundle=None):
+        self.bundle, self.files = bundle, {}
+
+    def put(self, fid, md5, rel, mime="image/jpeg", w=1024, h=768, rot=0):
+        self.files[fid] = {"id": fid, "rel": rel, "mime": mime, "md5": md5, "time": None,
+                           "lat": None, "lon": None, "w": w, "h": h, "rot": rot}
+
+    def list_tree(self, root, prefix):
+        return list(self.files.values())
+
+    def image(self, fid, px):
+        return ("JPEG:" + fid).encode()
+
+    def find(self, name):
+        if not self.bundle:
+            return None
+        import hashlib
+        return {"id": "bundle", "md5Checksum": hashlib.md5(open(self.bundle, "rb").read()).hexdigest()}
+
+    def download(self, fid, dest, md5=None):
+        shutil.copyfile(self.bundle, dest)
+
+
+class LibGemini:
+    def __init__(self):
+        self.seen = []
+
+    def classify(self, jpeg):
+        self.seen.append(jpeg.decode().split(":")[1])
+        return dict(OK), 0.001
+
+    def embed(self, text):
+        return [0.01] * 768, 0.0
+
+
+def library(out):
+    db = fresh_db(NAME + "_lib")
+    tmp = tempfile.mkdtemp()
+    bundle = os.path.join(tmp, "archives-library.sqlite")
+    write_bundle(bundle)
+    L = LibDrive.L
+    drive = LibDrive()
+
+    def go(g=None):
+        g = g or LibGemini()
+        w = CE.Worker(db, drive, g, None, None, "root", "Media/Communal", workers=1, budget=100)
+        with contextlib.redirect_stdout(out):
+            r = w.run()
+        return r, g
+
+    # before the export is shared, the cloud judges what it finds
+    drive.put("d7", "m-l7", L + "secret-l7.jpg")
+    go()
+    check("before the export, the cloud judged the file itself",
+          q(db, "select count(*) from photos where hash = 'drive:d7'")[0][0], 1)
+
+    # now the export arrives, with Drive as the library left it
+    drive.bundle = bundle
+    drive.put("d1", "m-l1", L + "secret-l1.jpg", w=3000, h=4000, rot=1)    # shown upright: 4000 x 3000
+    drive.put("d2", "m-l2", L + "secret-l2.jpg")                            # landscape; its thumbnail is not
+    drive.put("d3a", "m-l3", L + "secret-l3.jpg")
+    drive.put("d3b", "m-l3", "Media/Communal/copies/secret-l3.jpg")         # a second copy
+    drive.put("d5", "m-anything", L + "secret-l5.jpg")
+    drive.put("d6", "m-l6-new", L + "secret-l6.jpg")                        # same name, new bytes
+    drive.put("d8", "m-l8", L + "secret-l8.mp4", mime="video/mp4")
+    drive.put("dh1", "m-h1", L + "secret-h1.jpg")
+    drive.put("dnew", "m-new", L + "secret-new.jpg")                        # the library never saw it
+    r, g = go()
+    check("it paid only for what the library never described (and the changed file)",
+          sorted(g.seen), ["d6", "dnew"])
+    check("a file the library held out was never shown to the classifier", "dh1" in g.seen, False)
+    held = dict(q(db, "select drive_id, reason from held"))
+    check("held: nudity stays held, the second copy is a duplicate",
+          (held.get("dh1"), held.get("d3b")), ("nudity", "duplicate"))
+    bound = dict(q(db, "select hash, drive_id from photos where source = 'seed'"))
+    check("bound by md5, the copy at the library's own path preferred",
+          (bound["b1"], bound["b2"], bound["b3"], bound["b8"]), ("d1", "d2", "d3a", "d8"))
+    check("bound by path only where the library knew no md5", bound["b5"], "d5")
+    check("a changed file under the same name is NOT given the library's verdict",
+          (bound["b6"], q(db, "select count(*) from photos where hash = 'drive:d6'")[0][0]), (None, 1))
+    check("the library row replaced the cloud's row for the same file",
+          (bound["b7"], q(db, "select count(*) from photos where hash = 'drive:d7'")[0][0]), ("d7", 0))
+    vis = {h for (h,) in q(db, "select hash from photos where visible")}
+    check("a library photo not on Drive is kept, and shown nowhere", ("b4" in bound, "b4" in vis), (True, False))
+    grp = dict(q(db, "select cluster_id, group_id from clusters where pinned"))
+    check("the library's groups are kept: merged stay merged, apart stay apart",
+          (grp["c1"] == grp["c2"], grp["c3"] != grp["c4"]), (True, True))
+    names = {g: (n, a, f) for g, n, a, f in q(db, "select group_id, name, answered, flagged from group_names")}
+    check("the journal names a group", names[grp["c1"]][0], "Asha Secretname")
+    check("a later 'needs identifying' re-opens a declined face, flagged",
+          names[grp["c3"]][1:], (False, True))
+    check("a later name closes a face that was flagged", names[grp["c4"]][:2], ("Meera Secretname", True))
+    queue = [g for (g,) in q(db, "select group_id from queue order by rank")]
+    check("the face the library asked about is asked first, before a bigger one",
+          (queue[:1], grp["c6"] in queue), ([grp["c3"]], True))
+    shown = {k for (k,) in q(db, "select hero_face from queue union all "
+                                 "select unnest(sample_faces) from queue union all "
+                                 "select cover_face from people where cover_face is not null")}
+    check("a turned thumbnail's box is never drawn",
+          (q(db, "select share from faces where key = 'b2::0'")[0][0], "b2::0" in shown), (None, False))
+    check("a video face and a box-less face are never drawn",
+          bool(shown & {"b8:f1:0", "b8:f2:0", "b2::1"}), False)
+    check("an upright thumbnail of a turned photo keeps its box",
+          q(db, "select share is not null from faces where key = 'b1::0'")[0][0], True)
+    people = dict(q(db, "select name, photo_count from people"))
+    check("people named only in the library's own record are listed too",
+          sorted(people), ["Asha Secretname", "Dev Secretname", "Meera Secretname", "Ravi Secretname"])
+    check("the journal is kept whole; its cluster answers count",
+          (q(db, "select count(*) from journal")[0][0],
+           q(db, "select count(*) from answers where reason = 'the library journal'")[0][0]), (7, 6))
+
+    # the same export again changes nothing and costs nothing
+    r, g = go()
+    check("the same export is imported once", (g.seen, r.get("library_photos", 0)), ([], 0))
+
+    # later: the purged file turns up, the missing photo arrives, one leaves
+    drive.put("dh2", "m-h2", "Media/Communal/2020/secret-again.jpg")
+    drive.put("d4", "m-l4", L + "secret-l4.jpg")
+    del drive.files["d1"]
+    r, g = go()
+    check("a purged photo that turns up is held, never classified",
+          ("dh2" in g.seen, dict(q(db, "select drive_id, reason from held")).get("dh2")), (False, "removed"))
+    check("the missing library photo binds when it arrives",
+          q(db, "select drive_id from photos where hash = 'b4'")[0][0], "d4")
+    check("a library photo whose file left keeps what the library knew",
+          q(db, "select drive_id is null, description is not null, "
+                "(select count(*) from faces where hash = 'b1') from photos where hash = 'b1'"),
+          [(True, True, 2)])
+    drive.put("d1b", "m-l1", L + "secret-l1.jpg")
+    go()
+    check("and re-binds when it comes back",
+          q(db, "select drive_id from photos where hash = 'b1'")[0][0], "d1b")
+
+    # an export that is not what it says it is stops the run
+    bad = os.path.join(tmp, "broken.sqlite")
+    write_bundle(bad, broken=True)
+    db2 = fresh_db(NAME + "_lib2")
+    w = CE.Worker(db2, LibDrive(bad), LibGemini(), None, None, "root", "Media/Communal", workers=1)
+    try:
+        with contextlib.redirect_stdout(out):
+            w.run()
+        check("an export whose counts disagree stops the run", "ran", "stopped")
+    except RuntimeError:
+        check("an export whose counts disagree stops the run", "stopped", "stopped")
+    check("and imports nothing", q(db2, "select count(*) from photos")[0][0], 0)
+    db2.close()
+    db.close()
+    shutil.rmtree(tmp, ignore_errors=True)
 
 
 if __name__ == "__main__":

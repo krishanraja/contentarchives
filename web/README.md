@@ -19,6 +19,13 @@ queue, people, receipt                │
                     the index + the family's answers
 ```
 
+**The library, once.** Everything the library machine learned (descriptions, faces,
+the merge groups people decided, every answer in the journal) arrives once as
+`archives-library.sqlite` in Krish's Drive, shared with the service account only,
+and the worker imports it (`stages/13_app/LIBRARY-EXPORT.md`). From then on
+Supabase is the system of record. A photo is shown only when `photos.visible`:
+bound to a Drive file and not hidden.
+
 **Nothing depends on D: or any PC.** Ruling (Krish, 2026-10-04): the index is
 built from Drive in the cloud. When the library machine is connected it can
 optionally add what only it knows (`seed_index.py`, the bridge) and copy answers
