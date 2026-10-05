@@ -24,6 +24,8 @@ describe("parseQuery", () => {
   it("understands decades however they are written", () => {
     expect(parseQuery("1980s", PEOPLE, PLACES)).toMatchObject({ yearFrom: 1980, yearTo: 1989 });
     expect(parseQuery("the 80s", PEOPLE, PLACES)).toMatchObject({ yearFrom: 1980, yearTo: 1989 });
+    // the Find page's example is "<most photographed decade>s": it must read as a decade alone
+    expect(parseQuery("2010s", PEOPLE, PLACES)).toMatchObject({ yearFrom: 2010, yearTo: 2019, rest: "" });
     expect(parseQuery("'90s", PEOPLE, PLACES)).toMatchObject({ yearFrom: 1990, yearTo: 1999 });
     expect(parseQuery("00s", PEOPLE, PLACES)).toMatchObject({ yearFrom: 2000, yearTo: 2009 });
   });

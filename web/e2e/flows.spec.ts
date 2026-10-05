@@ -43,6 +43,10 @@ test("the code and a name work before the page's script has arrived", async ({ b
   await page.click("button:has-text('That')");
   await page.waitForURL((u) => u.pathname === "/");
   await expect(page.getByText("Cousin Tara", { exact: false })).toBeVisible();
+  await page.goto("/find");
+  await page.fill("#q", "Asha");
+  await page.click("button:has-text('Search')");
+  await expect(page.locator(".sentence")).toContainText("of Asha Raja");
   await ctx.close();
 });
 

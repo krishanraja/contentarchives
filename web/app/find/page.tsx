@@ -6,6 +6,12 @@ import Results from "./Results";
 
 export const dynamic = "force-dynamic";
 
+// the decade this library has the most photographs from, as a search to try
+function exampleYears(decades: { decade: number; n: number }[]) {
+  const top = [...decades].sort((a, b) => b.n - a.n)[0];
+  return top ? `${top.decade}s` : "";
+}
+
 export default async function Find({ searchParams }: { searchParams: Promise<{ q?: string }> }) {
   const q = ((await searchParams).q || "").trim();
   if (q) {
@@ -26,7 +32,7 @@ export default async function Find({ searchParams }: { searchParams: Promise<{ q
     <>
       <Bar title="Find photos" />
       <main className="page">
-        <SearchBox initial="" />
+        <SearchBox initial="" example={exampleYears(b.decades)} />
         {b.people.length > 0 && (
           <section className="stack">
             <h2>People</h2>

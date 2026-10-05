@@ -1,18 +1,26 @@
 "use client";
-import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Search } from "@/components/icons";
 
-export default function SearchBox({ initial }: { initial: string }) {
-  const [q, setQ] = useState(initial);
+// A real GET form (/find?q=...), so a search typed and tapped before the
+// page's script arrives still works; with the script, the same form moves
+// without a page load. The words are read from the form, never from React
+// state, so nothing typed is lost when the script arrives. The example year is
+// one this library actually has (a hard-coded 1998 found nothing here).
+export default function SearchBox({ initial, example = "" }: { initial: string; example?: string }) {
   const router = useRouter();
   return (
-    <form role="search" className="stack" onSubmit={(e) => { e.preventDefault(); if (q.trim()) router.push(`/find?q=${encodeURIComponent(q.trim())}`); }}>
+    <form role="search" className="stack" method="get" action="/find"
+      onSubmit={(e) => {
+        e.preventDefault();
+        const q = String(new FormData(e.currentTarget).get("q") || "").trim();
+        if (q) router.push(`/find?q=${encodeURIComponent(q)}`);
+      }}>
       <label className="sr" htmlFor="q">What are you looking for?</label>
-      <input id="q" className="field" type="search" value={q} onChange={(e) => setQ(e.target.value)}
+      <input id="q" name="q" className="field" type="search" defaultValue={initial} key={initial}
         placeholder="Who, where, or what…" enterKeyHint="search" autoComplete="off" />
       <button className="btn block sun"><Search /> Search</button>
-      {!initial && <p className="muted">Try <b>a name</b>, <b>a place</b>, <b>1998</b> or <b>a birthday party</b>. You can also tap the microphone on your keyboard and say it.</p>}
+      {!initial && <p className="muted">Try <b>a name</b>, <b>a place</b>{example ? <>, <b>{example}</b></> : null} or <b>a birthday party</b>. You can also tap the microphone on your keyboard and say it.</p>}
     </form>
   );
 }
