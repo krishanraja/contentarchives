@@ -46,6 +46,11 @@ nudity in this".
   (file, share-set hashes only); anything else is refused at the API AND at ingest
 - the seed reconciles; a Drive listing that looks broken removes nothing
 - nothing younger than the 10-minute undo window is pulled into the journal
+- the library's knowledge leaves this machine ONCE, through `export_library.py`,
+  read-only on D:/F: and on H:\My Drive\ContentLibrary, and the export file never
+  enters git: it carries family names and face embeddings and the repo is public
+- a held-out file is NAMED in the export, not merely counted, so the cloud can
+  keep it out; its reason is a category word and never a description
 
 ## Code
 | file | role |
@@ -53,6 +58,7 @@ nudity in this".
 | `stages/13_app/cloud_enrich.py` | THE writer of the index, from Drive alone: classify, hold, embed, place, faces, clusters, groups, queue, people, receipt |
 | `stages/13_app/share_set.py` | the one rule for what may leave the library machine |
 | `stages/13_app/seed_index.py` | the optional BRIDGE for when D: is connected: library knowledge up, with a watermark |
+| `stages/13_app/export_library.py` | the ONE-TIME carry: everything the library learned, into Drive as SQLite, to `LIBRARY-EXPORT.md` |
 | `stages/13_app/pull_answers.py` | optional, with the bridge: app answers into the journal, older than the undo window |
 | `stages/13_app/cloud.py` | Supabase REST and storage, keys from the environment only |
 | `stages/13_app/chain_app_sync.ps1` | nightly: pull, merge, rebuild, seed |
@@ -69,6 +75,7 @@ widths, synthetic family only).
 ## Tests
 - `tests/test_app_cloud.py` (needs a Postgres: `TEST_PG_DSN`)
 - `tests/test_app_share_set.py`
+- `tests/test_app_export.py`
 - `tests/test_app_sync.py`
 - `tests/test_game_ingest.py`
 - also `web/tests/*.test.ts` (vitest) and `web/e2e/*.spec.ts` (Playwright), which run under Node
@@ -77,7 +84,7 @@ widths, synthetic family only).
 | # | what this stage does about it | enforced by |
 |---|---|---|
 | 44 | every share rule is watched refusing, not only passing | `test:tests/test_app_share_set.py:nobody has seen reject is indistinguishable from no filter` |
-| 45 | embeddings and face vectors are joined by hash or (image, face_index), never by position | `code:stages/13_app/seed_index.py:never by position`, `test:tests/test_app_sync.py:joined by key, never by position` |
+| 45 | embeddings and face vectors are joined by hash or (image, face_index), never by position | `code:stages/13_app/seed_index.py:never by position`, `test:tests/test_app_sync.py:joined by key, never by position`, `test:tests/test_app_export.py:carries ITS OWN embedding` |
 | 52 | "I don't know" is recorded as that player's skip, so nobody is asked twice | `code:web/lib/data.ts:export async function skip` |
 | 57 | the cloud copy is reconciled on every run; a broken listing removes nothing | `code:stages/13_app/seed_index.py:RECONCILE, NOT APPEND`, `test:tests/test_app_cloud.py:an empty listing removed nothing` |
 | 72 | a new cluster id clears every id already handed out, even with the counter lost | `code:stages/13_app/cloud_enrich.py:A NEW ID MUST CLEAR EVERY ID ALREADY HANDED OUT`, `test:tests/test_app_cloud.py:the next id still clears every k-id` |

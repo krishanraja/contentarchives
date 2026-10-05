@@ -79,12 +79,20 @@ def path_ok(path: str) -> bool:
             and not any(m in n for m in PRIVATE_MARKS))
 
 
-def share_set(db: sqlite3.Connection, purged: set):
+def share_set(db: sqlite3.Connection, purged: set, reasons: dict = None):
     """(shared: {hash: {"paths": [...], "media": ...}}, held: Counter of reasons).
 
     `held` counts each hash once, under the FIRST rule it fails, so the total
     of shared + held is every hash the index knows - nothing disappears
     without a reason being printed.
+
+    `reasons` is an optional dict filled in place with hash -> the SAME reason
+    string this function counted, for a caller that must name the held-out
+    files rather than only count them (`export_library.py` writes them into
+    the export's `held` table, so the cloud never re-judges one). It is an
+    out-parameter and not a third return value on purpose: the pair above is
+    this function's contract and every existing caller unpacks exactly two.
+    Nothing here reads it, so no decision can depend on it.
     """
     paths = collections.defaultdict(list)
     media = {}
@@ -112,19 +120,25 @@ def share_set(db: sqlite3.Connection, purged: set):
     for h, ps in paths.items():
         r = res.get(h, {})
         if not all(path_ok(p) for p in ps):
-            held["a copy lives outside Media\\Communal"] += 1
+            why = "a copy lives outside Media\\Communal"
         elif h.lower() in purged:
-            held["purged"] += 1
+            why = "purged"
         elif r.get("audience") != "family":
-            held["audience is not family"] += 1
+            why = "audience is not family"
         elif r.get("share") == "no":
-            held["Krish said do not share"] += 1
+            why = "Krish said do not share"
         elif nudity_hold(r.get("sensitivity", ""), sens.get(h, {}),
                          r.get("share") == "yes"):
-            held[nudity_hold(r.get("sensitivity", ""), sens.get(h, {}),
-                             r.get("share") == "yes")] += 1
+            why = nudity_hold(r.get("sensitivity", ""), sens.get(h, {}),
+                              r.get("share") == "yes")
         elif not (media.get(h) == "video" or r.get("kind") == "photo"):
-            held["not a photograph (" + (r.get("kind") or "no kind") + ")"] += 1
+            why = "not a photograph (" + (r.get("kind") or "no kind") + ")"
+        else:
+            why = ""
+        if why:
+            held[why] += 1
+            if reasons is not None:
+                reasons[h] = why
         else:
             shared[h] = {"paths": sorted(ps), "media": media.get(h) or "photo"}
     return shared, held

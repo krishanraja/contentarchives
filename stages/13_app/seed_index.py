@@ -108,12 +108,29 @@ def rel_path(path: str) -> str:
     return p[i + 1:] if i >= 0 else p.split("/")[-1]
 
 
-def mirror_md5(path: str) -> dict:
+# What stage 11 WRITES when a file reached H: - mirror_to_h.py,
+# apply_mirror_deletions.py, verify_drive_by_mount.py, verify_drive_md5.py and
+# patch_mirror_flatten.py all read exactly this pair. A sixth vocabulary lived
+# here: ("ok", "copied", "verified", "skipped-identical"), none of which the
+# writer has ever emitted, so this function returned 117 md5s out of 94,523
+# rows and every seeded photo got md5 = NULL - the cloud's primary binding key,
+# absent, with every count still agreeing. One definition of the word, taken
+# from the writer, and the rows it refuses are counted out loud.
+MIRROR_OK = ("written", "already-present")
+
+
+def mirror_md5(path: str, log=None) -> dict:
     """blake2b -> md5 from the mirror journal: how a seeded row finds its Drive file."""
-    out = {}
+    out, refused = {}, 0
     for r in read_csv(path):
-        if r.get("blake2b") and r.get("md5") and (r.get("outcome") or "ok").lower() in ("ok", "copied", "verified", "skipped-identical", ""):
+        if not (r.get("blake2b") and r.get("md5")):
+            refused += 1
+        elif (r.get("outcome") or "").strip().lower() in MIRROR_OK:
             out[r["blake2b"].lower()] = r["md5"].lower()
+        else:
+            refused += 1                     # copy failed, DEFERRED, no hash
+    if log:
+        log("mirror journal: {:,} md5s, {:,} rows refused".format(len(out), refused))
     return out
 
 
