@@ -6,10 +6,10 @@ export default async function Gate({ searchParams }: { searchParams: Promise<{ e
   const ua = (await headers()).get("user-agent") || "";
   const said = (await searchParams).e || "";
   return (
-    <main className="page middle">
+    <main className="page middle gate">
       <div className="center stack" style={{ gap: 6, flex: "none" }}>
         <div className="art" aria-hidden="true" style={{ fontSize: 0 }}>
-          <svg viewBox="0 0 120 90" width="150" height="112" style={{ height: "clamp(64px, 14dvh, 112px)", width: "auto" }}>
+          <svg viewBox="0 0 120 90" width="150" height="112" style={{ height: "clamp(64px, 14cqh, 112px)", width: "auto" }}>
             <rect x="8" y="14" width="74" height="60" rx="10" fill="#ff9ccf" stroke="#1e1433" strokeWidth="4" transform="rotate(-8 45 44)" />
             <rect x="36" y="10" width="74" height="60" rx="10" fill="#ffc93c" stroke="#1e1433" strokeWidth="4" transform="rotate(7 73 40)" />
             <circle cx="66" cy="34" r="8" fill="#fff" stroke="#1e1433" strokeWidth="4" />

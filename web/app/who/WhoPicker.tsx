@@ -20,7 +20,7 @@ export default function WhoPicker({ names }: { names: string[] }) {
     else setBusy(false);
   }
   const nameForm = (
-    <form className="card" method="post" action="/api/who" onSubmit={pick} style={{ flex: "none" }}>
+    <form className="card nameform" method="post" action="/api/who" onSubmit={pick} style={{ flex: "none" }}>
       <label className="big" htmlFor="me">Your first name</label>
       <input id="me" name="name" className="field" autoComplete="given-name" autoCapitalize="words" enterKeyHint="done" placeholder="Your first name" minLength={2} required />
       <button className="btn block mint">That's me</button>

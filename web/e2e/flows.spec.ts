@@ -295,7 +295,7 @@ test("two people who disagree are both kept, and the next person settles it", as
 
   const meera = await person(browser, "Auntie Meera");
   await meera.goto("/help");
-  await expect(meera.getByText("People have said different names")).toBeVisible();
+  await expect(meera.getByText("People said different names")).toBeVisible();
   await expect(meera.getByText(/^Is this /)).toHaveCount(0);            // the question is which, not a yes/no
   await floor(meera, "contested");
   await meera.click("[aria-label='Names people have given'] button:has-text('Kamala Raja')");

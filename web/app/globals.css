@@ -8,7 +8,15 @@
    like the pages of a book (components/Fit.tsx), and spacing tightens on a
    short screen. A phone on its side puts the photo beside the question.
    Nothing is clipped to make it fit: if something ever did not fit, the page
-   would scroll rather than hide a button. */
+   would scroll rather than hide a button.
+
+   EVERY SIZE RULE ASKS THE SCREEN, NEVER THE WINDOW (Krish's phone,
+   2026-10-06). A phone's browser tells "@media (max-height)" the height it
+   would have with the address bar hidden (806px on his phone) while the page
+   really gets less (748px), so a rule that should have fired never did and
+   the home screen's words spilled over each other. .screen is the space the
+   page really has, and every rule below is "@container screen", measured on
+   it. No height media queries; tests/style.test.ts keeps it that way. */
 
 :root {
   --cream: #fff6e9;
@@ -37,18 +45,18 @@
   color-scheme: light;
 }
 /* a shorter screen: the same screen, packed closer - never smaller than the floor */
-@media (max-height: 800px) {
-  :root { --tap: 60px; --gap: 14px; --pad: 12px; --field: 64px; --h1: 34px; --h2: 26px; }
+@container screen (max-height: 800px) {
+  .bar, .page { --tap: 60px; --gap: 14px; --pad: 12px; --field: 64px; --h1: 34px; --h2: 26px; }
 }
-@media (max-height: 680px) {
-  :root { --tap: 56px; --gap: 10px; --pad: 10px; --field: 58px; --h1: 30px; --h2: 24px; --gutter: 14px; }
+@container screen (max-height: 680px) {
+  .bar, .page { --tap: 56px; --gap: 10px; --pad: 10px; --field: 58px; --h1: 30px; --h2: 24px; --gutter: 14px; }
 }
-@media (max-height: 460px) {
-  :root { --gap: 8px; --pad: 8px; --field: 56px; --h1: 26px; --h2: 22px; }
+@container screen (max-height: 460px) {
+  .bar, .page { --gap: 8px; --pad: 8px; --field: 56px; --h1: 26px; --h2: 22px; }
   .sub { display: none; }
 }
 /* a phone on its side: the search and the list switch share the top row */
-@media (orientation: landscape) and (max-height: 520px) {
+@container screen (orientation: landscape) and (max-height: 520px) {
   .page.find { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); max-width: 980px; }
   .page.find > .fit { grid-column: 1 / -1; min-height: 0; }
   .page.find > .sentence { align-self: center; }
@@ -68,7 +76,7 @@ body {
   overflow-x: hidden;
 }
 /* the whole app is one screen tall (layout.tsx wraps every page in it) */
-.screen { height: 100vh; height: var(--app-h, 100dvh); display: flex; flex-direction: column; }
+.screen { height: 100vh; height: var(--app-h, 100dvh); display: flex; flex-direction: column; container: screen / size; }
 /* playful dotted paper, very faint so photos still lead */
 body::before {
   content: ""; position: fixed; inset: 0; z-index: -1; pointer-events: none;
@@ -139,7 +147,7 @@ p { margin: 0; }
 .tile {
   display: grid; grid-template-columns: auto 1fr; align-items: center; gap: 16px;
   padding: 12px 20px; border: var(--line); border-radius: 28px; box-shadow: var(--pop);
-  color: var(--ink); text-decoration: none; min-height: 0; flex: 0 1 150px;
+  color: var(--ink); text-decoration: none; flex: none;
   transition: transform .08s ease, box-shadow .08s ease;
 }
 .tile:active { transform: translate(3px, 3px); box-shadow: var(--pop-press); }
@@ -150,12 +158,20 @@ p { margin: 0; }
 .tile .icon svg { width: 40px; height: 40px; }
 .tile h2 { font-size: calc(var(--h2) + 2px); }
 .tile p { font-size: 20px; margin-top: 4px; color: var(--ink); }
-.tiles { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; gap: var(--gap); justify-content: center; }
-/* a short screen keeps each tile's name and count, and leaves the sentence */
-@media (max-height: 800px) { .tile p { display: none; } }
-@media (max-height: 680px) { .tile .icon { width: 56px; height: 56px; } .tile .icon svg { width: 30px; height: 30px; } }
+/* A tile is never smaller than its words. The tiles give up detail, a step at
+   a time, until the screen fits (components/Squeeze.tsx measures it): 1 the
+   sentence, 2 a smaller round icon, 3 no icon. */
+.tiles { flex: 1 1 auto; display: flex; flex-direction: column; gap: var(--gap); justify-content: center; }
+.tiles[data-fit]:not([data-fit="0"]) .tile p { display: none; }
+.tiles[data-fit="2"] .tile, .tiles[data-fit="3"] .tile { padding: 8px 16px; gap: 12px; }
+.tiles[data-fit="2"] .tile .icon { width: 52px; height: 52px; }
+.tiles[data-fit="2"] .tile .icon svg { width: 28px; height: 28px; }
+.tiles[data-fit="3"] .tile { grid-template-columns: 1fr; }
+.tiles[data-fit="3"] .tile .icon { display: none; }
+/* before the script has measured, a short screen starts without the sentences */
+@container screen (max-height: 860px) { .tiles:not([data-fit]) .tile p { display: none; } }
 .count {
-  display: inline-block; margin-top: 6px; padding: 2px 12px; border-radius: 999px;
+  display: inline-block; margin-top: 6px; padding: 3px 12px; border-radius: 14px; line-height: 1.25;
   background: var(--ink); color: var(--paper); font-weight: 700; font-size: 18px;
 }
 
@@ -183,7 +199,7 @@ label.big { font-family: var(--font-display), system-ui; font-weight: 600; font-
 
 /* ---------- photo grid ---------- */
 .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; align-content: start; }
-@media (min-width: 480px) { .grid { grid-template-columns: repeat(3, 1fr); } }
+@container screen (min-width: 480px) { .grid { grid-template-columns: repeat(3, 1fr); } }
 .grid a, .shot {
   display: block; position: relative; aspect-ratio: 1; border-radius: 18px; overflow: hidden;
   border: var(--line); background: var(--grape); box-shadow: 3px 3px 0 var(--ink);
@@ -238,9 +254,9 @@ label.big { font-family: var(--font-display), system-ui; font-weight: 600; font-
 /* "the same person?": a row of faces, as big as the screen can spare */
 .samples { flex: none; display: flex; align-items: center; gap: 8px; }
 .samples p { flex: 0 1 auto; font-size: 18px; line-height: 1.15; }
-.samples img { flex: none; width: clamp(40px, 7.5dvh, 72px); aspect-ratio: 1; object-fit: cover; border-radius: 50%; border: var(--line); background: var(--grape); }
+.samples img { flex: none; width: clamp(40px, 7.5cqh, 72px); aspect-ratio: 1; object-fit: cover; border-radius: 50%; border: var(--line); background: var(--grape); }
 .strip { flex: none; display: flex; gap: 8px; }
-.strip img { flex: 1 1 0; min-width: 0; height: clamp(48px, 9dvh, 96px); object-fit: cover; border-radius: 14px; border: var(--line); background: var(--grape); }
+.strip img { flex: 1 1 0; min-width: 0; height: clamp(48px, 9cqh, 96px); object-fit: cover; border-radius: 14px; border: var(--line); background: var(--grape); }
 
 /* ---------- a screen with a photo: the photo, then the question ---------- */
 /* Upright, the question's parts sit directly in the column (.panel and a
@@ -249,20 +265,31 @@ label.big { font-family: var(--font-display), system-ui; font-weight: 600; font-
    not need goes back to the photo. */
 .game { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; gap: var(--gap); }
 .game > *, .panel > *, .contents > * { flex: none; }
-.game > .slot { flex: 1 1 0; }
+/* the photo is never squeezed below a size a face can be recognised at: a
+   list on the same screen turns its pages sooner instead */
+.game > .slot { flex: 1 1 0; min-height: min(120px, 28cqh); }
 .game .fit { flex: 1 1 0; }
 /* a short phone, upright, choosing a name: the photo and the names come first;
    the other photos of the face and "not the same person" stay on the yes/no
    question and on taller screens */
-@media (max-height: 680px) and (orientation: portrait) {
+@container screen (max-height: 680px) and (orientation: portrait) {
   .game.choose > .samples, .game.choose .notsame { display: none; }
+}
+/* the smallest phones (an iPhone SE in Safari is 320x460): the photo and the
+   question only; the box's own label is read out, not shown, when typing */
+@container screen (max-height: 520px) and (orientation: portrait) {
+  .game > .samples, .game > .notsame { display: none; }
+  .game h2 { font-size: 22px; }
+  .game .chip img { width: 36px; height: 36px; }
+  .game .row .btn { font-size: 20px; }
+  .game label.big { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 }
 .panel, .contents { display: contents; }
 .game > .notsame { min-height: 56px; }
 .game.middle { justify-content: center; }
 .game.middle > .undo { margin-top: auto; }
 /* a phone on its side: the photo on the left, the question on the right */
-@media (orientation: landscape) and (max-height: 520px) {
+@container screen (orientation: landscape) and (max-height: 520px) {
   /* the photo is held by the screen's height, so the question gets more of the width */
   .game:has(> .slot), .game:has(> .about) { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 3fr); grid-template-rows: minmax(0, 1fr) auto auto; }
   .game > .samples p { display: none; }
@@ -284,6 +311,20 @@ label.big { font-family: var(--font-display), system-ui; font-weight: 600; font-
   .game.middle > .undo { margin-top: 0; }
   .game .fit { flex: 1 1 0; }
   .page:has(> .game > .slot) { max-width: 980px; }
+  .game label.big { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+  .yay { padding: 8px 14px; }
+  .undo { padding: 4px 4px 4px 14px; }
+  /* home: the three tiles side by side */
+  .tiles { flex-direction: row; align-items: stretch; }
+  .tiles .tile { flex: 1 1 0; min-width: 0; grid-template-columns: 1fr; align-content: center; padding: 10px 14px; }
+  .tiles .tile .icon { display: none; }
+  /* the gate: who we are on the left, the code on the right */
+  .page.gate { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); column-gap: 24px; align-content: center; max-width: 980px; }
+  .page.gate > .card { grid-column: 2; grid-row: 1 / span 2; align-self: center; }
+  .page.gate > :not(.card) { grid-column: 1; }
+  /* your name: the box and its button side by side */
+  .card.nameform { display: grid; grid-template-columns: minmax(0, 1fr) auto; }
+  .card.nameform label { grid-column: 1 / -1; margin-bottom: 0; }
 }
 
 /* ---------- undo bar and celebrations ---------- */
@@ -299,7 +340,7 @@ label.big { font-family: var(--font-display), system-ui; font-weight: 600; font-
   background: var(--mint); border: var(--line); border-radius: 26px; padding: var(--pad) 20px;
   text-align: center; box-shadow: var(--pop); flex: none;
 }
-.yay .big { font-family: var(--font-display), system-ui; font-weight: 600; font-size: calc(var(--h1) + 14px); line-height: 1; }
+.yay .big { font-family: var(--font-display), system-ui; font-weight: 600; font-size: calc(var(--h1) + 14px); line-height: 1.2; }
 .confetti { position: fixed; inset: 0; pointer-events: none; z-index: 60; overflow: hidden; }
 .confetti i { position: absolute; top: -20px; width: 12px; height: 18px; border: 2px solid var(--ink); border-radius: 3px; }
 @media (prefers-reduced-motion: no-preference) {
@@ -327,7 +368,7 @@ summary.btn::-webkit-details-marker { display: none; }
 .fit-box > * { position: relative; padding: 0 5px 5px 0; }   /* room for the chips' shadow */
 .fit-pager { flex: none; display: flex; gap: 10px; }
 /* "More ›" and "‹ Back" turn a list's pages from inside it */
-.chip.turn { background: var(--sun); }
+.chip.turn { background: var(--sun); padding-left: 14px; padding-right: 14px; }
 .chip.turn, .stack > .btn[data-turn] { flex: none; }
 .fit-pager .btn { flex: 1; }
 
@@ -338,7 +379,7 @@ summary.btn::-webkit-details-marker { display: none; }
 .tabs { display: flex; gap: 8px; flex: none; }
 .tabs .btn { flex: 1 1 0; min-width: 0; padding: 8px 4px; font-size: 20px; }
 .tabs .btn[aria-current="page"] { background: var(--sun); }
-@media (max-height: 680px) { .hint { display: none; } }
+@container screen (max-height: 680px) { .hint { display: none; } }
 
 /* ---------- a photo: the picture, a line about it, and what you can do ---------- */
 .caption { flex: none; font-size: 20px; line-height: 1.3; }
@@ -351,7 +392,7 @@ summary.btn::-webkit-details-marker { display: none; }
 .about .what { display: -webkit-box; -webkit-box-orient: vertical; }
 
 /* the gate's picture is the first thing a short screen gives up */
-@media (max-height: 460px) { .art { display: none; } }
+@container screen (max-height: 460px) { .art { display: none; } }
 
 /* a photo grid whose rows were sized to fill the room (Fit cells): each
    photo takes its row's height, cropped to it */
@@ -359,13 +400,13 @@ summary.btn::-webkit-details-marker { display: none; }
 
 /* two buttons side by side keep their words on as few lines as they can */
 .row .btn { padding-left: 10px; padding-right: 10px; }
-@media (max-width: 420px) { .row .btn svg { display: none; } }
+@container screen (max-width: 420px) { .row .btn svg { display: none; } }
 
 /* a phone on its side: the top bar lines up with the wider page under it */
-@media (orientation: landscape) and (max-height: 520px) {
+@container screen (orientation: landscape) and (max-height: 520px) {
   .screen:has(.page.find) .bar-inner, .screen:has(.game > .slot) .bar-inner { max-width: 980px; }
 }
 /* the shortest screens: a slimmer top bar (after .bar, so it wins) */
-@media (max-height: 460px) {
+@container screen (max-height: 460px) {
   .bar { padding-top: calc(2px + env(safe-area-inset-top)); padding-bottom: 2px; }
 }

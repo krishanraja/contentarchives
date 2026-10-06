@@ -5,12 +5,19 @@ import { db, signIn } from "./helpers";
 // NOTHING SCROLLS, ON ANY DEVICE (Krish, 2026-10-05: "this needs to be
 // guaranteed no scroll on all devices"). Every screen, in every state a
 // person can reach, at every size below: the page does not move, every
-// button is wholly on screen and is the thing a finger lands on, and a photo
-// stays big enough to recognise someone in.
+// button is wholly on screen and is the thing a finger lands on, no words
+// spill out of their box or sit on top of another box, and a photo stays big
+// enough to recognise someone in.
+//
+// The sizes are what a page really GETS inside a phone's browser - the screen
+// less the address bar, the toolbar and the system bar - not the screen
+// itself. Krish's phone, 2026-10-06: a 412x915 screen gives Chrome's page
+// 412x748, and a layout tested only at 412x915 broke on it.
 const SIZES: [number, number][] = [
-  [320, 568], [360, 640], [375, 667], [390, 844], [412, 915], [430, 932],   // phones, upright
-  [568, 320], [667, 375], [844, 390], [932, 430],                           // phones on their side
-  [768, 1024], [1024, 768], [1280, 800], [1920, 1080],                      // tablets and computers
+  [320, 460], [360, 560], [375, 553], [390, 664], [393, 727], [412, 748], [430, 740],  // in a phone's browser, upright
+  [412, 806], [375, 667], [390, 844], [430, 932],                                      // address bar hidden; full screen
+  [568, 280], [667, 325], [844, 340], [915, 356],                                      // in a phone's browser, on its side
+  [768, 954], [1024, 698], [1280, 720], [1920, 960],                                   // tablets and computers, in a browser
 ];
 
 test.describe.configure({ mode: "serial" });
@@ -52,6 +59,27 @@ async function fits(page: Page, where: string) {
         }
         const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
         if (!hit || !(hit === el || el.contains(hit))) out.push(`covered: "${name}"`);
+      }
+      // words that spill out of their box, onto whatever is next to it
+      const seen = (el: Element) => { const r = el.getBoundingClientRect(); return r.width > 1 && r.height > 1 && el.checkVisibility({ checkOpacity: true, checkVisibilityCSS: true }) && !el.closest("[aria-hidden=true]"); };
+      const label = (el: Element) => ((el as HTMLElement).innerText || el.className || el.tagName).toString().replace(/\s+/g, " ").trim().slice(0, 28);
+      for (const el of document.querySelectorAll<HTMLElement>(".page *, .bar *")) {
+        if (!seen(el) || getComputedStyle(el).display === "inline") continue;
+        const cs = getComputedStyle(el);
+        if (cs.overflowY === "visible" && el.scrollHeight > el.clientHeight + 2) out.push(`spills out of its box: "${label(el)}"`);
+        if (cs.overflowX === "visible" && el.scrollWidth > el.clientWidth + 2) out.push(`spills sideways: "${label(el)}"`);
+      }
+      // boxes laid out side by side or one under another that sit on top of each other
+      const flow = (p: Element): Element[] => [...p.children].flatMap((k) =>
+        getComputedStyle(k).display === "contents" ? flow(k) : [k]);
+      for (const p of [document.querySelector(".screen")!, ...document.querySelectorAll(".screen *")]) {
+        if (!/flex|grid/.test(getComputedStyle(p).display)) continue;
+        const kids = flow(p).filter((k) => seen(k) && !/absolute|fixed/.test(getComputedStyle(k).position));
+        for (let i = 0; i < kids.length; i++) for (let j = i + 1; j < kids.length; j++) {
+          const a = kids[i].getBoundingClientRect(), b = kids[j].getBoundingClientRect();
+          const x = Math.min(a.right, b.right) - Math.max(a.left, b.left), y = Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top);
+          if (x > 2 && y > 2) out.push(`on top of each other: "${label(kids[i])}" / "${label(kids[j])}"`);
+        }
       }
       const shot = document.querySelector(".slot");
       if (shot) {
@@ -147,7 +175,7 @@ test("every screen, in every state, fits every screen size without scrolling", a
   for (const [who, name] of [["grandpa", "Asha Raja"], ["auntie meera", "Priya Kapoor"]])
     await db`insert into answers (id, who, scope, target, field, value) values (gen_random_uuid(), ${who}, 'cluster', 'c8', 'person', ${name})`;
   await page.goto("/help");
-  await expect(page.getByText("People have said different names")).toBeVisible();
+  await expect(page.getByText("People said different names")).toBeVisible();
   await fits(page, "who is this, contested");
   await page.click("button:has-text(\"I don't know\")");
   await expect(page.getByText("That's every face for now")).toBeVisible();

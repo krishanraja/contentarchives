@@ -110,7 +110,7 @@ export default function NameGame() {
     return (
       <div className="game middle">
         {err ? <p className="notice error">{err}</p>
-          : skipped > 0 ? <div className="yay"><h2>That's every face for now</h2><p>The ones you didn't know come round again. Another photo of them might jog your memory.</p></div>
+          : skipped > 0 ? <div className="yay"><h2>That's every face for now</h2><p>The ones you didn't know will come round again.</p></div>
           : <div className="yay"><h2>All done!</h2><p>There are no more faces to name right now. Thank you so much.</p></div>}
         {/* the faces they did not know, oldest "I don't know" first */}
         {!err && skipped > 0 && <button className="btn block pink" onClick={() => { setSeen([]); setSkipped(0); void load([]); }}>Look at those again</button>}
@@ -140,7 +140,7 @@ export default function NameGame() {
         {mode === "ask" && q.ask && (
           <>
             <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-              <img src={faceUrl(q.ask.face)} alt="" style={{ width: "clamp(52px, 8dvh, 76px)", aspectRatio: "1", borderRadius: "50%", border: "3px solid var(--ink)", flex: "none" }} />
+              <img src={faceUrl(q.ask.face)} alt="" style={{ width: "clamp(52px, 8cqh, 76px)", aspectRatio: "1", borderRadius: "50%", border: "3px solid var(--ink)", flex: "none" }} />
               <h2>Is this {q.ask.name}?</h2>
             </div>
             <div className="row">
@@ -154,7 +154,7 @@ export default function NameGame() {
         {mode === "choose" && (
           <>
             {q.contest.length > 0
-              ? <h2>People have said different names. Which is right?</h2>
+              ? <h2>People said different names. Which is right?</h2>
               : <h2 className="said-above">Who is this?</h2>}
             {(q.contest.length > 0 || others.length > 0) && (
               <Fit label={q.contest.length ? "Names people have given" : "Names it might be"} more="More names">
@@ -206,8 +206,10 @@ export default function NameGame() {
             <Fit label="Names we already know" more="More names">
               {meant.map((n) => <button key={n} className="chip" onClick={() => answer("person", n)}>{n}</button>)}
             </Fit>
-            <button className="btn block" onClick={() => answer("person", typedNow)}>No, save “{typedNow}”</button>
-            <button className="btn block quiet" onClick={() => setMode("type")}>Change what I typed</button>
+            <div className="row">
+              <button className="btn" onClick={() => setMode("type")}>Change what I typed</button>
+              <button className="btn" onClick={() => answer("person", typedNow)}>No, save “{typedNow}”</button>
+            </div>
           </>
         )}
       </div>

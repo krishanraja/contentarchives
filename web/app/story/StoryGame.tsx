@@ -160,8 +160,10 @@ export default function StoryGame({ only }: { only: string | null }) {
             <Fit label="Places we already know" more="More places">
               {meant.map((p) => <button key={p} className="chip" onClick={() => pickPlace(p)}>{p}</button>)}
             </Fit>
-            <button className="btn block" onClick={() => pickPlace(typedNow)}>No, save “{typedNow}”</button>
-            <button className="btn block quiet" onClick={() => setStep("place")}>Change what I typed</button>
+            <div className="row">
+              <button className="btn" onClick={() => setStep("place")}>Change what I typed</button>
+              <button className="btn" onClick={() => pickPlace(typedNow)}>No, save “{typedNow}”</button>
+            </div>
           </>
         )}
 
@@ -200,7 +202,7 @@ export default function StoryGame({ only }: { only: string | null }) {
         {step === "thanks" && (
           <>
             <div className="yay">
-              {labelled > 0 ? <h2><span className="big" style={{ fontSize: "1.4em" }}>{labelled}</span> {labelled === 1 ? "photo" : "photos"} labelled. Thank you!</h2> : <h2>No problem!</h2>}
+              {labelled > 0 ? <h2>{labelled.toLocaleString("en-GB")} {labelled === 1 ? "photo" : "photos"} labelled. Thank you!</h2> : <h2>No problem!</h2>}
             </div>
             <div className="row">
               <Link className="btn" href="/">I'm done</Link>

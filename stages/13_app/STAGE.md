@@ -59,10 +59,18 @@ nudity in this".
   one window tall, a photo takes the room its question leaves it, a list longer
   than its room turns like pages (`web/components/Fit.tsx`), and a phone on its
   side puts the photo beside the question. `web/e2e/noscroll.spec.ts` walks every
-  screen in every state at 14 sizes (320x568 to 1920x1080, upright and sideways):
-  nothing scrolls, every button is wholly on screen and is what a finger lands
-  on, and a photo stays big enough to recognise someone. Nothing is clipped to
-  pass: if something ever did not fit, the page would scroll, never hide a button
+  screen in every state at 19 sizes a page really gets INSIDE a browser (the
+  screen less its address bar and toolbars: 320x460 to 1920x960, upright and
+  sideways, Krish's own phone at 412x748): nothing scrolls, every button is
+  wholly on screen and is what a finger lands on, no words spill out of their box
+  or sit on another box, and a photo stays big enough to recognise someone.
+  Nothing is clipped to pass, and no box shrinks below its own words: if
+  something ever did not fit, the page would scroll, never lay words over words
+- every size rule asks the space the page really has (`@container screen`), never
+  the window (Krish, 2026-10-06): a phone's browser answers `@media (max-height)`
+  as if its address bar were hidden, so a rule written that way did not fire on
+  his phone and the home screen's words spilled over each other.
+  `web/tests/style.test.ts` fails on any window-sized rule
 - the app may write only person / unidentifiable (cluster) and place / approx_year
   (file, share-set hashes only); anything else is refused at the API AND at ingest
 - the seed reconciles; a Drive listing that looks broken removes nothing
