@@ -193,6 +193,14 @@ def call(paths, key, prompt=PROMPT, max_out=800, timeout=120):
                 "mime_type": "image/jpeg",
                 "data": base64.b64encode(f.read()).decode()}})
     parts.append({"text": prompt})
+    return generate(parts, key, max_out, timeout)
+
+
+def generate(parts, key, max_out=800, timeout=120):
+    """One request with any parts - images inline, or a whole video uploaded
+    with the File API (stages/13_app/cloud_enrich.py Gemini.video) - read with
+    the same checks as every other pass: a filter that answers with nothing
+    is raised as BLOCKED, never returned as an empty success."""
     body = {"contents": [{"parts": parts}],
             "generationConfig": {"maxOutputTokens": max_out},
             "safetySettings": [{"category": c, "threshold": "BLOCK_NONE"}

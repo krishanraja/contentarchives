@@ -75,6 +75,17 @@ nudity in this".
   repository, its commits or its logs; migration 0008 holds the mechanism, and the
   worker applies it every run before anything is rebuilt. It only ever un-hides
   what it hid itself (`hidden_by = 'rule:private'`)
+- a video plays only after the WHOLE of it has been judged (Krish, 2026-10-06): its
+  still was all that had been checked, and playing shows every frame. The worker
+  (`videos()`, `--videos` per run, 0 unless asked: it is a spend) downloads it, has
+  the library's sensitivity pass watch the picture (no sound) a frame a second in
+  parts that cover every second, and the most revealing moment decides by the
+  photograph's own rule. A part the model will not look at holds it; an unreadable
+  answer is no verdict and is tried again, three times. A video that fails is hidden
+  everywhere, still and all (`hidden_by = 'rule:video-check'`), and only Krish brings
+  it back. The `/video` route streams a video only while `video_checks` says `ok`,
+  in pieces of at most 3.5 MB; a format no phone plays keeps its still and costs
+  nothing. Migration 0009 holds the states
 - every size rule asks the space the page really has (`@container screen`), never
   the window (Krish, 2026-10-06): a phone's browser answers `@media (max-height)`
   as if its address bar were hidden, so a rule written that way did not fire on

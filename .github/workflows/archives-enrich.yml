@@ -50,6 +50,10 @@ on:
         description: "Most video faces given a judged frame of their own"
         required: false
         default: "1500"
+      videos:
+        description: "Most videos watched whole so they can play (a Gemini spend)"
+        required: false
+        default: "0"
 
 permissions:
   contents: read
@@ -82,6 +86,8 @@ jobs:
           cache: pip
           cache-dependency-path: stages/13_app/requirements-cloud.txt
       - run: pip install -r stages/13_app/requirements-cloud.txt
+      - name: ffmpeg (the video checks probe and remux real clips)
+        run: command -v ffmpeg || (sudo apt-get update -q && sudo apt-get install -y -q --no-install-recommends ffmpeg)
       - name: the worker's tests
         env:
           TEST_PG_DSN: postgresql://postgres:pw@127.0.0.1:54329/postgres
@@ -140,6 +146,7 @@ jobs:
           BUDGET: ${{ inputs.budget || '5000' }}
           WORKERS: ${{ inputs.workers || '16' }}
           FRAMES_PER_RUN: ${{ inputs.frames || '1500' }}
+          VIDEOS_PER_RUN: ${{ inputs.videos || vars.ARCHIVES_VIDEOS_PER_RUN || '0' }}
           SPEND_CAP_USD: "60"
           MAX_MINUTES: "320"
         run: python stages/13_app/cloud_enrich.py

@@ -273,6 +273,62 @@ test("Where and when: a place for the whole day, then roughly what year", async 
   }
 });
 
+test("a video judged whole plays, streamed in pieces; any other shows its still and says why", async ({ page, request }) => {
+  await signIn(page);
+  const ok = "0".repeat(63) + "8";
+  const piece = 3.5 * 1024 * 1024;
+  await page.goto(`/photo/${ok}`);
+  const v = page.locator(".frame video");
+  await expect(v).toBeVisible();
+  await expect(page.locator(".caption")).toContainText("A video ·");
+  await floor(page, "video");
+  // the phone's own player reads it through the route, and it plays
+  await expect.poll(() => v.evaluate((el: HTMLVideoElement) => el.readyState)).toBeGreaterThanOrEqual(1);
+  expect(await v.evaluate((el: HTMLVideoElement) => Math.round(el.duration))).toBe(8);
+  expect(await v.evaluate((el: HTMLVideoElement) => el.autoplay || !el.paused)).toBe(false);   // nothing plays by itself
+  await v.evaluate((el: HTMLVideoElement) => { el.muted = true; return el.play(); });
+  await expect.poll(() => v.evaluate((el: HTMLVideoElement) => el.currentTime)).toBeGreaterThan(1);
+  // never more than one piece at a time, each saying where it sits in the whole
+  const first = await page.request.get(`/video/${ok}`, { headers: { range: "bytes=0-" } });
+  expect(first.status()).toBe(206);
+  const total = Number(first.headers()["content-range"].split("/")[1]);
+  expect(total).toBeGreaterThan(piece);
+  expect(first.headers()["content-range"]).toBe(`bytes 0-${piece - 1}/${total}`);
+  expect((await first.body()).length).toBe(piece);
+  const last = await page.request.get(`/video/${ok}`, { headers: { range: `bytes=${total - 100}-` } });
+  expect([last.status(), (await last.body()).length]).toEqual([206, 100]);
+  expect((await page.request.get(`/video/${ok}`, { headers: { range: `bytes=${total}-` } })).status()).toBe(416);
+  // not judged yet, and a format no phone plays: the still, the reason, and nothing streamed
+  for (const [h, says] of [["0".repeat(62) + "15", "isn't ready to play yet"], ["0".repeat(62) + "22", "can't play on this phone"]]) {
+    await page.goto(`/photo/${h}`);
+    await expect(page.locator(".frame img")).toBeVisible();
+    await expect(page.locator(".frame video")).toHaveCount(0);
+    await expect(page.locator(".caption")).toContainText("A still from a video");
+    await page.click("button:has-text('About this video')");
+    await expect(page.locator(".about-text")).toContainText(says);
+    expect((await page.request.get(`/video/${h}`, { headers: { range: "bytes=0-" } })).status()).toBe(404);
+  }
+  // signed out: nothing; hidden: nothing, even judged clear
+  expect((await request.get(`/video/${ok}`, { headers: { range: "bytes=0-" } })).status()).toBe(401);
+  await db`update photos set hidden = true, hidden_by = 'test' where hash = ${ok}`;
+  try {
+    expect((await page.request.get(`/video/${ok}`, { headers: { range: "bytes=0-" } })).status()).toBe(404);
+  } finally {
+    await db`update photos set hidden = false, hidden_by = null where hash = ${ok}`;
+  }
+});
+
+test("a video the phone cannot play after all puts its still back", async ({ page }) => {
+  await signIn(page);
+  await page.route("**/video/**", (r) => r.fulfill({ status: 206, contentType: "video/mp4",
+    headers: { "content-range": "bytes 0-9/10" }, body: "not video!" }));
+  await page.goto(`/photo/${"0".repeat(63)}8`);
+  await expect(page.locator(".frame img")).toBeVisible();
+  await expect(page.locator(".frame video")).toHaveCount(0);
+  await page.click("button:has-text('About this video')");
+  await expect(page.locator(".about-text")).toContainText("can't play on this phone");
+});
+
 test("Hide this photo removes it for everyone at once", async ({ page }) => {
   await signIn(page);
   await page.goto("/find?q=Asha%20Raja");

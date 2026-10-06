@@ -5,6 +5,7 @@
 //   DATABASE_URL=... IMAGE_SOURCE=fixture npx tsx scripts/seed-fixtures.ts
 import postgres from "postgres";
 import sharp from "sharp";
+import { execFileSync } from "node:child_process";
 import { promises as fs } from "node:fs";
 import path from "node:path";
 
@@ -50,7 +51,7 @@ const hex = (n: number) => n.toString(16).padStart(64, "0");
 async function main() {
   await fs.mkdir(OUT, { recursive: true });
   await db`truncate photos, held, clusters, cluster_hashes, faces, people, queue, players,
-           answers, skips, gate_attempts, snapshots, sync_state cascade`;
+           answers, skips, gate_attempts, snapshots, sync_state, video_checks cascade`;
   await db`insert into players ${db([{ name: "Grandma", sort: 1 }, { name: "Grandpa", sort: 2 }, { name: "Auntie Meera", sort: 3 }])}`;
 
   const W = 1200, H = 900;
@@ -120,6 +121,18 @@ async function main() {
     await db`insert into queue (group_id, rank, photo_count, hero_face, sample_faces, suggestions)
       values (${q.group_id}, ${q.rank}, ${q.photo_count}, ${q.hero_face}, ${q.sample_faces}::text[], ${db.json(q.suggestions as any)})`;
   }
+  // Videos (migration 0009): fx-8 plays - a test pattern judged clear, VP9 in
+  // MP4 so the test browser (which has no H.264) plays it, and bigger than
+  // one of the /video route's pieces so it is streamed in more than one;
+  // fx-34 is in a format no phone plays; fx-21 is not judged yet.
+  const vid = path.join(OUT, "fx-8.mp4");
+  try {
+    execFileSync("ffmpeg", ["-nostdin", "-loglevel", "error", "-y", "-f", "lavfi", "-i", "testsrc2=duration=8:size=1280x720:rate=24",
+      "-c:v", "libvpx-vp9", "-deadline", "realtime", "-cpu-used", "8", "-b:v", "8M", "-pix_fmt", "yuv420p",
+      "-movflags", "+faststart", vid]);
+    await db`insert into video_checks (hash, status, mime, seconds, verdict) values (${hex(8)}, 'ok', 'video/mp4', 8, '[]'::jsonb)`;
+  } catch { console.log("no ffmpeg here: the fixture video will not play"); }
+  await db`insert into video_checks (hash, status, reason) values (${hex(34)}, 'unplayable', 'a format phones cannot play')`;
   await db`insert into snapshots (kind, counts, head, watermark) values ('seed', ${JSON.stringify({ photos: photos.length })}::jsonb, 'fixtures', now() - interval '1 day')`;
   console.log(`fixtures: ${photos.length} photos, ${faces.length} faces, ${queue.length} groups to name -> ${OUT}`);
   await db.end();

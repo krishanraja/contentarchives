@@ -251,6 +251,10 @@ def main():
     private_rules(out)
 
     print()
+    print("8d. a video plays only once the whole of it has been judged")
+    videos(out)
+
+    print()
     print("8b. a rate limit waits and tries again; a refusal does not")
     class FakeCL:
         def __init__(self, fails, code):
@@ -539,6 +543,202 @@ def private_rules(out):
     back = q(db, "select * from apply_private_rules()")[0]
     check("a rule taken away shows its photographs again", (back[1], "p9" in {h for (h,) in q(db, "select hash from photos where visible")}), (1, True))
     db.close()
+
+
+def clip(path, seconds, codec="libx264"):
+    """A real, tiny video for the probe and the remux to read."""
+    import subprocess
+    subprocess.run(["ffmpeg", "-nostdin", "-loglevel", "error", "-y", "-f", "lavfi",
+                    "-i", "testsrc=duration={}:size=160x120:rate=5".format(seconds),
+                    "-f", "lavfi", "-i", "sine=duration={}".format(seconds),
+                    "-c:v", codec, "-pix_fmt", "yuv420p", "-c:a", "aac", "-shortest", path],
+                   check=True, capture_output=True)
+
+
+class VidDrive:
+    """fid -> (mime, size, the local clip it downloads as)."""
+    def __init__(self, files):
+        self.files, self.downloads, self.asked = files, [], []
+
+    def meta(self, fid):
+        self.asked.append(fid)
+        mime, size, _ = self.files[fid]
+        return {"mime": mime, "size": size}
+
+    def download(self, fid, dest, md5=None):
+        self.downloads.append(fid)
+        shutil.copyfile(self.files[fid][2], dest)
+
+
+class VidGemini:
+    """What each video holds, by its length in seconds (the clips differ only in that)."""
+    def __init__(self, by_len):
+        self.by_len, self.watched, self.no_sound = by_len, [], []
+
+    def video(self, path, seconds):
+        n = int(round(seconds))
+        self.watched.append(n)
+        self.no_sound.append(CE.probe(path)["codec"] == "h264" and not _has_audio(path))
+        v = self.by_len[n]
+        if isinstance(v, list) and v and v[0] == "FAIL ONCE":
+            if n not in getattr(self, "failed", set()):
+                self.__dict__.setdefault("failed", set()).add(n)
+                raise RuntimeError("HTTP 400: secret-video.mp4")
+            v = v[1:]
+        return [dict(x) for x in v], 0.003
+
+
+def _has_audio(path):
+    import subprocess
+    r = subprocess.run(["ffprobe", "-v", "error", "-select_streams", "a", "-show_entries", "stream=index",
+                        "-of", "csv=p=0", path], capture_output=True)
+    return bool(r.stdout.strip())
+
+
+def videos(out):
+    """A video plays only once the whole of it has been judged (Krish, 2026-10-06)."""
+    db = fresh_db(NAME + "_vid")
+    tmp = tempfile.mkdtemp()
+    c = lambda n, codec="libx264", ext="mp4": (clip(os.path.join(tmp, "{}.{}".format(n, ext)), n, codec),   # noqa: E731
+                                               os.path.join(tmp, "{}.{}".format(n, ext)))[1]
+    adult = {"nudity": "partial", "subject_age": "adult", "sexual": "no", "nudity_note": "secret note"}
+    files = {   # drive id -> (mime, size, clip); what the model sees in it is keyed by length
+        "dv-ok": ("video/mp4", 1000, c(2)),
+        "dv-nude": ("video/quicktime", 1000, c(3)),
+        "dv-bath": ("video/quicktime", 1000, c(4, ext="mov")),
+        "dv-mpg": ("video/mpeg", 1000, None),
+        "dv-mp4v": ("video/mp4", 1000, c(5, "mpeg4")),
+        "dv-big": ("video/mp4", 3_000_000_000, None),
+        "dv-flaky": ("video/mp4", 1000, c(6)),
+        "dv-blocked": ("video/mp4", 1000, c(7)),
+        "dv-empty": ("video/mp4", 1000, c(8)),
+        "dv-private": ("video/mp4", 1000, c(9)),
+        "dv-vp9": ("video/mp4", 1000, c(10, "libvpx-vp9")),
+    }
+    gem = VidGemini({
+        2: [CLEAN], 3: [CLEAN, adult], 4: [{"nudity": "partial", "subject_age": "child", "sexual": "no"}],
+        6: ["FAIL ONCE", CLEAN], 7: [{"_blocked": True}], 8: [{}], 9: [CLEAN], 10: [CLEAN],
+    })
+    for fid in files:
+        db.execute("insert into photos (hash, drive_id, media, people, taken_at) values (%s, %s, 'video', %s, %s)",
+                   ("h" + fid, fid, ["Asha Secretname"] if fid == "dv-ok" else [], "2020-01-01"))
+    db.execute("insert into photos (hash, drive_id, media) values ('h-photo', 'dp', 'photo')")
+    db.execute("update photos set hidden = true, hidden_by = 'rule:private' where hash = 'hdv-private'")
+    db.commit()
+    drive = VidDrive(files)
+
+    def go(n):
+        w = CE.Worker(db, drive, gem, None, None, "", "", workers=2, videos=n)
+        with contextlib.redirect_stdout(out):
+            w.videos()
+        return w
+
+    go(0)
+    check("no videos are judged unless asked (it is a spend)", (drive.asked, gem.watched), ([], []))
+    w = go(1)
+    check("a video with a named person in it is judged first", drive.downloads, ["dv-ok"])
+    go(50)
+    st = dict(q(db, "select drive_id, v.status from video_checks v join photos p using (hash)"))
+    check("clear plays; adult nudity anywhere in it is held; a child in the bath plays",
+          (st.get("dv-ok"), st.get("dv-nude"), st.get("dv-bath")), ("ok", "held", "ok"))
+    check("a format no phone plays keeps its still and is never downloaded or judged",
+          (st.get("dv-mpg"), st.get("dv-mp4v"), st.get("dv-big"), "dv-mpg" in drive.downloads,
+           "dv-big" in drive.downloads, 5 in gem.watched), ("unplayable",) * 3 + (False, False, False))
+    check("a refusal holds it; an unreadable answer is no verdict, so it is tried again",
+          (st.get("dv-blocked"), st.get("dv-empty"), st.get("dv-flaky")), ("held", "error", "error"))
+    check("a private video is never downloaded to be judged", ("dv-private" in drive.downloads, "dv-private" in st),
+          (False, False))
+    check("the model sees the picture alone, as H.264 it can decode, no sound",
+          (all(gem.no_sound), 10 in gem.watched, st.get("dv-vp9")), (True, True, "ok"))
+    hidden = dict(q(db, "select drive_id, hidden_by from photos where hidden"))
+    check("a held video is hidden everywhere, still and all",
+          (hidden.get("dv-nude"), hidden.get("dv-blocked"), hidden.get("dv-ok")),
+          ("rule:video-check", "rule:video-check", None))
+    check("what plays is told to the phone as MP4, a phone's QuickTime file included, with its length",
+          q(db, "select drive_id, mime, seconds from video_checks v join photos p using (hash) "
+                "where drive_id in ('dv-ok', 'dv-bath') order by drive_id"),
+          [("dv-bath", "video/mp4", 4), ("dv-ok", "video/mp4", 2)])
+    notes = q(db, "select count(*) from video_checks where verdict::text like '%%note%%'")[0][0]
+    check("the stored verdict is category words only, never the model's note", notes, 0)
+    check("the spend is counted", round(w.spent, 4) > 0 and q(db, "select sum(usd) > 0 from video_checks")[0][0], True)
+    before = list(drive.downloads)
+    go(50)
+    st = dict(q(db, "select drive_id, v.status from video_checks v join photos p using (hash)"))
+    check("the next run tries only the unjudged ones again, and judges nothing twice",
+          (sorted(drive.downloads[len(before):]), st.get("dv-flaky")), (["dv-empty", "dv-flaky"], "ok"))
+    go(50)
+    go(50)
+    check("an answer that never comes is tried three times, then left",
+          (q(db, "select tries, status from video_checks v join photos p using (hash) where drive_id = 'dv-empty'"),
+           drive.downloads.count("dv-empty")), ([(3, "error")], 3))
+    check("a long tape is watched in parts that cover every second",
+          (CE.segments(None), CE.segments(1200), CE.segments(3000.4)),
+          ([(None, None)], [(None, None)], [(0, 1200), (1200, 2400), (2400, 3001)]))
+
+    # the File API conversation itself, against a fake Google
+    class R:
+        def __init__(self, code=200, j=None, h=None):
+            self.status_code, self._j, self.headers = code, j, h or {}
+
+        def json(self):
+            return self._j
+
+    class Http:
+        def __init__(self, gen_fails=False):
+            self.log, self.polls = [], 0
+
+        def post(self, url, **kw):
+            self.log.append(("post", url, kw.get("headers", {})))
+            if url.endswith("/upload/v1beta/files"):
+                return R(h={"x-goog-upload-url": "https://up.example/abc"})
+            return R(j={"file": {"name": "files/abc", "state": "PROCESSING"}})
+
+        def get(self, url, **kw):
+            self.log.append(("get", url, kw.get("headers", {})))
+            self.polls += 1
+            return R(j={"name": "files/abc", "state": "ACTIVE", "uri": "https://g.example/files/abc"})
+
+        def delete(self, url, **kw):
+            self.log.append(("delete", url, kw.get("headers", {})))
+            return R()
+
+    class GenCL:
+        IN_PER_M, OUT_PER_M, SENS_PROMPT = 0.25, 1.5, "judge"
+        parse = staticmethod(json.loads)
+
+        def __init__(self, answers):
+            self.answers, self.parts = list(answers), []
+
+        def generate(self, parts, key, max_out, timeout):
+            self.parts.append(parts[0])
+            a = self.answers.pop(0)
+            if isinstance(a, Exception):
+                raise a
+            return a, 1000, 10
+
+    import threading
+    gm = CE.Gemini.__new__(CE.Gemini)
+    gm.key, gm.gate, gm.backoff, gm.poll = "SECRET-KEY", threading.Semaphore(1), 0.001, 0.001
+    gm.http, gm.CL = Http(), GenCL(['{"nudity":"none"}'] * 3)
+    v, usd = gm.video(files["dv-ok"][2], 2500)
+    urls = [u for _, u, _ in gm.http.log]
+    check("the video is uploaded once, waited for, watched in three parts, and deleted",
+          ([m for m, _, _ in gm.http.log], [p.get("video_metadata") for p in gm.CL.parts], len(v)),
+          (["post", "post", "get", "delete"],
+           [{"start_offset": "0s", "end_offset": "1200s"}, {"start_offset": "1200s", "end_offset": "2400s"},
+            {"start_offset": "2400s", "end_offset": "2500s"}], 3))
+    check("the key travels in a header, never in an address", any("SECRET-KEY" in u for u in urls), False)
+    gm.http, gm.CL = Http(), GenCL(['{"nudity":"none"}', RuntimeError("BLOCKED: no text"), '{"nudity":"none"}'])
+    v, _ = gm.video(files["dv-ok"][2], 2500)
+    check("a part the model refuses stops the watching and is held", (v[-1], len(v)), ({"_blocked": True}, 2))
+    gm.http, gm.CL = Http(), GenCL([RuntimeError("HTTP 400: bad")])
+    try:
+        gm.video(files["dv-ok"][2], 60)
+        check("an upload is deleted even when the look fails", "no error", "deleted")
+    except RuntimeError:
+        check("an upload is deleted even when the look fails", gm.http.log[-1][0], "delete")
+    db.close()
+    shutil.rmtree(tmp, ignore_errors=True)
 
 
 def library(out):

@@ -24,7 +24,7 @@ export default async function Photo({ params, searchParams }: { params: Promise<
       <main className="page">
         <PhotoView back={q ? `/find?q=${encodeURIComponent(q)}` : "/find"} p={{
           hash: p.hash, alt: p.description || "A family photo", people: p.people, where, when: when(p),
-          what: p.description || null, video: p.media === "video", needs: !p.place || (!p.year && !p.approx_year),
+          what: p.description || null, video: p.media === "video", play: p.play, needs: !p.place || (!p.year && !p.approx_year),
         }} />
       </main>
     </>

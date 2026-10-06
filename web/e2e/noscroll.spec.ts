@@ -160,8 +160,16 @@ test("every screen, in every state, fits every screen size without scrolling", a
            where hash = ${hash}`;
   await page.goto(first!);
   await fits(page, "photo");
-  const about = page.locator("button:has-text('About this photo')");
+  const about = page.locator("button:has-text('About this photo'), button:has-text('About this video')");
   if (await about.count()) { await about.click(); await fits(page, "photo, about"); }
+  // a video that plays, and one that does not yet
+  await page.goto(`/photo/${"0".repeat(63)}8`);
+  await expect(page.locator(".frame video")).toBeVisible();
+  await fits(page, "video");
+  await page.click("button:has-text('About this video')");
+  await fits(page, "video, about");
+  await page.goto(`/photo/${"0".repeat(62)}15`);
+  await fits(page, "video not ready");
 
   // who is this: every question it can ask
   await page.goto("/help");

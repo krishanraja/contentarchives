@@ -63,6 +63,14 @@ record and nothing reads a local drive again.
     shows; video faces and box-less faces group and find people, and are never
     drawn
 
+VIDEOS PLAY ONLY ONCE ALL OF THEM HAS BEEN JUDGED (Krish, 2026-10-06)
+
+A video was shown as one still, and only that still had been judged. Playing it
+shows every frame, so videos() has the library's sensitivity pass watch the
+whole video first (--videos per run, 0 by default: it is a spend), and the
+most revealing moment decides by the same nudity_hold rule as a photograph. A
+video that fails is hidden everywhere. Migration 0009 has the states.
+
 THE LOG IS PUBLIC
 
 This runs in a public repository, so stdout carries COUNTS ONLY: never a path,
@@ -89,6 +97,7 @@ import json
 import os
 import random
 import re
+import shutil
 import sqlite3
 import struct
 import sys
@@ -109,6 +118,12 @@ SUGGEST_MIN = 0.40
 FACE_PX, VIEW_PX = 512, 1024
 MAX_QUEUE = 5000
 FRAME_PX, FRAME_MATCH = 960, 0.50          # a video frame's size; the same person, found again in it
+VIDEO_SEGMENT = 20 * 60                    # seconds per look: a long tape is watched in parts that fit the model
+VIDEO_MAX_BYTES = 2_000_000_000            # the Gemini File API's ceiling for one file
+VIDEO_TRIES = 3                            # an unjudged video is tried again on this many runs
+# Containers no phone's browser plays, known from Drive before a byte is downloaded
+UNPLAYABLE_MIME = {"video/mpeg", "video/x-msvideo", "video/avi", "video/x-ms-wmv", "video/x-ms-asf",
+                   "video/x-flv", "video/3gpp", "video/3gpp2", "video/mp2t", "video/dv", "video/x-dv"}
 BUNDLE_NAME, BUNDLE_FORMAT = "archives-library.sqlite", "1"     # LIBRARY-EXPORT.md
 DESC_DIM, FACE_DIM = 768, 512
 LIBRARY_FIELDS = ("person", "unidentifiable", "needs_identifying")
@@ -148,6 +163,82 @@ def frame_ok(v: dict) -> bool:
     and only if it clears the same nudity rule as a photograph."""
     sens = {k: str(v.get(k) or "").lower() for k in ("nudity", "subject_age", "sexual")}
     return bool(sens["nudity"]) and nudity_hold("none", sens, False) == ""
+
+
+def video_verdict(verdicts: list) -> tuple:
+    """(status, reason) for a whole video from the verdicts on every part of
+    it. The most revealing moment decides, by the photograph's own rule. A part
+    the model would not look at is held - a filter that refuses is a signal,
+    not a pass. A part answered with nothing readable is no verdict at all, so
+    the video is tried again rather than shown."""
+    if not verdicts:
+        return "error", "not judged"
+    if any(v.get("_blocked") for v in verdicts):
+        return "held", "the model would not look"
+    for v in verdicts:
+        sens = {k: str(v.get(k) or "").lower() for k in ("nudity", "subject_age", "sexual")}
+        if sens["nudity"]:
+            why = nudity_hold("none", sens, False)
+            if why:
+                return "held", why
+    if any(not str(v.get("nudity") or "") for v in verdicts):
+        return "error", "no verdict"
+    return "ok", ""
+
+
+def segments(seconds) -> list:
+    """The parts a video is watched in: [(None, None)] - all of it at once -
+    when it is short enough or its length is unknown, else whole-second
+    (start, end) spans of VIDEO_SEGMENT that cover every second."""
+    if not seconds or seconds <= VIDEO_SEGMENT:
+        return [(None, None)]
+    s = int(-(-seconds // 1))
+    return [(a, min(a + VIDEO_SEGMENT, s)) for a in range(0, s, VIDEO_SEGMENT)]
+
+
+def probe(path: str) -> dict:
+    """Container, picture codec and length, as ffprobe reads the file."""
+    import subprocess
+    r = subprocess.run(["ffprobe", "-v", "error", "-show_entries",
+                        "format=duration,format_name:stream=codec_type,codec_name", "-of", "json", path],
+                       capture_output=True, timeout=300)
+    if r.returncode != 0:
+        raise RuntimeError("probe failed")
+    j = json.loads(r.stdout or b"{}")
+    fmt = j.get("format") or {}
+    codec = next((s.get("codec_name") for s in j.get("streams") or [] if s.get("codec_type") == "video"), "")
+    try:
+        secs = float(fmt.get("duration"))
+    except (TypeError, ValueError):
+        secs = None
+    return {"format": fmt.get("format_name") or "", "codec": codec or "", "seconds": secs}
+
+
+def play_mime(p: dict):
+    """What a phone's browser is told the video is, or None when it cannot
+    play it. A QuickTime file holding H.264 or HEVC plays as MP4."""
+    c, f = p["codec"], p["format"]
+    if "mp4" in f or "mov" in f:
+        return "video/mp4" if c in ("h264", "hevc", "vp9", "av1") else None
+    if "webm" in f or "matroska" in f:
+        return "video/webm" if c in ("vp8", "vp9", "av1") else None
+    return None
+
+
+def remux(src: str, dst: str, codec: str) -> None:
+    """The picture alone, as an H.264 MP4: everything the check has to see,
+    and no sound it would be charged for hearing. H.264 is copied as it is;
+    anything else (an iPhone's HEVC) is converted, no bigger than 1280px, so
+    the model is never handed a picture it may not be able to decode."""
+    import subprocess
+    pic = (["-c:v", "copy"] if codec == "h264" else
+           ["-c:v", "libx264", "-preset", "ultrafast", "-crf", "26", "-pix_fmt", "yuv420p",
+            "-vf", "scale=w='min(1280,iw)':h='min(1280,ih)':force_original_aspect_ratio=decrease:force_divisible_by=2"])
+    r = subprocess.run(["ffmpeg", "-nostdin", "-loglevel", "error", "-y", "-i", src,
+                        "-map", "0:v:0", *pic, "-an", "-f", "mp4", dst],
+                       capture_output=True, timeout=3600)
+    if r.returncode != 0 or not os.path.exists(dst) or os.path.getsize(dst) == 0:
+        raise RuntimeError("remux failed")
 
 
 # ------------------------------------------------------------ the world ----
@@ -246,6 +337,14 @@ class Drive:
             return None
         return r.stdout if r.returncode == 0 and r.stdout[:2] == b"\xff\xd8" else None
 
+    def meta(self, fid: str) -> dict:
+        """A file's size and type, before deciding whether to download it."""
+        r = self.s.get("https://www.googleapis.com/drive/v3/files/" + fid,
+                       params={"fields": "size, mimeType", "supportsAllDrives": "true"}, timeout=60)
+        r.raise_for_status()
+        j = r.json()
+        return {"size": int(j.get("size") or 0), "mime": j.get("mimeType") or ""}
+
     def image(self, fid: str, px: int):
         r = self.s.get("https://www.googleapis.com/drive/v3/files/" + fid,
                        params={"fields": "thumbnailLink", "supportsAllDrives": "true"}, timeout=60)
@@ -285,11 +384,14 @@ class Gemini:
         self.backoff = float(os.environ.get("GEMINI_BACKOFF", "5"))
 
     def _call(self, paths, prompt, max_out):
+        return self._retry(lambda: self.CL.call(paths, self.key, prompt=prompt, max_out=max_out))
+
+    def _retry(self, fn):
         delay = self.backoff
         for attempt in range(6):
             try:
                 with self.gate:
-                    return self.CL.call(paths, self.key, prompt=prompt, max_out=max_out)
+                    return fn()
             except RuntimeError as e:
                 if attempt == 5 or not self.RETRY.match(str(e)):
                     raise
@@ -324,6 +426,71 @@ class Gemini:
             return CL.parse(txt), (tin * CL.IN_PER_M + tout * CL.OUT_PER_M) / 1e6
         finally:
             os.unlink(path)
+
+    API = "https://generativelanguage.googleapis.com/"
+    VIDEO_PROMPT = ("This is a video, not a photograph. Watch all of it, and answer for its MOST "
+                    "revealing moment: if anyone is unclothed at any point, even briefly, say so.\n\n")
+    poll = 5.0
+
+    def video(self, path: str, seconds):
+        """The library's sensitivity pass over the WHOLE of one video: uploaded
+        once with the File API, watched in parts of VIDEO_SEGMENT (Gemini
+        samples a frame a second), every part judged, the upload deleted
+        whatever happens. -> (one verdict per part, dollars). The key travels
+        in a header, never in an address that could be logged."""
+        import requests
+        http = getattr(self, "http", None) or requests
+        CL, auth = self.CL, {"x-goog-api-key": self.key}
+
+        def ok(r):
+            if r.status_code >= 400:
+                raise RuntimeError("HTTP {}: video".format(r.status_code))
+            return r
+
+        r = ok(http.post(self.API + "upload/v1beta/files", timeout=60, json={"file": {"display_name": "family-video"}},
+                         headers={**auth, "X-Goog-Upload-Protocol": "resumable", "X-Goog-Upload-Command": "start",
+                                  "X-Goog-Upload-Header-Content-Length": str(os.path.getsize(path)),
+                                  "X-Goog-Upload-Header-Content-Type": "video/mp4"}))
+        up = r.headers.get("x-goog-upload-url")
+        if not up:
+            raise RuntimeError("video upload: no upload address")
+        with open(path, "rb") as fh:
+            r = ok(http.post(up, data=fh, timeout=1800,
+                             headers={"X-Goog-Upload-Offset": "0", "X-Goog-Upload-Command": "upload, finalize"}))
+        f = (r.json() or {}).get("file") or {}
+        name = f.get("name")
+        if not name:
+            raise RuntimeError("video upload: no file")
+        try:
+            t0 = time.time()
+            while f.get("state") == "PROCESSING":
+                if time.time() - t0 > 900:
+                    raise RuntimeError("video still processing")
+                time.sleep(self.poll)
+                f = ok(http.get(self.API + "v1beta/" + name, headers=auth, timeout=60)).json() or {}
+            if f.get("state") != "ACTIVE" or not f.get("uri"):
+                raise RuntimeError("video upload not active")
+            verdicts, usd = [], 0.0
+            for a, b in segments(seconds):
+                part = {"file_data": {"mime_type": "video/mp4", "file_uri": f["uri"]}}
+                if a is not None:
+                    part["video_metadata"] = {"start_offset": "{}s".format(a), "end_offset": "{}s".format(b)}
+                try:
+                    txt, tin, tout = self._retry(lambda: CL.generate(
+                        [part, {"text": self.VIDEO_PROMPT + CL.SENS_PROMPT}], self.key, 200, 600))
+                except RuntimeError as e:
+                    if str(e).startswith("BLOCKED"):
+                        verdicts.append({"_blocked": True})
+                        break                          # one refused part is enough to hold it
+                    raise
+                usd += (tin * CL.IN_PER_M + tout * CL.OUT_PER_M) / 1e6
+                verdicts.append(CL.parse(txt))
+            return verdicts, usd
+        finally:
+            try:
+                http.delete(self.API + "v1beta/" + name, headers=auth, timeout=60)
+            except Exception:                                    # noqa: BLE001
+                pass                                             # Gemini deletes uploads after 48 hours anyway
 
     def embed(self, text: str):
         v = self.ED.embed([text], self.key)[0]
@@ -432,11 +599,12 @@ def when(f: dict):
 
 class Worker:
     def __init__(self, db, drive, gemini, faces, geo, folder, prefix,
-                 budget=300, cap_usd=60.0, workers=8, max_minutes=None, frames=0):
+                 budget=300, cap_usd=60.0, workers=8, max_minutes=None, frames=0, videos=0):
         self.db, self.drive, self.gemini, self.faces, self.geo = db, drive, gemini, faces, geo
         self.folder, self.prefix = folder, prefix
         self.budget, self.cap, self.workers = budget, cap_usd, workers
         self.frames_per_run = frames
+        self.videos_per_run = videos
         # A DEADLINE, NOT A KILL: GitHub ends a job at 6 h, and a killed run
         # never reaches group(), rebuild() or its receipt - the parts the app
         # reads. Past the deadline nothing new starts, exactly like the cap.
@@ -531,6 +699,7 @@ class Worker:
         self.group()
         self.frames()
         self.private()
+        self.videos()
         self.rebuild()
         receipt = dict(self.c, spent_usd=round(self.spent, 4), seconds=int(time.time() - t0),
                        errors=sum(self.errors.values()))
@@ -1118,6 +1287,103 @@ class Worker:
         say("frames", done=done, wanted=len(rows), shown=self.c["frames_ok"], held=self.c["frames_held"],
             noface=self.c["frames_noface"], failed=self.c["frames_error"])
 
+    # -- videos ------------------------------------------------------------
+    def videos(self):
+        """A video plays only once all of it has been judged (migration 0009).
+        Videos with a named person in them first, then the newest. A format no
+        phone plays, or a file too big to judge, keeps its still and costs
+        nothing. A video that fails is hidden everywhere; one not judged this
+        time is tried again on a later run, VIDEO_TRIES times. Runs after
+        private(), so nothing private is ever downloaded to be judged."""
+        if self.videos_per_run <= 0 or not hasattr(self.drive, "meta") or not hasattr(self.gemini, "video"):
+            return
+        db = self.db
+        rows = db.execute("""
+            with named as materialized (select distinct hash from photo_people)
+            select p.hash, p.drive_id, p.md5 from photos p
+            left join video_checks v on v.hash = p.hash
+            where p.visible and p.media = 'video' and p.drive_id is not null
+              and (v.hash is null or (v.status = 'error' and v.tries < %s))
+            order by (p.hash in (select hash from named)) desc, p.taken_at desc nulls last, p.hash""",
+            (VIDEO_TRIES,)).fetchall()
+        self.c["videos_wanted"] = len(rows)
+        todo = rows[:self.videos_per_run]
+        if not todo:
+            return
+        tmp = tempfile.mkdtemp(prefix="videos-")
+
+        def judge(row):
+            h, fid, md5 = row
+            meta = self.drive.meta(fid)
+            if meta.get("mime") in UNPLAYABLE_MIME:
+                return "unplayable", "a format phones cannot play", None, None, None, 0.0
+            if int(meta.get("size") or 0) > VIDEO_MAX_BYTES:
+                return "unplayable", "too big to judge", None, None, None, 0.0
+            n = hashlib.sha1(h.encode()).hexdigest()[:16]
+            src, clip = os.path.join(tmp, n + ".src"), os.path.join(tmp, n + ".mp4")
+            try:
+                self.drive.download(fid, src, md5)
+                p = probe(src)
+                secs = int(round(p["seconds"])) if p["seconds"] else None
+                mime = play_mime(p)
+                if not mime:
+                    return "unplayable", "a format phones cannot play", None, secs, None, 0.0
+                remux(src, clip, p["codec"])
+                verdicts, usd = self.gemini.video(clip, p["seconds"])
+                status, why = video_verdict(verdicts)
+                kept = [{k: v.get(k) for k in ("nudity", "subject_age", "sexual", "_blocked") if k in v}
+                        for v in verdicts]                  # category words only, never the model's note
+                return status, why or None, mime, secs, kept, usd
+            finally:
+                for x in (src, clip):
+                    if os.path.exists(x):
+                        os.unlink(x)
+
+        def look(row):
+            try:
+                return row, judge(row)
+            except Exception as e:                               # noqa: BLE001
+                self.errors["video_" + err_name(e)] += 1         # recorded, tried again next run
+                return row, ("error", err_name(e), None, None, None, 0.0)
+
+        done = 0
+        with cf.ThreadPoolExecutor(max_workers=max(1, min(self.workers, 3))) as pool:   # whole files on disk: few at once
+            futs, it = set(), iter(todo)
+            for row in it:
+                futs.add(pool.submit(look, row))
+                if len(futs) >= 3:
+                    break
+            while futs:
+                fut = next(cf.as_completed(futs))
+                futs.discard(fut)
+                (h, _, _), (status, why, mime, secs, verdict, usd) = fut.result()
+                self.spent += usd
+                self.c["videos_" + status] += 1
+                db.execute(
+                    "insert into video_checks (hash, status, reason, mime, seconds, verdict, usd) "
+                    "values (%s, %s, %s, %s, %s, %s::jsonb, %s) on conflict (hash) do update set "
+                    "status = excluded.status, reason = excluded.reason, mime = excluded.mime, "
+                    "seconds = excluded.seconds, verdict = excluded.verdict, usd = excluded.usd, "
+                    "tries = video_checks.tries + 1, at = now()",
+                    (h, status, why, mime, secs, json.dumps(verdict) if verdict is not None else None, round(usd, 5)))
+                if status == "held":
+                    db.execute("update photos set hidden = true, hidden_by = 'rule:video-check', hidden_at = now() "
+                               "where hash = %s and not hidden", (h,))
+                db.commit()
+                done += 1
+                if done % 25 == 0:
+                    say("videos", done=done, of=len(todo), playable=self.c["videos_ok"],
+                        held=self.c["videos_held"], spent_usd=self.spent)
+                if self.spent >= self.cap or (self.deadline is not None and time.time() >= self.deadline):
+                    self.c["videos_stopped"] = 1
+                    continue                               # in flight finish; nothing new starts
+                nxt = next(it, None)
+                if nxt is not None:
+                    futs.add(pool.submit(look, nxt))
+        shutil.rmtree(tmp, ignore_errors=True)
+        say("videos", done=done, wanted=len(rows), playable=self.c["videos_ok"], held=self.c["videos_held"],
+            unplayable=self.c["videos_unplayable"], failed=self.c["videos_error"], spent_usd=self.spent)
+
     # -- people ------------------------------------------------------------
     def group(self):
         """Clusters -> people. The library's groups were decided by people
@@ -1284,6 +1550,8 @@ def main() -> int:
                     default=float(os.environ["MAX_MINUTES"]) if os.environ.get("MAX_MINUTES") else None)
     ap.add_argument("--frames", type=int, default=int(os.environ.get("FRAMES_PER_RUN", "1500")),
                     help="most video faces given a judged frame of their own this run")
+    ap.add_argument("--videos", type=int, default=int(os.environ.get("VIDEOS_PER_RUN", "0")),
+                    help="most videos watched whole this run, so they can play (a spend: 0 unless asked)")
     ap.add_argument("--no-faces", action="store_true")
     a = ap.parse_args()
     need = ["DATABASE_URL", "GOOGLE_SERVICE_ACCOUNT_JSON", "GOOGLE_API_KEY_ARCHIVES",
@@ -1300,7 +1568,7 @@ def main() -> int:
                os.environ["DRIVE_COMMUNAL_FOLDER_ID"],
                os.environ.get("DRIVE_REL_PREFIX", "Media/Communal"),
                budget=a.budget, cap_usd=a.cap_usd, workers=a.workers, max_minutes=a.max_minutes,
-               frames=a.frames)
+               frames=a.frames, videos=a.videos)
     w.run()
     return 0
 

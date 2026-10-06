@@ -103,6 +103,16 @@ export async function thumbnail(fileId: string, px: number): Promise<Buffer | nu
   return Buffer.from(await t.arrayBuffer());
 }
 
+// A span of a file's bytes, straight from Drive, for a video being played.
+// Drive answers a Range with 206 and its own Content-Range (which carries the
+// file's whole size); the caller passes both on.
+export async function mediaRange(fileId: string, from: number, to: number): Promise<Response> {
+  const u = new URL(`https://www.googleapis.com/drive/v3/files/${fileId}`);
+  u.searchParams.set("alt", "media");
+  u.searchParams.set("supportsAllDrives", "true");
+  return fetch(u, { headers: { authorization: `Bearer ${await driveToken()}`, range: `bytes=${from}-${to}` } });
+}
+
 export async function download(fileId: string): Promise<Buffer> {
   const r = await api(`files/${fileId}`, { alt: "media" });
   return Buffer.from(await r.arrayBuffer());

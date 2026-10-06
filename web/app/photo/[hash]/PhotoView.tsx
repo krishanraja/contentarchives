@@ -1,17 +1,23 @@
 "use client";
 import Link from "next/link";
-import { useLayoutEffect, useRef, useState } from "react";
+import { useCallback, useLayoutEffect, useRef, useState } from "react";
+import Clip from "@/components/Clip";
 import Shot from "@/components/Shot";
 import { Back, Eye, Pin, Share } from "@/components/icons";
 
-type P = { hash: string; alt: string; people: string[]; where: string; when: string | null; what: string | null; video: boolean; needs: boolean };
+type P = { hash: string; alt: string; people: string[]; where: string; when: string | null; what: string | null; video: boolean;
+  play: "ok" | "unplayable" | null; needs: boolean };
 
 // The photo fills the screen; one line says who, one says where and when, and
 // "About this photo" turns the picture over to everything we know about it.
 // Nothing scrolls (Krish, 2026-10-05): a long description is set smaller to
-// fit, never below the floor's 16px, and only then shortened.
+// fit, never below the floor's 16px, and only then shortened. A video judged
+// whole plays in the picture's place (Krish, 2026-10-06); any other shows its
+// still, and says plainly why it does not play.
 export default function PhotoView({ p, back }: { p: P; back: string }) {
   const [about, setAbout] = useState(false);
+  const [failed, setFailed] = useState(false);
+  const fail = useCallback(() => setFailed(true), []);
   const [sure, setSure] = useState(false);
   const [hidden, setHidden] = useState(false);
   const box = useRef<HTMLDivElement>(null);
@@ -56,15 +62,21 @@ export default function PhotoView({ p, back }: { p: P; back: string }) {
 
   const who = p.people.length ? p.people.join(", ") : "Nobody named yet";
   const whereWhen = [p.where, p.when].filter(Boolean).join(" · ") || "Where and when: not known yet";
+  const plays = p.video && p.play === "ok" && !failed;
+  const noun = p.video ? "video" : "photo";
+  const still = !p.video ? null : plays ? null
+    : failed || p.play === "unplayable" ? "This video can't play on this phone; the picture is a still from it."
+    : "This video isn't ready to play yet; the picture is a still from it.";
   return (
     <div className="game">
-      {!about ? (
-        <Shot src={`/img/v/${encodeURIComponent(p.hash)}`} alt={p.alt} />
+      {!about ? (plays
+        ? <Clip hash={p.hash} alt={p.alt} onFail={fail} />
+        : <Shot src={`/img/v/${encodeURIComponent(p.hash)}`} alt={p.alt} />
       ) : (
         <div className="card about">
-          {hidden ? <p className="notice">This photo is now hidden for everyone. Thank you.</p> : sure ? (
+          {hidden ? <p className="notice">This {noun} is now hidden for everyone. Thank you.</p> : sure ? (
             <>
-              <p><b>Hide this photo for everyone?</b> Krish can bring it back if it was a mistake.</p>
+              <p><b>Hide this {noun} for everyone?</b> Krish can bring it back if it was a mistake.</p>
               <div className="row" style={{ flex: "none" }}>
                 <button className="btn" onClick={() => setSure(false)}>No</button>
                 <button className="btn tomato" onClick={hide}>Yes, hide it</button>
@@ -77,12 +89,12 @@ export default function PhotoView({ p, back }: { p: P; back: string }) {
                 <div><h3>Who</h3><p>{p.people.length ? who : <span className="muted">Nobody named yet</span>}</p></div>
                 <div><h3>Where</h3><p>{p.where || <span className="muted">Not known yet</span>}</p></div>
                 <div><h3>When</h3><p>{p.when || <span className="muted">Not known yet</span>}</p></div>
-                {p.video && <p>This is a video; the picture is a still from it.</p>}
+                {still && <p>{still}</p>}
                 {p.what && <div><h3>What</h3><p className="what" ref={what}>{p.what}</p></div>}
               </div>
               <div className="stack" style={{ gap: 8, flex: "none" }}>
                 {p.needs && <Link className="btn block mint small" href={`/story?photo=${encodeURIComponent(p.hash)}`}><Pin /> I know where or when</Link>}
-                <button className="btn block quiet small" onClick={() => setSure(true)}><Eye /> This photo shouldn't be here</button>
+                <button className="btn block quiet small" onClick={() => setSure(true)}><Eye /> This {noun} shouldn&apos;t be here</button>
               </div>
             </>
           )}
@@ -92,11 +104,11 @@ export default function PhotoView({ p, back }: { p: P; back: string }) {
         {!about && (
           <div className="caption">
             <p><b>{who}</b></p>
-            <p>{p.video ? "A still from a video · " : ""}{whereWhen}</p>
+            <p>{plays ? "A video · " : p.video ? "A still from a video · " : ""}{whereWhen}</p>
           </div>
         )}
         <button className="btn block grape" onClick={() => { setAbout(!about); setSure(false); }}>
-          {about ? "Show the photo" : "About this photo"}
+          {about ? `Show the ${noun}` : `About this ${noun}`}
         </button>
         <div className="row">
           <Link className="btn" href={back}><Back /> Back to photos</Link>

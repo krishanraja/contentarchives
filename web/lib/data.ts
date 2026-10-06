@@ -149,14 +149,30 @@ export type PhotoRow = {
   occasion: string | null; width: number | null; height: number | null; hidden: boolean; visible: boolean;
 };
 
-export async function photo(hash: string): Promise<(PhotoRow & { people: string[] }) | null> {
+// play: a video judged whole and clear plays ('ok'); one in a format no phone
+// plays keeps its still ('unplayable'); any other is not judged yet (null).
+// Migration 0009.
+export type Play = "ok" | "unplayable" | null;
+
+export async function photo(hash: string): Promise<(PhotoRow & { people: string[]; play: Play }) | null> {
   const db = sql();
-  const [p] = await db<PhotoRow[]>`select hash, drive_id, media, taken_at, year, approx_year, place,
-      region, country, description, occasion, width, height, hidden, visible
-    from photos where hash = ${hash}`;
+  const [p] = await db<(PhotoRow & { play: string | null })[]>`select p.hash, p.drive_id, p.media, p.taken_at, p.year,
+      p.approx_year, p.place, p.region, p.country, p.description, p.occasion, p.width, p.height, p.hidden, p.visible,
+      v.status as play
+    from photos p left join video_checks v on v.hash = p.hash and p.media = 'video'
+    where p.hash = ${hash}`;
   if (!p || !p.visible) return null;
   const who = await db`select distinct name from photo_people where hash = ${hash} order by name`;
-  return { ...p, people: who.map((r) => r.name as string) };
+  const play: Play = p.play === "ok" || p.play === "unplayable" ? p.play : null;
+  return { ...p, play, people: who.map((r) => r.name as string) };
+}
+
+// The one video the /video route may stream: shown, a video, judged whole and clear.
+export async function playable(hash: string): Promise<{ drive_id: string; mime: string } | null> {
+  const [r] = await sql()`select p.drive_id, v.mime from photos p
+    join video_checks v on v.hash = p.hash and v.status = 'ok'
+    where p.hash = ${hash} and p.visible and p.media = 'video'`;
+  return r ? { drive_id: r.drive_id as string, mime: r.mime as string } : null;
 }
 
 export async function counts() {
