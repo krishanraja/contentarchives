@@ -119,7 +119,7 @@ test("find photos by a first name, a place and a year", async ({ page }) => {
   await floor(page, "results");
   await page.locator(".grid a").first().click();
   await page.waitForURL("**/photo/**");
-  await expect(page.locator(".caption")).toContainText("Ravi Raja");
+  await expect(page.locator(".facts")).toContainText("Ravi Raja");
   await floor(page, "photo");
   await page.click("button:has-text('About this photo')");
   await expect(page.getByRole("heading", { name: "Who" })).toBeVisible();
@@ -263,7 +263,7 @@ test("Where and when: a place for the whole day, then roughly what year", async 
   await expect.poll(async () => (await db`select 1 from answers where field = 'place'`).length).toBe(1);
   const rows = await db`select field, value, array_length(hashes, 1) n from answers where field = 'place'`;
   expect(rows[0]).toMatchObject({ field: "place", value: "Nainital" });
-  const placed = await db`select count(*)::int n from photos where place = 'Nainital'`;
+  const placed = await db`select count(*)::int n from photos where family_place = 'Nainital'`;   // the family's place (0012)
   expect(placed[0].n).toBe(rows[0].n);
   if (await page.getByText("Roughly what year?").isVisible().catch(() => false)) {
     await floor(page, "decade");
@@ -280,7 +280,7 @@ test("a video judged whole plays, streamed in pieces; any other shows its still 
   await page.goto(`/photo/${ok}`);
   const v = page.locator(".frame video");
   await expect(v).toBeVisible();
-  await expect(page.locator(".caption")).toContainText("A video ·");
+  await expect(page.locator(".caption")).toContainText("A video");
   await floor(page, "video");
   // the phone's own player reads it through the route, and it plays
   await expect.poll(() => v.evaluate((el: HTMLVideoElement) => el.readyState)).toBeGreaterThanOrEqual(1);
@@ -340,7 +340,7 @@ test("a wrong year is put right in two taps, with the photos from the same day, 
   try {
     await signIn(page);
     await page.goto(`/photo/${h}`);
-    const when = page.locator("button.when");
+    const when = page.locator("button.fact-when");
     await expect(when).toContainText("Change");
     await floor(page, "photo, the year");
     await when.click();
@@ -360,23 +360,74 @@ test("a wrong year is put right in two taps, with the photos from the same day, 
       and hash = any(${[h, ...batch]})`)[0].n).toBe(4);
     // the family's year wins over the file's everywhere: the photo, the grid, the search
     await page.goto(`/photo/${h}`);
-    await expect(page.locator("button.when")).toContainText("1987");
+    await expect(page.locator("button.fact-when")).toContainText("1987");
     await page.goto("/find?q=1987");
     await expect(page.locator(".sentence")).toContainText("1987");
     await expect(page.locator(`.grid a[href*='${h}'] .badge`)).toHaveText("1987");
     // and Undo puts it back as it was
     await page.goto(`/photo/${h}`);
-    await page.locator("button.when").click();
+    await page.locator("button.fact-when").click();
     await page.click("button:has-text('1990s')");
     await page.click("[aria-label='Years'] button:has-text('1991')");      // the others already have a year: not asked again
-    await expect(page.locator("button.when")).toContainText("1991");
+    await expect(page.locator("button.fact-when")).toContainText("1991");
     await page.click(".undo button:has-text('Undo')");
-    await expect(page.locator("button.when")).toContainText("1987");
+    await expect(page.locator("button.fact-when")).toContainText("1987");
     await expect.poll(async () => (await db`select family_when from photos where hash = ${h}`)[0].family_when).toBe("1987");
   } finally {
     await db`update answers set status = 'undone' where field = 'approx_year' and hashes && ${[h, ...batch]}`;
     await db`update photos set family_when = null where hash = any(${[h, ...batch]})`;
     for (const r of rows) await db`update photos set day_key = ${r.day_key} where hash = ${r.hash}`;
+  }
+});
+
+test("who and where are put right from the photo itself, and win everywhere", async ({ page }) => {
+  await signIn(page);
+  await page.goto("/find?q=Asha%20Raja");
+  const href = (await page.locator(".grid a").first().getAttribute("href"))!;
+  const h = decodeURIComponent(href.split("/photo/")[1].split("?")[0]);
+  const [{ place: was }] = await db`select coalesce(family_place, place) place from photos where hash = ${h}`;
+  try {
+    await page.goto(href);
+    await floor(page, "photo, who where when");
+    // WHO: a wrong name comes off this photograph only
+    await page.click("button.fact-who");
+    await expect(page.getByText("Who is in this photo?")).toBeVisible();
+    await floor(page, "photo, who is in it");
+    await page.click("[aria-label='Take Asha Raja off this photo']");
+    await expect(page.getByText("Taken off: Asha Raja")).toBeVisible();
+    await expect(page.locator(".fact-who")).not.toContainText("Asha Raja");
+    await expect.poll(async () => (await db`select name from photo_people where hash = ${h}`).map((r) => r.name)).not.toContain("Asha Raja");
+    const asha = await (await page.request.get("/api/search?q=" + encodeURIComponent("Asha Raja"))).json();
+    expect(asha.cards.map((c: { hash: string }) => c.hash)).not.toContain(h);
+    // ... and someone missing goes on, spelled the way the family spells them
+    await page.click("button.fact-who");
+    await page.click("button:has-text('Add someone')");
+    await page.fill("#who-add", "sam kapor");
+    await page.click("button:has-text('Save this name')");
+    await expect(page.getByText("Did you mean Sam Kapoor?")).toBeVisible();
+    await floor(page, "photo, add someone, did you mean");
+    await page.click("[aria-label='Names we already know'] button:has-text('Sam Kapoor')");
+    await expect(page.getByText("Added: Sam Kapoor")).toBeVisible();
+    const sam = await (await page.request.get("/api/search?q=" + encodeURIComponent("Sam Kapoor"))).json();
+    expect(sam.cards.map((c: { hash: string }) => c.hash)).toContain(h);
+    // WHERE: the family's place wins over the library's, in search too
+    await page.click("button.fact-where");
+    await expect(page.getByText("Where was this photo taken?")).toBeVisible();
+    await floor(page, "photo, where");
+    await page.click("button:has-text('Somewhere else')");
+    await page.fill("#pl", "Nainital");
+    await page.click("button:has-text('Save this place')");
+    const all = page.getByRole("button", { name: /Yes, all/ });
+    if (await all.isVisible().catch(() => false)) await page.click("button:has-text('Just this one')");
+    await expect(page.locator(".fact-where")).toContainText("Nainital");
+    const found = await (await page.request.get("/api/search?q=Nainital")).json();
+    expect(found.cards.map((c: { hash: string }) => c.hash)).toContain(h);
+    await page.click(".undo button:has-text('Undo')");
+    await expect(page.locator(".fact-where")).toContainText(String(was ?? "Not known"));
+    await expect.poll(async () => (await db`select family_place from photos where hash = ${h}`)[0].family_place).toBe(null);
+  } finally {
+    await db`update answers set status = 'undone' where hashes && ${[h]} and field in ('place', 'in_photo', 'not_in_photo')`;
+    await db`update photos set family_place = null where hash = ${h}`;
   }
 });
 
@@ -547,9 +598,10 @@ test("a misspelt name is caught, and the same name typed differently is the same
   expect((await db`select value from answers where scope = 'cluster'`)[0].value).toBe("Dev Sha");
 });
 
-test("places: a misspelling is caught, a second opinion is counted not written over, the library's place stays", async ({ page, browser }) => {
+test("places: a misspelling is caught, a second opinion is counted not written over, the family's place wins and the library's is kept", async ({ page, browser }) => {
   await db`delete from answers where scope = 'file'`;
   await db`delete from skips`;
+  await db`update photos set family_place = null`;
   await db`update photos set place = null where place = 'Nainital' or place = 'Naini Tal'`;
   await signIn(page);
   await page.goto("/story");
@@ -573,7 +625,7 @@ test("places: a misspelling is caught, a second opinion is counted not written o
     expect((await pg.request.post("/api/answers", { data: { id, kind: "place", hashes: [hash], value } })).ok()).toBe(true);
     return id;
   };
-  const place = async (hash = p.hash as string) => (await db`select place from photos where hash = ${hash}`)[0].place;
+  const place = async (hash = p.hash as string) => (await db`select coalesce(family_place, place) place from photos where hash = ${hash}`)[0].place;
   await say(page, "Goa");
   expect(await place()).toBe("Goa");
   await say(grandpa, "Mumbai");
@@ -585,9 +637,13 @@ test("places: a misspelling is caught, a second opinion is counted not written o
   expect((await meera.request.post("/api/answers/undo", { data: { id: third } })).ok()).toBe(true);
   expect(await place()).toBe("Goa");
 
-  // the library's own place is never replaced by an answer
+  // a wrong library place is put right by the family (Krish, 2026-10-06), and the
+  // library's own is kept underneath: take the answer back and it shows again
   const [lib] = await db`select hash from photos where place = 'Sydney' and visible and media = 'photo' limit 1`;
-  await say(grandpa, "Delhi", lib.hash);
+  const delhi = await say(grandpa, "Delhi", lib.hash);
+  expect(await place(lib.hash)).toBe("Delhi");
+  expect((await db`select place from photos where hash = ${lib.hash}`)[0].place).toBe("Sydney");
+  expect((await grandpa.request.post("/api/answers/undo", { data: { id: delhi } })).ok()).toBe(true);
   expect(await place(lib.hash)).toBe("Sydney");
   for (const pg of [grandpa, meera]) await pg.context().close();
 });

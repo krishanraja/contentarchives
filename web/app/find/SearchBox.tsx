@@ -20,7 +20,7 @@ export default function SearchBox({ initial, example = "" }: { initial: string; 
       <label className="sr" htmlFor="q">What are you looking for?</label>
       <div className="searchrow">
         <input id="q" name="q" className="field" type="search" defaultValue={initial} key={initial}
-          placeholder="Who, where, what…" enterKeyHint="search" autoComplete="off" />
+          placeholder="Type here" enterKeyHint="search" autoComplete="off" />
         <button className="btn sun" aria-label="Search"><Search /> Search</button>
       </div>
       {!initial && <p className="muted hint">Try <b>a name</b>, <b>a place</b>{example ? <>, <b>{example}</b></> : null} or <b>a birthday</b>. You can also tap the microphone on your keyboard and say it.</p>}

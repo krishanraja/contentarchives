@@ -152,11 +152,14 @@ p { margin: 0; }
 .btn.small { min-height: 56px; font-size: 20px; padding: 8px 18px; }
 .btn[disabled] { opacity: .55; }
 .btn svg { width: 28px; height: 28px; flex: none; }
-/* the year under a photo (Krish, 2026-10-06): the whole row is the button - the
-   date on the left, what a tap does on the right - so a wrong year is one
-   obvious tap from being put right */
-.btn.when { justify-content: space-between; text-align: left; box-shadow: none; padding-right: 10px; }
-.btn.when .when-date { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* who, where and when under a photo (Krish, 2026-10-06): each card is a
+   button that puts it right - what it is on top, what it says below */
+.facts { flex: none; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); grid-template-areas: "who who" "where when"; gap: 10px; }
+.btn.fact { flex-direction: column; align-items: stretch; justify-content: center; gap: 0; text-align: left; box-shadow: none; padding: 4px 12px 6px; }
+.fact-who { grid-area: who; } .fact-where { grid-area: where; } .fact-when { grid-area: when; }
+.fact .fact-k { display: flex; justify-content: space-between; align-items: center; gap: 8px; font-size: 17px; color: var(--ink-soft); letter-spacing: .03em; }
+.fact .fact-do { background: var(--sun); color: var(--ink); border: 2px solid var(--ink); border-radius: 999px; padding: 0 10px; font-size: 17px; letter-spacing: 0; }
+.fact .fact-v { font-size: 21px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* decades and years: a tight grid, so all ten years of a decade fit at once */
 .chips.when-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(76px, 1fr)); }
 .chips.when-grid .chip { justify-content: center; padding-left: 6px; padding-right: 6px; }
@@ -177,11 +180,15 @@ p { margin: 0; }
 .photo-panel:is([data-fit="2"], [data-fit="3"], [data-fit="4"]) .turnrow .btn { padding-left: 12px; padding-right: 12px; }
 .photo-panel:is([data-fit="2"], [data-fit="3"], [data-fit="4"]) .turnrow .send svg { display: none; }
 .photo-panel:is([data-fit="2"], [data-fit="3"], [data-fit="4"]) .turnrow :is(.prev, .next) { font-size: 28px; }
-.photo-panel:is([data-fit="1"], [data-fit="2"]) .caption p + p { display: none; }
-.photo-panel:is([data-fit="3"], [data-fit="4"]) .caption { display: none; }
-/* while "Saved · Undo" shows, it already says the year: on a cramped screen the year row steps aside */
-.photo-panel[data-fit="4"]:has(.undo) .btn.when { display: none; }
-.btn.when .when-do { flex: none; background: var(--sun); border: var(--line); border-radius: 999px; padding: 4px 16px; font-size: 20px; }
+/* squeezed: the cards drop their labels (a pencil says they still change
+   things), a video's caption goes, then Who (it is in About too); while
+   "Saved · Undo" shows, it already says what changed, so the cards step aside */
+.photo-panel:not([data-fit="0"]) .fact .fact-k { display: none; }
+.photo-panel:not([data-fit="0"]) .fact .fact-v::after { content: " ✎"; }
+.photo-panel:not([data-fit="0"]) .caption { display: none; }
+.photo-panel:is([data-fit="3"], [data-fit="4"]) .facts { grid-template-areas: "where when"; }
+.photo-panel:is([data-fit="3"], [data-fit="4"]) .fact-who { display: none; }
+.photo-panel[data-fit="4"]:has(.undo) .facts { display: none; }
 
 /* ---------- big home tiles ---------- */
 .tile {
@@ -252,10 +259,10 @@ label.big { font-family: var(--font-display), system-ui; font-weight: 600; font-
   background: var(--sun); border: 2px solid var(--ink); font-weight: 700; font-size: 16px;
 }
 
+/* what a search found, said in words - plain text, never mistaken for a button */
 .sentence {
   font-family: var(--font-display), system-ui; font-weight: 600; font-size: calc(var(--h2) - 4px);
-  background: var(--sun); border: var(--line); border-radius: 18px; padding: 8px 14px;
-  box-shadow: 3px 3px 0 var(--ink); flex: none;
+  line-height: 1.2; padding: 2px 2px; flex: none;
 }
 
 .card {

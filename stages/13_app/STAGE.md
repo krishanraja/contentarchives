@@ -107,6 +107,14 @@ nudity in this".
   column (`when_year`, migration 0011). The year under every photo is a button: a
   decade, then a year, and the photos the file dates to the same day can be put
   right in the same answer
+- the family's WHERE and WHO win the same way (Krish, 2026-10-06): their settled
+  place (`family_place`) shows and is searched instead of the library's, and each
+  person's latest "in it" / "not in it" on one photograph is a vote that adds or
+  takes off that name on that photograph only (`photo_people`, migration 0012).
+  Under every photo Who, Where and When are three buttons that put them right. The
+  owner's private rules see a family's place only to HIDE: an always-fine place is
+  matched against the library's place and path alone, so nothing typed on a phone
+  can un-hide a private photograph
 - every size rule asks the space the page really has (`@container screen`), never
   the window (Krish, 2026-10-06): a phone's browser answers `@media (max-height)`
   as if its address bar were hidden, so a rule written that way did not fire on

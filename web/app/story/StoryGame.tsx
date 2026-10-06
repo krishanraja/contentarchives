@@ -4,13 +4,12 @@ import { useCallback, useEffect, useState } from "react";
 import Undo from "@/components/Undo";
 import Confetti from "@/components/Confetti";
 import Shot from "@/components/Shot";
-import Fit from "@/components/Fit";
 import YearPicker from "@/components/YearPicker";
+import PlacePicker from "@/components/PlacePicker";
 import { send, uuid } from "@/components/outbox";
-import { close, exact } from "@/lib/spelling";
 
 type S = { hash: string; needPlace: boolean; needYear: boolean; day: string[]; places: string[] } | null;
-type Step = "place" | "spell" | "day" | "decade" | "thanks";
+type Step = "place" | "day" | "decade" | "thanks";
 
 const img = (h: string, size = "v") => `/img/${size}/${encodeURIComponent(h)}`;
 
@@ -18,17 +17,14 @@ export default function StoryGame({ only }: { only: string | null }) {
   const [s, setS] = useState<S | undefined>(undefined);
   const [step, setStep] = useState<Step>("place");
   const [place, setPlace] = useState("");
-  const [typing, setTyping] = useState(false);
   const [labelled, setLabelled] = useState(0);
   const [last, setLast] = useState<{ id: string; text: string } | null>(null);
   const [seen, setSeen] = useState<string[]>([]);
   const [err, setErr] = useState("");
   const [single, setSingle] = useState(only);
-  const [known, setKnown] = useState<string[]>([]);
-  const [meant, setMeant] = useState<string[]>([]);
 
   const load = useCallback(async (after: string[], one: string | null) => {
-    setS(undefined); setErr(""); setPlace(""); setTyping(false); setLabelled(0);
+    setS(undefined); setErr(""); setPlace(""); setLabelled(0);
     const r = await fetch(`/api/story/next?after=${after.join(",")}${one ? `&photo=${encodeURIComponent(one)}` : ""}`)
       .then((x) => x.json()).catch(() => undefined);
     if (r === undefined) { setErr("No internet connection. Your answers are safe on this phone."); setS(null); return; }
@@ -36,20 +32,6 @@ export default function StoryGame({ only }: { only: string | null }) {
     if (r) setStep(r.needPlace ? "place" : r.needYear ? "decade" : "thanks");
   }, []);
   useEffect(() => { void load([], only); }, [load, only]);
-  useEffect(() => { fetch("/api/names").then((r) => r.json()).then((j) => setKnown(j.places || [])).catch(() => undefined); }, []);
-
-  // a typed place spelled the way the family already spells it is that place;
-  // a near miss ("Naintal") is asked about, never changed without a tap
-  function typedPlace() {
-    const v = place.trim().replace(/\s+/g, " ");
-    if (v.length < 2) return;
-    const all = [...new Set([...(s?.places || []), ...known])];
-    const same = exact(v, all);
-    if (same) { pickPlace(same); return; }
-    const near = close(v, all);
-    if (near.length) { setMeant(near); setStep("spell"); return; }
-    pickPlace(v);
-  }
 
   function after() {
     if (!s) return;
@@ -117,7 +99,6 @@ export default function StoryGame({ only }: { only: string | null }) {
 
   // One screen per step, never scrolling (Krish, 2026-10-05): the photo takes
   // the room the step leaves it; a list of places longer than its room turns.
-  const typedNow = place.trim().replace(/\s+/g, " ");
   return (
     <div className={step === "decade" ? "game picking" : "game"}>
       {step === "thanks" && labelled > 0 && <Confetti seed={labelled} />}
@@ -126,44 +107,8 @@ export default function StoryGame({ only }: { only: string | null }) {
         {err && <p className="notice error" role="alert">{err}</p>}
 
         {step === "place" && (
-          <>
-            <h2>Where was this taken?</h2>
-            {!typing ? (
-              <>
-                {s.places.length > 0 && (
-                  <Fit label="Places" more="More places">
-                    {s.places.map((p) => <button key={p} className="chip" onClick={() => pickPlace(p)}>{p}</button>)}
-                  </Fit>
-                )}
-                <div className="row">
-                  <button className="btn sky" onClick={() => setTyping(true)}>{s.places.length ? "Somewhere else" : "Type the place"}</button>
-                  <button className="btn" onClick={s.needYear ? () => { void shrug(); setStep("decade"); } : skip}>I don't know</button>
-                </div>
-              </>
-            ) : (
-              <form className="contents" onSubmit={(e) => { e.preventDefault(); typedPlace(); }}>
-                <label className="sr" htmlFor="pl">The place</label>
-                <input id="pl" className="field" value={place} onChange={(e) => setPlace(e.target.value)} placeholder="A town, a house, a country…" autoCapitalize="words" enterKeyHint="done" />
-                <div className="row">
-                  <button type="button" className="btn" onClick={s.needYear ? () => { void shrug(); setStep("decade"); } : skip}>I don't know</button>
-                  <button className="btn mint">Save this place</button>
-                </div>
-              </form>
-            )}
-          </>
-        )}
-
-        {step === "spell" && (
-          <>
-            <h2>Did you mean {meant.length === 1 ? `${meant[0]}?` : "one of these?"}</h2>
-            <Fit label="Places we already know" more="More places">
-              {meant.map((p) => <button key={p} className="chip" onClick={() => pickPlace(p)}>{p}</button>)}
-            </Fit>
-            <div className="row">
-              <button className="btn" onClick={() => setStep("place")}>Change what I typed</button>
-              <button className="btn" onClick={() => pickPlace(typedNow)}>No, save “{typedNow}”</button>
-            </div>
-          </>
+          <PlacePicker key={s.hash} ask="Where was this taken?" places={s.places} cancel="I don't know"
+            onCancel={s.needYear ? () => { void shrug(); setStep("decade"); } : skip} onPick={pickPlace} />
         )}
 
         {step === "day" && (

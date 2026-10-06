@@ -155,7 +155,7 @@ test("every screen, in every state, fits every screen size without scrolling", a
   const first = await page.locator(".grid a").first().getAttribute("href");
   const hash = decodeURIComponent(first!.split("/photo/")[1].split("?")[0]);
   await db`update photos set description = ${"A long afternoon in the garden with everyone gathered round the table under the old mango tree, plates of food, children running between the chairs, a dog asleep in the shade, grandparents in the middle laughing at something just out of the picture, cousins on the steps, and the light coming low through the leaves so every face is half in sun. ".repeat(2).slice(0, 556)},
-             place = null, year = null, approx_year = null, taken_at = null,   -- both actions show: "I know where or when" too
+             place = null, year = null, approx_year = null, taken_at = null,   -- nothing known: every card says so
            people = ${["Asha Raja", "Ravi Raja", "Meera Shah", "Dev Shah", "Priya Kapoor", "Sam Kapoor", "Kamala Raja", "Sunil Raja", "Usha Raja", "Ashvin Raja", "Isha Patel", "Tara Patel", "Vikram Patel"]}::text[]
            where hash = ${hash}`;
   await page.goto(first!);
@@ -164,7 +164,7 @@ test("every screen, in every state, fits every screen size without scrolling", a
   if (await about.count()) { await about.click(); await fits(page, "photo, about"); }
   // the year: which decade, which year, and the photos from the same day too
   await page.goto(first!);
-  await page.locator("button.when").click();
+  await page.locator("button.fact-when").click();
   await fits(page, "photo, which decade");
   await page.click("button:has-text('1980s')");
   await fits(page, "photo, which year");
@@ -172,7 +172,7 @@ test("every screen, in every state, fits every screen size without scrolling", a
   await db`update photos set day_key = ${dk ?? "x-day"} where hash in (select hash from photos where hash <> ${hash} and media = 'photo' order by hash limit 3)`;
   await db`update photos set day_key = ${dk ?? "x-day"} where hash = ${hash}`;
   await page.goto(first!);
-  await page.locator("button.when").click();
+  await page.locator("button.fact-when").click();
   await page.click("button:has-text('1980s')");
   await page.click("[aria-label='Years'] button:has-text('1987')");
   await expect(page.getByText(/Change the \d+ other/)).toBeVisible();
@@ -180,6 +180,17 @@ test("every screen, in every state, fits every screen size without scrolling", a
   await page.click("button:has-text('Just this one')");
   await expect(page.getByText("Saved: 1987")).toBeVisible();
   await fits(page, "photo, year saved + undo");
+  // who is in it, adding someone, and where
+  await page.goto(first!);
+  await page.click("button.fact-who");
+  await fits(page, "photo, who is in it");
+  await page.click("button:has-text('Add someone')");
+  await fits(page, "photo, add someone");
+  await page.goto(first!);
+  await page.click("button.fact-where");
+  await fits(page, "photo, where");
+  await page.click("button:has-text('Somewhere else')");
+  await fits(page, "photo, where, typing");
   // a video that plays, and one that does not yet
   await page.goto(`/photo/${"0".repeat(63)}8`);
   await expect(page.locator(".frame video")).toBeVisible();

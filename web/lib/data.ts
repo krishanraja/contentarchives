@@ -19,9 +19,9 @@ export async function vocab() {
   const db = sql();
   const [people, places] = await Promise.all([
     db`select distinct name from photo_people where name is not null`,
-    db`select place, count(*)::int n from photos
-       where place is not null and place <> '' and visible
-       group by place order by n desc limit 400`,
+    db`select coalesce(family_place, place) place, count(*)::int n from photos
+       where coalesce(family_place, place) <> '' and visible
+       group by 1 order by n desc limit 400`,
   ]);
   return { people: people.map((r) => r.name as string), places: places.map((r) => r.place as string) };
 }
@@ -36,7 +36,8 @@ export async function search(q: string, offset = 0) {
   } else if (p.rest) mode = "words";
   const db = sql();
   const rows = await db`
-    select s.hash, s.score, s.total, ph.media, ph.year, ph.approx_year, ph.family_when, ph.place,
+    select s.hash, s.score, s.total, ph.media, ph.year, ph.approx_year, ph.family_when,
+           coalesce(ph.family_place, ph.place) place,
            ph.width, ph.height
     from search_photos(
       ${vec ? `[${vec.join(",")}]` : null}::extensions.vector,
@@ -67,8 +68,8 @@ export async function refine(p: Parsed): Promise<Refine | null> {
   if (p.rest) return null;
   const db = sql();
   const yearOf = db`ph.when_year`;          // the family's year first, then the file's (0011)
-  const where = db`(${p.place}::text is null or
-      coalesce(ph.place, '') || ' ' || coalesce(ph.region, '') || ' ' || coalesce(ph.country, '') ilike '%' || ${p.place} || '%')`;
+  const where = db`(${p.place}::text is null or coalesce(ph.family_place,
+      coalesce(ph.place, '') || ' ' || coalesce(ph.region, '') || ' ' || coalesce(ph.country, '')) ilike '%' || ${p.place} || '%')`;
   if (p.yearFrom !== null && !p.people.length) {
     // a year (or a decade) first: who is in these photos?
     const rows = await db`
@@ -127,9 +128,9 @@ export async function browse() {
               (select pe.cover_face from people pe where pe.name = pp.name) cover
        from photo_people pp join photos p on p.hash = pp.hash and p.visible
        group by pp.name order by n desc limit 200`,
-    db`select place, count(*)::int n from photos
-       where place is not null and place <> '' and visible
-       group by place order by n desc limit 120`,
+    db`select coalesce(family_place, place) place, count(*)::int n from photos
+       where coalesce(family_place, place) <> '' and visible
+       group by 1 order by n desc limit 120`,
     db`select (when_year / 10 * 10) decade, count(*)::int n
        from photos where visible and when_year is not null
        group by 1 order by 1`,
@@ -146,7 +147,7 @@ export type PhotoRow = {
   year: number | null; approx_year: string | null; place: string | null;
   region: string | null; country: string | null; description: string | null;
   occasion: string | null; width: number | null; height: number | null; hidden: boolean; visible: boolean;
-  family_when: string | null; day_key: string | null;
+  family_when: string | null; family_place: string | null; day_key: string | null;
 };
 
 // play: a video judged whole and clear plays ('ok'); one in a format no phone
@@ -157,22 +158,25 @@ export type Play = "ok" | "unplayable" | null;
 // sameDay: the other photographs the file says were taken the same day. When
 // that date is the day a batch was scanned or copied, they are usually wrong
 // together, and one answer can put them all right (Krish, 2026-10-06).
-export async function photo(hash: string): Promise<(PhotoRow & { people: string[]; play: Play; sameDay: string[] }) | null> {
+export async function photo(hash: string): Promise<(PhotoRow & { people: string[]; play: Play; sameDay: string[]; sameDayPlace: string[] }) | null> {
   const db = sql();
   const [p] = await db<(PhotoRow & { play: string | null })[]>`select p.hash, p.drive_id, p.media, p.taken_at, p.year,
       p.approx_year, p.place, p.region, p.country, p.description, p.occasion, p.width, p.height, p.hidden, p.visible,
-      p.family_when, p.day_key, v.status as play
+      p.family_when, p.family_place, p.day_key, v.status as play
     from photos p left join video_checks v on v.hash = p.hash and p.media = 'video'
     where p.hash = ${hash}`;
   if (!p || !p.visible) return null;
   const [who, same] = await Promise.all([
     db`select distinct name from photo_people where hash = ${hash} order by name`,
-    p.day_key && !p.family_when ? db`select hash from photos
-      where day_key = ${p.day_key} and hash <> ${hash} and visible and family_when is null
+    p.day_key ? db`select hash, family_when is null as no_when, family_place is null as no_place from photos
+      where day_key = ${p.day_key} and hash <> ${hash} and visible
       order by taken_at nulls last, hash limit 199` : Promise.resolve([]),
   ]);
   const play: Play = p.play === "ok" || p.play === "unplayable" ? p.play : null;
-  return { ...p, play, people: who.map((r) => r.name as string), sameDay: same.map((r) => r.hash as string) };
+  return { ...p, play, people: who.map((r) => r.name as string),
+    // the family has not answered for these yet: one answer can cover them too
+    sameDay: p.family_when ? [] : same.filter((r) => r.no_when).map((r) => r.hash as string),
+    sameDayPlace: p.family_place ? [] : same.filter((r) => r.no_place).map((r) => r.hash as string) };
 }
 
 // The one video the /video route may stream: shown, a video, judged whole and clear.
@@ -189,7 +193,7 @@ export async function counts() {
       (select count(*)::int from queue q join group_names g on g.group_id = q.group_id
          where not g.answered) faces,
       (select count(*)::int from photos where visible and media = 'photo'
-         and (place is null or (year is null and approx_year is null and family_when is null))) story,
+         and ((place is null and family_place is null) or (year is null and approx_year is null and family_when is null))) story,
       (select count(*)::int from photos where visible) photos`;
   return r as { faces: number; story: number; photos: number };
 }
@@ -264,15 +268,15 @@ export async function nextStory(who: string, after: string[] = [], only: string 
   // A photo comes to this person while it still needs something THEY have not
   // answered; "I don't know" sends it to the back of their queue for 30 days.
   const [p] = only ? await db`
-    select p.hash, p.place, p.year, p.approx_year, p.family_when, p.day_key, p.width, p.height
+    select p.hash, coalesce(p.family_place, p.place) place, p.year, p.approx_year, p.family_when, p.day_key, p.width, p.height
     from photos p where p.hash = ${only} and p.visible and p.media = 'photo'` : await db`
     with days as (select day_key, count(*) as n from photos where day_key is not null group by day_key)
-    select p.hash, p.place, p.year, p.approx_year, p.family_when, p.day_key, p.width, p.height
+    select p.hash, coalesce(p.family_place, p.place) place, p.year, p.approx_year, p.family_when, p.day_key, p.width, p.height
     from photos p
     left join days d on d.day_key = p.day_key
     left join skips s on s.who = ${who} and s.group_id = 'story:' || p.hash and s.at > now() - interval '30 days'
     where p.visible and p.media = 'photo'
-      and ((p.place is null and not exists (select 1 from answers a where a.who = ${who} and a.scope = 'file'
+      and ((p.place is null and p.family_place is null and not exists (select 1 from answers a where a.who = ${who} and a.scope = 'file'
               and a.field = 'place' and a.status in ('new', 'ingested') and a.hashes @> array[p.hash]))
         or (p.year is null and p.approx_year is null and p.family_when is null and not exists (select 1 from answers a where a.who = ${who}
               and a.scope = 'file' and a.field = 'approx_year' and a.status in ('new', 'ingested') and a.hashes @> array[p.hash])))
@@ -281,10 +285,10 @@ export async function nextStory(who: string, after: string[] = [], only: string 
     limit 1`;
   if (!p) return null;
   const day = p.day_key ? await db`select hash from photos
-      where day_key = ${p.day_key} and hash <> ${p.hash} and visible and place is null
+      where day_key = ${p.day_key} and hash <> ${p.hash} and visible and place is null and family_place is null
       order by taken_at nulls last limit 40` : [];
-  const places = await db`select place, count(*)::int n from photos
-      where place is not null and place <> '' group by place order by n desc limit 8`;
+  const places = await db`select coalesce(family_place, place) place, count(*)::int n from photos
+      where coalesce(family_place, place) <> '' and visible group by 1 order by n desc limit 8`;
   return {
     hash: p.hash as string, width: p.width, height: p.height,
     needPlace: !p.place, needYear: !p.year && !p.approx_year && !p.family_when,
@@ -296,7 +300,7 @@ export async function nextStory(who: string, after: string[] = [], only: string 
 // ---------- answers: durable, idempotent, undoable ----------
 
 export type AnswerIn = {
-  id: string; kind: "person" | "mixed" | "place" | "year";
+  id: string; kind: "person" | "mixed" | "place" | "year" | "in" | "out";   // in/out: a name on ONE photograph
   group?: string; cluster?: string; hashes?: string[]; value: string; client_at?: string;
 };
 
@@ -310,7 +314,7 @@ export function validate(a: AnswerIn): string | null {
   if (/^(\?+|for\s.+|-+)$/i.test(v)) return "that is a question, not an answer";
   if (a.kind === "person" || a.kind === "mixed") {
     if (!a.group) return "no face group";
-  } else if (a.kind === "place" || a.kind === "year") {
+  } else if (a.kind === "place" || a.kind === "year" || a.kind === "in" || a.kind === "out") {
     if (!a.hashes || !a.hashes.length || a.hashes.length > 200) return "no photos";
     if (a.kind === "year" && !YEAR.test(v)) return "a year is 1987 or a decade is 1980s";
   } else return "unknown answer";
@@ -325,9 +329,9 @@ export async function saveAnswer(who: string, a: AnswerIn): Promise<{ labelled: 
   let value = a.value.trim().replace(/\s+/g, " ");
   // a name or place that differs from a known one only in case, spacing or
   // punctuation IS that one, spelled the way the family already spells it
-  if (a.kind === "person" || a.kind === "place") {
+  if (a.kind === "person" || a.kind === "place" || a.kind === "in" || a.kind === "out") {
     const v = await vocab();
-    value = exact(value, a.kind === "person" ? v.people : v.places) || value;
+    value = exact(value, a.kind === "place" ? v.places : v.people) || value;
   }
   return db.begin(async (tx) => {
     if (a.kind === "person" || a.kind === "mixed") {
@@ -349,11 +353,13 @@ export async function saveAnswer(who: string, a: AnswerIn): Promise<{ labelled: 
     const ok = await tx`select hash from photos where hash = any(${a.hashes!}::text[]) and visible`;
     const hashes = ok.map((r) => r.hash as string);
     if (!hashes.length) throw new Error("no such photographs");
-    const field = a.kind === "place" ? "place" : "approx_year";
+    const field = a.kind === "place" ? "place" : a.kind === "year" ? "approx_year"
+      : a.kind === "in" ? "in_photo" : "not_in_photo";
     const ins = await tx`insert into answers (id, client_at, who, scope, target, field, value, hashes)
       values (${a.id}, ${a.client_at || null}, ${who}, 'file', ${hashes[0]}, ${field}, ${value}, ${hashes}::text[])
       on conflict (id) do nothing returning id`;
-    if (ins.length) await settle(tx, field, hashes);
+    // who is in it is counted where it is read (photo_people, migration 0012)
+    if (ins.length && (field === "place" || field === "approx_year")) await settle(tx, field, hashes);
     return { labelled: hashes.length };
   });
 }
@@ -361,18 +367,16 @@ export async function saveAnswer(who: string, a: AnswerIn): Promise<{ labelled: 
 // What a photo shows for a place or a year the FAMILY gave: each person's latest
 // answer is one vote, the answer most people gave wins (a tie goes to the first
 // given), spellings folded as in name_key. A second person's different answer
-// is counted, never written over the first. A place the LIBRARY gave (no family
-// answer matches it) is never replaced by an answer here. A year is different
-// (Krish, 2026-10-06): a file's date is often the day it was scanned or
-// copied, so the family's year is kept apart (family_when) and wins.
+// is counted, never written over the first. The family's answer is kept apart
+// from what the library or the file said (family_when, family_place) and wins
+// on every screen (Krish, 2026-10-06: a file's date is often the day it was
+// scanned, and a library's place a guess); undo every answer and the
+// library's value shows again, untouched.
 type Tx = postgres.TransactionSql;
 async function settle(tx: Tx, field: "place" | "approx_year", hashes: string[]) {
-  // a year the family gives lives in its own column and wins over the file's
-  // date (migration 0011); a place still never replaces the library's
-  const col = field === "approx_year" ? "family_when" : "place";
-  const familyOwned = col === "family_when" ? tx`true` : tx`(p.${tx(col)} is null or exists (select 1 from answers o
-      where o.scope = 'file' and o.field = ${field} and o.hashes @> array[p.hash]
-      and name_key(o.value) = name_key(p.${tx(col)})))`;
+  // the family's year and place live in their own columns and win over the
+  // file's date and the library's guess (migrations 0011, 0012)
+  const col = field === "approx_year" ? "family_when" : "family_place";
   await tx`
     with v as (
       select distinct on (h, a.who) h, a.who, a.value, a.at
@@ -386,13 +390,11 @@ async function settle(tx: Tx, field: "place" | "approx_year", hashes: string[]) 
     sp as (select distinct on (h, k) h, k, value from s order by h, k, c desc, f)
     update photos p set ${tx(col)} = sp.value, updated_at = now()
     from w join sp on sp.h = w.h and sp.k = w.k
-    where p.hash = w.h and p.${tx(col)} is distinct from sp.value and ${familyOwned}`;
-  // no live family answer left (all undone): a family value goes, a library one stays
+    where p.hash = w.h and p.${tx(col)} is distinct from sp.value`;
+  // no live family answer left (all undone): the library's value shows again
   await tx`
     update photos p set ${tx(col)} = null, updated_at = now()
     where p.hash = any(${hashes}::text[]) and p.${tx(col)} is not null
-      and (${col === "family_when"} or exists (select 1 from answers o where o.scope = 'file' and o.field = ${field}
-                  and o.hashes @> array[p.hash] and name_key(o.value) = name_key(p.${tx(col)})))
       and not exists (select 1 from answers o where o.scope = 'file' and o.field = ${field}
                   and o.status in ('new', 'ingested') and o.hashes @> array[p.hash])`;
 }
@@ -410,7 +412,7 @@ export async function undoAnswer(who: string, id: string): Promise<boolean> {
       returning scope, field, value, hashes`;
     if (!a) return false;
     // the photo shows what everyone else's answers now add up to
-    if (a.scope === "file") await settle(tx, a.field === "place" ? "place" : "approx_year", a.hashes as string[]);
+    if (a.scope === "file" && (a.field === "place" || a.field === "approx_year")) await settle(tx, a.field, a.hashes as string[]);
     return true;
   });
 }

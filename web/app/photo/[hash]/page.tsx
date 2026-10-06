@@ -23,7 +23,8 @@ export default async function Photo({ params, searchParams }: { params: Promise<
   const q = (await searchParams).q || "";
   const p = await photo(decodeURIComponent(hash));
   if (!p) notFound();
-  const where = [p.place, p.country && p.country !== p.place ? p.country : null].filter(Boolean).join(", ");
+  // what the family said wins over the library's guess (migration 0012)
+  const where = p.family_place || [p.place, p.country && p.country !== p.place ? p.country : null].filter(Boolean).join(", ");
   const back = q ? `/find?q=${encodeURIComponent(q)}` : "/find";
   return (
     <>
@@ -32,8 +33,7 @@ export default async function Photo({ params, searchParams }: { params: Promise<
         <PhotoView q={q} p={{
           hash: p.hash, alt: p.description || "A family photo", people: p.people, where, when: when(p),
           what: p.description || null, video: p.media === "video", play: p.play,
-          needs: !p.place || (!p.year && !p.approx_year && !p.family_when),
-          sameDay: p.sameDay, dayText: p.taken_at ? day(p.taken_at) : null,
+          sameDay: p.sameDay, sameDayPlace: p.sameDayPlace, dayText: p.taken_at ? day(p.taken_at) : null,
         }} />
       </main>
     </>

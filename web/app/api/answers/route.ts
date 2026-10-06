@@ -11,6 +11,10 @@ export async function POST(req: NextRequest) {
   try {
     return NextResponse.json({ ok: true, ...(await saveAnswer(who, a!)) });
   } catch (e) {
+    // a database's own words never reach a grandmother's screen
+    if ((e as { code?: string }).code) {
+      return NextResponse.json({ ok: false, error: "That didn't save. Please try again in a moment." }, { status: 500 });
+    }
     // 422: the phone must NOT retry this one - it can never succeed
     return NextResponse.json({ ok: false, error: (e as Error).message }, { status: 422 });
   }

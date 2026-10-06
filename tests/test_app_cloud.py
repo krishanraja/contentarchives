@@ -542,6 +542,32 @@ def private_rules(out):
     check("a photograph a person hid stays theirs", q(db, "select hidden_by from photos where hash = 'p11'")[0][0], "grandma")
     again = q(db, "select * from apply_private_rules()")[0]
     check("a second run changes nothing", (again[0], again[1]), (0, 0))
+    # a place the family types can bring a photograph INTO a private place, never take one out
+    db.execute("update photos set family_place = 'Secretbay Pier' where hash = 'p5'")
+    db.execute("update photos set family_place = 'Allowtown Park' where hash = 'p1'")
+    db.commit()
+    q(db, "select * from apply_private_rules()")
+    shown = {h for (h,) in q(db, "select hash from photos where visible")}
+    check("a family's place can make a photograph private, never public again",
+          ("p5" in shown, "p1" in shown), (False, False))
+    db.execute("update photos set family_place = null where hash in ('p5', 'p1')")
+    db.commit()
+    q(db, "select * from apply_private_rules()")
+    # who is in it: a family member taken off a photograph no longer keeps it shown
+    db.execute("insert into answers (id, who, scope, target, field, value, hashes) values "
+               "(gen_random_uuid(), 'gran', 'file', 'p2', 'not_in_photo', 'Aunt Secretname', array['p2'])")
+    db.commit()
+    q(db, "select * from apply_private_rules()")
+    check("a name the family takes off a photograph no longer counts there",
+          ("p2" in {h for (h,) in q(db, "select hash from photos where visible")},
+           q(db, "select count(*) from photo_people where hash = 'p2' and name = 'Aunt Secretname'")[0][0]), (False, 0))
+    db.execute("insert into answers (id, who, scope, target, field, value, hashes) values "
+               "(gen_random_uuid(), 'dev', 'file', 'p2', 'in_photo', 'Aunt Secretname', array['p2']), "
+               "(gen_random_uuid(), 'meera', 'file', 'p2', 'in_photo', 'aunt  secretname', array['p2'])")
+    db.commit()
+    q(db, "select * from apply_private_rules()")
+    check("and two who say she is in it outvote one who said she is not",
+          "p2" in {h for (h,) in q(db, "select hash from photos where visible")}, True)
     db.execute("delete from private_rules where kind = 'words'")
     db.commit()
     back = q(db, "select * from apply_private_rules()")[0]
