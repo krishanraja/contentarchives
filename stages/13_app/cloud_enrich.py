@@ -530,6 +530,7 @@ class Worker:
         self.save_clusters()
         self.group()
         self.frames()
+        self.private()
         self.rebuild()
         receipt = dict(self.c, spent_usd=round(self.spent, 4), seconds=int(time.time() - t0),
                        errors=sum(self.errors.values()))
@@ -540,6 +541,16 @@ class Worker:
         for name, n in self.errors.most_common():
             say("error", **{re.sub(r"[^a-z0-9_]", "_", name.lower())[:40] or "unknown": n})
         return receipt
+
+    def private(self):
+        """The owner's private rules (migration 0008), before anything is
+        rebuilt: a photograph they cover is hidden before anyone can see it,
+        and leaves the questions and the people's covers in the same run. The
+        rules live only in the database - this repository is public."""
+        h, s, c = self.db.execute("select * from apply_private_rules()").fetchone()
+        self.db.commit()
+        self.c["private_hidden"] = int(h)
+        say("private", hidden=int(h), shown_again=int(s), covered=int(c))
 
     def reconcile(self, files):
         ids = {f["id"] for f in files}

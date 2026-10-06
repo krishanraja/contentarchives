@@ -247,6 +247,10 @@ def main():
     library(out)
 
     print()
+    print("8c. the owner's private places, periods and people")
+    private_rules(out)
+
+    print()
     print("8b. a rate limit waits and tries again; a refusal does not")
     class FakeCL:
         def __init__(self, fails, code):
@@ -479,6 +483,62 @@ class LibGemini:
 
     def embed(self, text):
         return [0.01] * 768, 0.0
+
+
+def private_rules(out):
+    """Made-up names and places only: the real rules never enter this public
+    repository (migration 0008)."""
+    db = fresh_db(NAME + "_priv")
+    rows = [  # hash, place, country, taken_at, people, description
+        ("p1", "Secretbay", "Farland", "2023-05-01", ["Owner", "Partner"], "two people on a beach"),
+        ("p2", "Secretbay", "Farland", "2023-05-02", ["Owner", "Aunt Secretname"], "lunch"),
+        ("p3", "Secretbay Beach", "Farland", "2023-05-03", [], "the sea"),
+        ("p4", "Elsewhere", "Farland", "2023-06-01", [], "a street"),
+        ("p5", "Homeplace", "Homeland", "2023-06-01", [], "a garden"),
+        ("p6", None, None, "2023-07-01", ["Owner"], "a room"),
+        ("p7", "Homeplace", "Homeland", "2019-01-01", ["Partner"], "a cafe"),
+        ("p8", "Homeplace", "Homeland", "2019-01-02", ["Partner", "Aunt Secretname"], "a birthday"),
+        ("p9", "Homeplace", "Homeland", "2018-01-01", ["Owner"], "a picnic, a kite and a lantern"),
+        ("p10", "Homeplace", "Homeland", "2018-02-01", ["Aunt Secretname"], "a picnic"),
+        ("p11", "Homeplace", "Homeland", "2017-01-01", [], "hidden by a person"),
+        ("p12", "Allowtown Park", "Homeland", "2019-03-01", ["Partner"], "a park"),
+        ("p13", "Secretbay", "Farland", "2023-05-04", ["Owner", "Friend Onlyhere"], "drinks"),
+    ]
+    for h, place, country, at, people, desc in rows:
+        db.execute("insert into photos (hash, drive_id, place, country, taken_at, people, description) "
+                   "values (%s, %s, %s, %s, %s, %s, %s)", (h, "d" + h, place, country, at, people, desc))
+    db.execute("update photos set hidden = true, hidden_by = 'grandma' where hash = 'p11'")
+    for r in ("('ignore', null, null, null, null, false, 'Owner')", "('ignore', null, null, null, null, false, 'Partner')",
+              "('place', 'secretbay', null, null, null, false, null)",
+              "('period', null, '2023-06-01', '2023-08-01', array['Farland'], true, null)",
+              "('person', null, null, null, null, false, 'Partner')",
+              "('words', 'picnic|kite|lantern', null, null, null, false, null)"):
+        db.execute("insert into private_rules (kind, pattern, from_at, to_at, countries, unplaced, name) values " + r)
+    db.execute("insert into private_overrides (kind, pattern, n) values ('allow', 'allowtown', null), ('family_min', null, 2)")
+    db.commit()
+    dry = q(db, "select * from apply_private_rules(true)")[0]
+    check("a dry run counts and changes nothing",
+          (dry[0], q(db, "select count(*) from photos where hidden_by = 'rule:private'")[0][0]), (7, 0))
+    w = CE.Worker(db, None, None, None, None, "", "")
+    with contextlib.redirect_stdout(out):
+        w.private()
+    shown = {h for (h,) in q(db, "select hash from photos where visible")}
+    check("a private place hides the owner and partner, and nobody recognised", ("p1" in shown, "p3" in shown), (False, False))
+    check("someone else in the family keeps a photograph shown", ("p2" in shown, "p8" in shown, "p10" in shown), (True, True, True))
+    check("a private period hides its country and the unplaced, not another country",
+          ("p4" in shown, "p6" in shown, "p5" in shown), (False, False, True))
+    check("the partner alone, anywhere, is private", "p7" in shown, False)
+    check("private words with only the owner are private", "p9" in shown, False)
+    check("a place that is always fine overrides every rule", "p12" in shown, True)
+    check("a friend seen only inside the private places is not family", "p13" in shown, False)
+    check("a photograph a person hid stays theirs", q(db, "select hidden_by from photos where hash = 'p11'")[0][0], "grandma")
+    again = q(db, "select * from apply_private_rules()")[0]
+    check("a second run changes nothing", (again[0], again[1]), (0, 0))
+    db.execute("delete from private_rules where kind = 'words'")
+    db.commit()
+    back = q(db, "select * from apply_private_rules()")[0]
+    check("a rule taken away shows its photographs again", (back[1], "p9" in {h for (h,) in q(db, "select hash from photos where visible")}), (1, True))
+    db.close()
 
 
 def library(out):

@@ -1,7 +1,7 @@
 import type postgres from "postgres";
 import { sql } from "./db";
 import { embed, hasGemini } from "./gemini";
-import { describe, parseQuery } from "./search";
+import { describe, parseQuery, type Parsed } from "./search";
 import { exact } from "./spelling";
 
 export type Card = {
@@ -52,6 +52,71 @@ export async function search(q: string, offset = 0) {
       place: r.place, width: r.width, height: r.height,
     })) as Card[],
   };
+}
+
+// The second filter, after the first (Krish, 2026-10-06): tap a person, then
+// narrow by year; tap a year, then narrow by person. Whatever the search has
+// not chosen yet is offered as one row of chips. A meaning search ("at the
+// beach") ranks every photo, so there is nothing to narrow and no row.
+export type Refine =
+  | { kind: "years"; active: string | null; items: { label: string; n: number }[] }
+  | { kind: "people"; items: { name: string; n: number; cover: string | null }[] };
+
+export async function refine(p: Parsed): Promise<Refine | null> {
+  if (p.rest) return null;
+  const db = sql();
+  const yearOf = db`coalesce(ph.year, nullif(substring(ph.approx_year from 1 for 4), '')::int)`;
+  const where = db`(${p.place}::text is null or
+      coalesce(ph.place, '') || ' ' || coalesce(ph.region, '') || ' ' || coalesce(ph.country, '') ilike '%' || ${p.place} || '%')`;
+  if (p.yearFrom !== null && !p.people.length) {
+    // a year (or a decade) first: who is in these photos?
+    const rows = await db`
+      select pp.name, count(distinct pp.hash)::int n,
+             (select pe.cover_face from people pe where pe.name = pp.name) cover
+      from photo_people pp join photos ph on ph.hash = pp.hash and ph.visible
+      where ${yearOf} between ${p.yearFrom} and ${p.yearTo} and ${where}
+      group by pp.name order by n desc, pp.name limit 80`;
+    return rows.length ? { kind: "people", items: rows.map((r) => ({ name: r.name as string, n: r.n as number, cover: r.cover as string | null })) } : null;
+  }
+  if (!p.people.length && !p.place) return null;
+  // a person or a place first: which years? Many years are offered as their
+  // decades first (a 15-year span would take seven "More" taps otherwise);
+  // inside a decade, or beside a year already chosen, that decade's years.
+  const decade = p.yearFrom !== null && p.yearFrom !== p.yearTo;
+  const rows = await db`
+    with wanted as materialized (
+      select pp.hash from photo_people pp
+      where ${p.people.length ? p.people : null}::text[] is not null
+        and lower(pp.name) in (select lower(w) from unnest(${p.people.length ? p.people : null}::text[]) w)
+      group by pp.hash
+      having count(distinct lower(pp.name)) = ${p.people.length})
+    select ${yearOf} y, count(*)::int n
+    from photos ph
+    where ph.visible and ${where}
+      and (${p.people.length ? p.people : null}::text[] is null or ph.hash in (select hash from wanted))
+    group by 1 having ${yearOf} is not null order by 1 desc`;
+  const years = rows.map((r) => ({ y: Number(r.y), n: r.n as number }));
+  const active = p.yearFrom === null ? null : decade ? `${p.yearFrom}s` : String(p.yearFrom);
+  const within = p.yearFrom === null ? null : Math.floor(p.yearFrom / 10) * 10;
+  let items: { label: string; n: number }[];
+  if (within !== null) {
+    items = years.filter((x) => x.y >= within && x.y <= within + 9).map((x) => ({ label: String(x.y), n: x.n }));
+  } else if (years.length > 6 && new Set(years.map((x) => Math.floor(x.y / 10))).size > 1) {
+    const by = new Map<number, number>();
+    for (const x of years) by.set(Math.floor(x.y / 10) * 10, (by.get(Math.floor(x.y / 10) * 10) || 0) + x.n);
+    items = [...by].sort((a, b) => b[0] - a[0]).map(([d, n]) => ({ label: `${d}s`, n }));
+  } else {
+    items = years.map((x) => ({ label: String(x.y), n: x.n }));
+  }
+  return items.length > 1 || active ? { kind: "years", active, items } : null;
+}
+
+// a search with one part changed, in the words the parser reads back
+export function compose(p: Parsed, change: { people?: string[]; year?: string | null }): string {
+  const people = change.people ?? p.people;
+  const year = change.year !== undefined ? change.year
+    : p.yearFrom === null ? null : p.yearFrom === p.yearTo ? String(p.yearFrom) : `${p.yearFrom}s`;
+  return [...people, p.place, year].filter(Boolean).join(" ");
 }
 
 export async function browse() {

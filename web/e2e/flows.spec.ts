@@ -132,6 +132,49 @@ test("find photos by a first name, a place and a year", async ({ page }) => {
   await expect(page.locator(".sentence")).toContainText("from the 1990s");
 });
 
+test("a person, then a year: one tap narrows a person's photos to a year", async ({ page }) => {
+  await signIn(page);
+  await page.goto("/find");
+  await page.click(".chip:has-text('Meera Shah')");
+  await expect(page.locator(".sentence")).toContainText("of Meera Shah");
+  const years = page.locator("[aria-label='Years'] a.chip:not(.turn):visible");
+  await expect(years.first()).toBeVisible();
+  await floor(page, "person then year");
+  let year = (await years.first().innerText()).trim();
+  if (year.endsWith("s")) {
+    // many years arrive as decades first; a decade then offers its own years
+    await years.first().click();
+    await expect(page.locator(".sentence")).toContainText(`of Meera Shah from the ${year}`);
+    await expect(page.locator(`[aria-label='Years'] a[aria-current='true']`)).toHaveCount(0);
+    year = (await years.first().innerText()).trim();
+    expect(year).toMatch(/^\d{4}$/);
+  }
+  await years.first().click();
+  await expect(page.locator(".sentence")).toContainText(`of Meera Shah from ${year}`);
+  await expect(page.locator(`[aria-label='Years'] a[aria-current='true']`)).toHaveText(year);
+  // every photo shown is that person's, from that year
+  const truth = await (await page.request.get("/api/search?q=" + encodeURIComponent(`Meera Shah ${year}`))).json();
+  expect(truth.total).toBeGreaterThan(0);
+  for (const c of truth.cards) expect(c.year).toBe(Number(year));
+  await page.click("[aria-label='Years'] a:has-text('All years')");
+  await expect(page.locator(".sentence")).not.toContainText(" from ");
+});
+
+test("a year, then a person: one tap narrows a decade to one person", async ({ page }) => {
+  await signIn(page);
+  await page.goto("/find?show=years");
+  await page.locator(".fit a.chip:has-text('2000s')").click();
+  await expect(page.locator(".sentence")).toContainText("from the 2000s");
+  const people = page.locator("[aria-label='Who is in these photos'] a.chip:not(.turn):visible");
+  await expect(people.first()).toBeVisible();
+  await floor(page, "year then person");
+  const who = (await people.first().innerText()).trim();
+  await people.first().click();
+  await expect(page.locator(".sentence")).toContainText(`of ${who} from the 2000s`);
+  // and the years row now offers that decade's years for that person
+  await expect(page.locator("[aria-label='Years'] a:has-text('All years')")).toBeVisible();
+});
+
 test("a second search shows its own photos, never the last search's", async ({ page }) => {
   await signIn(page);
   await page.goto("/find?q=Asha%20Raja");

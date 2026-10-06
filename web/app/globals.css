@@ -59,6 +59,16 @@
 @container screen (orientation: landscape) and (max-height: 520px) {
   .page.find { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); max-width: 980px; }
   .page.find > .fit { grid-column: 1 / -1; min-height: 0; }
+  /* results with a row of choices: search, sentence and choices on the left,
+     the photographs on the right at full height */
+  .page.find:has(> .fit.one) { grid-template-rows: auto auto minmax(0, 1fr); align-content: start; }
+  .page.find:has(> .fit.one) > form { grid-column: 1; grid-row: 1; }
+  .page.find:has(> .fit.one) > .sentence { grid-column: 1; grid-row: 2; align-self: start; }
+  .page.find:has(> .fit.one) > .fit.one { grid-column: 1; grid-row: 3; align-self: start; }
+  .page.find:has(> .fit.one) > .fit:not(.one) { grid-column: 2; grid-row: 1 / -1; }
+  .fit.one .chip img { width: 36px; height: 36px; }
+  .fit.one .more-word { display: none; }   /* a narrow column: "›" alone, still read out as "More" */
+  .page.find .sentence { font-size: 20px; padding: 6px 12px; }
   .page.find > .sentence { align-self: center; }
 }
 /* "Someone else" opens in place of the list of names */
@@ -373,6 +383,11 @@ summary.btn::-webkit-details-marker { display: none; }
 .fit-pager { flex: none; display: flex; gap: 10px; }
 /* "More ›" and "‹ Back" turn a list's pages from inside it */
 .chip.turn { background: var(--sun); padding-left: 14px; padding-right: 14px; }
+.chip[aria-current="true"] { background: var(--sun); outline: 3px solid var(--ink); outline-offset: 2px; }
+/* a row of choices above a grid: always exactly one row of chips */
+.fit.one { flex: none; height: calc(max(var(--tap), 66px) + 10px); min-height: 0; }   /* a chip with a face is 66px */
+.fit.one .chips { flex-wrap: wrap; gap: 8px; }
+.fit.one .chip { padding-left: 14px; padding-right: 14px; }
 .chip.turn, .stack > .btn[data-turn] { flex: none; }
 .fit-pager .btn { flex: 1; }
 

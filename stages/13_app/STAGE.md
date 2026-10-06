@@ -66,6 +66,15 @@ nudity in this".
   or sit on another box, and a photo stays big enough to recognise someone.
   Nothing is clipped to pass, and no box shrinks below its own words: if
   something ever did not fit, the page would scroll, never lay words over words
+- photographs from places, periods or people the owner keeps private are hidden
+  everywhere unless someone else in the family is recognised in them - "someone
+  else" meaning a person seen often enough OUTSIDE those places and periods, so
+  friends who only appear inside them do not count; a place marked always-fine
+  overrides every rule (Krish, 2026-10-06). THE RULES ARE PRIVATE: they live only
+  in the database (`private_rules`, `private_overrides`), never in this public
+  repository, its commits or its logs; migration 0008 holds the mechanism, and the
+  worker applies it every run before anything is rebuilt. It only ever un-hides
+  what it hid itself (`hidden_by = 'rule:private'`)
 - every size rule asks the space the page really has (`@container screen`), never
   the window (Krish, 2026-10-06): a phone's browser answers `@media (max-height)`
   as if its address bar were hidden, so a rule written that way did not fire on

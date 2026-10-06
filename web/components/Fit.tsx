@@ -18,13 +18,14 @@ const useIso = typeof window === "undefined" ? useEffect : useLayoutEffect;
 const CAP = 80;
 const SHADOW = 5;          // the chips' and photos' drop shadow, kept inside the room
 
-type Fitted = { shown: number; natural: number; floor: number; rowH?: number };
+type Fitted = { shown: number; natural: number; floor: number; rowH?: number; row?: number };
 const same = (a: Fitted | null, b: Fitted) =>
   !!a && a.shown === b.shown && Math.abs(a.natural - b.natural) < 1 && Math.abs(a.floor - b.floor) < 1 && a.rowH === b.rowH;
 
-export default function Fit({ children, className = "chips", label, more = "More", total, need, cells = false, turn = "chip turn" }: {
+export default function Fit({ children, className = "chips", label, more = "More", total, need, cells = false, turn = "chip turn", one = false }: {
   children: ReactNode; className?: string; label?: string; more?: string;
   total?: number; need?: (n: number) => void; cells?: boolean; turn?: string;
+  one?: boolean;            // exactly one row, always: a row of choices above a grid
 }) {
   const all = Children.toArray(children);
   const count = Math.max(total ?? 0, all.length);
@@ -83,7 +84,7 @@ export default function Fit({ children, className = "chips", label, more = "More
       }
       const floor = bottom(1) + SHADOW;
       kids.forEach((k, i) => { k.style.display = saved[i]; });
-      put({ shown: Math.max(1, n), natural, floor });
+      put({ shown: Math.max(1, n), natural, floor, row: (its[0] || backK || moreK)?.offsetHeight });
     };
     measure();
     const ro = new ResizeObserver(measure);
@@ -108,7 +109,7 @@ export default function Fit({ children, className = "chips", label, more = "More
   if (f) style.minHeight = f.floor;
   if (fitsAll && f) { style.maxHeight = f.natural; style.minHeight = Math.min(f.floor, f.natural); }
   return (
-    <div className="fit" style={style}>
+    <div className={one ? "fit one" : "fit"} style={one ? (f?.row ? { height: f.row + SHADOW } : undefined) : style}>
       <div className="fit-box" ref={box}>
         <div className={cells && f?.rowH ? `${className} sized` : className} ref={list} aria-label={label}
           style={cells && f?.rowH ? { gridAutoRows: `${f.rowH}px` } : undefined}>
@@ -121,7 +122,7 @@ export default function Fit({ children, className = "chips", label, more = "More
             : c))}
           {!cells && (
             <button type="button" key="__more" data-turn="more" className={turn} aria-label={more} onClick={next}
-              style={shown !== null && start + shown < count ? undefined : { display: "none" }}>More ›</button>
+              style={shown !== null && start + shown < count ? undefined : { display: "none" }}><span className="more-word">More </span>›</button>
           )}
         </div>
       </div>

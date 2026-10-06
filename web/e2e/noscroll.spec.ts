@@ -138,8 +138,12 @@ test("every screen, in every state, fits every screen size without scrolling", a
   }
   await page.goto("/find?q=Asha");
   await fits(page, "results");
-  const more = page.locator("button:has-text('More')");
+  const more = page.locator(".fit-pager button:has-text('More')");
   if (await more.isVisible()) { await more.click(); await fits(page, "results, next page"); }
+  await page.goto("/find?q=2000s");
+  await fits(page, "results by decade, then a person");
+  await page.goto("/find?q=Asha%20Raja%202017");
+  await fits(page, "results by person and year");
   await page.goto("/find?q=zebra%20crossing%201871");
   await fits(page, "results, nothing found");
 
