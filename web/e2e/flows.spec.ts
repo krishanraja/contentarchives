@@ -329,6 +329,77 @@ test("a video the phone cannot play after all puts its still back", async ({ pag
   await expect(page.locator(".about-text")).toContainText("can't play on this phone");
 });
 
+test("a wrong year is put right in two taps, with the photos from the same day, and wins everywhere", async ({ page }) => {
+  // the file says 2 February 2020 (the day a batch was scanned); the family knows better
+  const h = "0".repeat(63) + "2";
+  const [{ day_key }] = await db`select day_key from photos where hash = ${h}`;
+  const rows = await db`select hash, day_key from photos where media = 'photo' and hash <> ${h} and family_when is null
+    order by hash limit 3 offset 20`;
+  const batch = rows.map((r) => r.hash as string);
+  await db`update photos set day_key = ${day_key} where hash = any(${batch})`;
+  try {
+    await signIn(page);
+    await page.goto(`/photo/${h}`);
+    const when = page.locator("button.when");
+    await expect(when).toContainText("Change");
+    await floor(page, "photo, the year");
+    await when.click();
+    await expect(page.getByText("When was this photo taken?")).toBeVisible();
+    await floor(page, "photo, which decade");
+    await page.click("button:has-text('1980s')");
+    await expect(page.getByText("Which year in the 1980s?")).toBeVisible();
+    await expect(page.locator("[aria-label='Years'] button:has-text('1989')")).toBeVisible();   // all ten, no turning
+    await floor(page, "photo, which year");
+    await page.click("[aria-label='Years'] button:has-text('1987')");
+    await expect(page.getByText("Change the 3 other photos")).toBeVisible();
+    await floor(page, "photo, the same day too");
+    await page.click("button:has-text('Yes, all 4')");
+    await expect(page.getByText("Saved: 1987 for 4 photos")).toBeVisible();
+    await expect(when).toContainText("1987");
+    await expect.poll(async () => (await db`select count(*)::int n from photos where family_when = '1987'
+      and hash = any(${[h, ...batch]})`)[0].n).toBe(4);
+    // the family's year wins over the file's everywhere: the photo, the grid, the search
+    await page.goto(`/photo/${h}`);
+    await expect(page.locator("button.when")).toContainText("1987");
+    await page.goto("/find?q=1987");
+    await expect(page.locator(".sentence")).toContainText("1987");
+    await expect(page.locator(`.grid a[href*='${h}'] .badge`)).toHaveText("1987");
+    // and Undo puts it back as it was
+    await page.goto(`/photo/${h}`);
+    await page.locator("button.when").click();
+    await page.click("button:has-text('1990s')");
+    await page.click("[aria-label='Years'] button:has-text('1991')");      // the others already have a year: not asked again
+    await expect(page.locator("button.when")).toContainText("1991");
+    await page.click(".undo button:has-text('Undo')");
+    await expect(page.locator("button.when")).toContainText("1987");
+    await expect.poll(async () => (await db`select family_when from photos where hash = ${h}`)[0].family_when).toBe("1987");
+  } finally {
+    await db`update answers set status = 'undone' where field = 'approx_year' and hashes && ${[h, ...batch]}`;
+    await db`update photos set family_when = null where hash = any(${[h, ...batch]})`;
+    for (const r of rows) await db`update photos set day_key = ${r.day_key} where hash = ${r.hash}`;
+  }
+});
+
+test("Previous and Next turn through the photos a search found", async ({ page }) => {
+  await signIn(page);
+  await page.goto("/find?q=Asha%20Raja");
+  const hrefs = await page.locator(".grid a").evaluateAll((as) => as.map((a) => a.getAttribute("href")!));
+  expect(hrefs.length).toBeGreaterThan(2);
+  await page.goto(hrefs[1]);
+  const prev = page.getByRole("link", { name: "Previous photo" }), next = page.getByRole("link", { name: "Next photo" });
+  await expect(next).toBeVisible();
+  await floor(page, "photo, previous and next");
+  await next.click();
+  await page.waitForURL((u) => u.pathname === new URL(hrefs[2], "http://x").pathname);
+  await prev.click();
+  await page.waitForURL((u) => u.pathname === new URL(hrefs[1], "http://x").pathname);
+  await page.getByRole("link", { name: "Previous photo" }).click();
+  await page.waitForURL((u) => u.pathname === new URL(hrefs[0], "http://x").pathname);
+  await expect(page.getByRole("button", { name: "Previous photo" })).toBeDisabled();       // the first has none before it
+  await page.click("text=Back to photos");
+  await expect(page.locator(".sentence")).toContainText("Asha Raja");
+});
+
 test("Hide this photo removes it for everyone at once", async ({ page }) => {
   await signIn(page);
   await page.goto("/find?q=Asha%20Raja");

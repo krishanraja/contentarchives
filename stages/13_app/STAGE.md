@@ -99,6 +99,14 @@ nudity in this".
   starts no new face for the family to name, it is hidden again the moment it stops
   qualifying (`hidden_by = 'rule:personal'`), and each folder's listing removes only
   its own files. Migration 0010 holds the mechanism
+- when the family says when a photograph was taken, that is when it was taken
+  (Krish, 2026-10-06: a file's date is often the day it was scanned or copied).
+  Their settled answer (`family_when`, each person's latest answer one vote) wins
+  over the file's date everywhere: the photo, the grid's badge, the search by year
+  and decade, the year chips and the order of results, all through one computed
+  column (`when_year`, migration 0011). The year under every photo is a button: a
+  decade, then a year, and the photos the file dates to the same day can be put
+  right in the same answer
 - every size rule asks the space the page really has (`@container screen`), never
   the window (Krish, 2026-10-06): a phone's browser answers `@media (max-height)`
   as if its address bar were hidden, so a rule written that way did not fire on

@@ -162,6 +162,24 @@ test("every screen, in every state, fits every screen size without scrolling", a
   await fits(page, "photo");
   const about = page.locator("button:has-text('About this photo'), button:has-text('About this video')");
   if (await about.count()) { await about.click(); await fits(page, "photo, about"); }
+  // the year: which decade, which year, and the photos from the same day too
+  await page.goto(first!);
+  await page.locator("button.when").click();
+  await fits(page, "photo, which decade");
+  await page.click("button:has-text('1980s')");
+  await fits(page, "photo, which year");
+  const [{ day_key: dk }] = await db`select day_key from photos where hash = ${hash}`;
+  await db`update photos set day_key = ${dk ?? "x-day"} where hash in (select hash from photos where hash <> ${hash} and media = 'photo' order by hash limit 3)`;
+  await db`update photos set day_key = ${dk ?? "x-day"} where hash = ${hash}`;
+  await page.goto(first!);
+  await page.locator("button.when").click();
+  await page.click("button:has-text('1980s')");
+  await page.click("[aria-label='Years'] button:has-text('1987')");
+  await expect(page.getByText(/Change the \d+ other/)).toBeVisible();
+  await fits(page, "photo, the same day too");
+  await page.click("button:has-text('Just this one')");
+  await expect(page.getByText("Saved: 1987")).toBeVisible();
+  await fits(page, "photo, year saved + undo");
   // a video that plays, and one that does not yet
   await page.goto(`/photo/${"0".repeat(63)}8`);
   await expect(page.locator(".frame video")).toBeVisible();

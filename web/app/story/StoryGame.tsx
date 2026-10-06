@@ -5,21 +5,20 @@ import Undo from "@/components/Undo";
 import Confetti from "@/components/Confetti";
 import Shot from "@/components/Shot";
 import Fit from "@/components/Fit";
+import YearPicker from "@/components/YearPicker";
 import { send, uuid } from "@/components/outbox";
 import { close, exact } from "@/lib/spelling";
 
 type S = { hash: string; needPlace: boolean; needYear: boolean; day: string[]; places: string[] } | null;
-type Step = "place" | "spell" | "day" | "decade" | "year" | "thanks";
+type Step = "place" | "spell" | "day" | "decade" | "thanks";
 
 const img = (h: string, size = "v") => `/img/${size}/${encodeURIComponent(h)}`;
-const DECADES = [1950, 1960, 1970, 1980, 1990, 2000, 2010, 2020];
 
 export default function StoryGame({ only }: { only: string | null }) {
   const [s, setS] = useState<S | undefined>(undefined);
   const [step, setStep] = useState<Step>("place");
   const [place, setPlace] = useState("");
   const [typing, setTyping] = useState(false);
-  const [decade, setDecade] = useState<number | null>(null);
   const [labelled, setLabelled] = useState(0);
   const [last, setLast] = useState<{ id: string; text: string } | null>(null);
   const [seen, setSeen] = useState<string[]>([]);
@@ -29,7 +28,7 @@ export default function StoryGame({ only }: { only: string | null }) {
   const [meant, setMeant] = useState<string[]>([]);
 
   const load = useCallback(async (after: string[], one: string | null) => {
-    setS(undefined); setErr(""); setPlace(""); setTyping(false); setDecade(null); setLabelled(0);
+    setS(undefined); setErr(""); setPlace(""); setTyping(false); setLabelled(0);
     const r = await fetch(`/api/story/next?after=${after.join(",")}${one ? `&photo=${encodeURIComponent(one)}` : ""}`)
       .then((x) => x.json()).catch(() => undefined);
     if (r === undefined) { setErr("No internet connection. Your answers are safe on this phone."); setS(null); return; }
@@ -120,7 +119,7 @@ export default function StoryGame({ only }: { only: string | null }) {
   // the room the step leaves it; a list of places longer than its room turns.
   const typedNow = place.trim().replace(/\s+/g, " ");
   return (
-    <div className="game">
+    <div className={step === "decade" ? "game picking" : "game"}>
       {step === "thanks" && labelled > 0 && <Confetti seed={labelled} />}
       <Shot src={img(s.hash)} alt="A family photo" />
       <div className="panel">
@@ -179,24 +178,7 @@ export default function StoryGame({ only }: { only: string | null }) {
         )}
 
         {step === "decade" && (
-          <>
-            <h2>Roughly what year? <span className="muted" style={{ fontSize: 20, fontWeight: 400 }}>A guess is fine.</span></h2>
-            <Fit label="Decades">
-              {DECADES.map((d) => <button key={d} className="chip" onClick={() => { setDecade(d); setStep("year"); }}>{d}s</button>)}
-            </Fit>
-            <button className="btn block" onClick={() => { void shrug(); setStep("thanks"); }}>I don't know</button>
-          </>
-        )}
-
-        {step === "year" && decade && (
-          <>
-            <h2>Which year in the {decade}s?</h2>
-            <Fit label="Years">
-              {Array.from({ length: 10 }, (_, i) => decade + i).filter((y) => y <= new Date().getFullYear())
-                .map((y) => <button key={y} className="chip" onClick={() => saveYear(String(y))}>{y}</button>)}
-            </Fit>
-            <button className="btn block mint" onClick={() => saveYear(`${decade}s`)}>Just “the {decade}s”</button>
-          </>
+          <YearPicker cancel="I don't know" onCancel={() => { void shrug(); setStep("thanks"); }} onPick={saveYear} />
         )}
 
         {step === "thanks" && (

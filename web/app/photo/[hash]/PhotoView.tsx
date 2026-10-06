@@ -1,27 +1,53 @@
 "use client";
 import Link from "next/link";
-import { useCallback, useLayoutEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import Clip from "@/components/Clip";
 import Shot from "@/components/Shot";
-import { Back, Eye, Pin, Share } from "@/components/icons";
+import Squeeze from "@/components/Squeeze";
+import Undo from "@/components/Undo";
+import YearPicker from "@/components/YearPicker";
+import { whenLabel } from "@/lib/when";
+import { send, uuid } from "@/components/outbox";
+import { Eye, Pin, Share } from "@/components/icons";
 
 type P = { hash: string; alt: string; people: string[]; where: string; when: string | null; what: string | null; video: boolean;
-  play: "ok" | "unplayable" | null; needs: boolean };
+  play: "ok" | "unplayable" | null; needs: boolean; sameDay: string[]; dayText: string | null };
+type Mode = "view" | "about" | "when" | "same";
 
-// The photo fills the screen; one line says who, one says where and when, and
-// "About this photo" turns the picture over to everything we know about it.
-// Nothing scrolls (Krish, 2026-10-05): a long description is set smaller to
-// fit, never below the floor's 16px, and only then shortened. A video judged
-// whole plays in the picture's place (Krish, 2026-10-06); any other shows its
-// still, and says plainly why it does not play.
-export default function PhotoView({ p, back }: { p: P; back: string }) {
-  const [about, setAbout] = useState(false);
+// The photo fills the screen. Under it: who is in it, where, and WHEN - the
+// year is a button, because the date in a file is often the day it was
+// scanned or copied (Krish, 2026-10-06), and putting it right must take two
+// taps: a decade, a year. Previous and Next turn through the photos the
+// search found, without going back to them each time. "About this photo"
+// turns the picture over to everything we know about it. Nothing scrolls
+// (Krish, 2026-10-05). A video judged whole plays in the picture's place.
+export default function PhotoView({ p, q }: { p: P; q: string }) {
+  const [mode, setMode] = useState<Mode>("view");
   const [failed, setFailed] = useState(false);
   const fail = useCallback(() => setFailed(true), []);
   const [sure, setSure] = useState(false);
   const [hidden, setHidden] = useState(false);
+  const [picked, setPicked] = useState<string | null>(null);
+  const [when, setWhen] = useState(p.when);
+  const [last, setLast] = useState<{ id: string; text: string; was: string | null } | null>(null);
+  const [err, setErr] = useState("");
+  const [nav, setNav] = useState<{ prev: string | null; next: string | null } | null>(null);
   const box = useRef<HTMLDivElement>(null);
   const what = useRef<HTMLParagraphElement>(null);
+  const about = mode === "about";
+
+  // the photos the search found, as the results screen left them on this phone
+  useEffect(() => {
+    if (!q) return;
+    try {
+      const list = JSON.parse(sessionStorage.getItem("photos:" + q) || "null");
+      const i = Array.isArray(list) ? list.indexOf(p.hash) : -1;
+      if (i >= 0) {
+        setNav({ prev: list[i - 1] ?? null, next: list[i + 1] ?? null });
+        if (list[i + 1]) new Image().src = `/img/v/${encodeURIComponent(list[i + 1])}`;   // the next one is ready
+      }
+    } catch { /* no list: no turning */ }
+  }, [q, p.hash]);
 
   useLayoutEffect(() => {
     const b = box.current;
@@ -60,16 +86,45 @@ export default function PhotoView({ p, back }: { p: P; back: string }) {
     if (r.ok) setHidden(true);
   }
 
+  function pick(v: string) {
+    if (p.sameDay.length) { setPicked(v); setMode("same"); } else void saveYear(v, [p.hash]);
+  }
+  async function saveYear(v: string, hashes: string[]) {
+    const id = uuid();
+    const r = await send({ id, kind: "year", hashes, value: v });
+    if (!r.ok && r.error && !r.error.startsWith("offline")) { setErr(r.error); return; }
+    const n = r.labelled ?? hashes.length;
+    setLast({ id, was: when, text: `Saved: ${whenLabel(v)}${n > 1 ? ` for ${n} photos` : ""}` });
+    setWhen(whenLabel(v)); setErr(""); setMode("view");
+  }
+  async function undo() {
+    if (!last) return;
+    await fetch("/api/answers/undo", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ id: last.id }) }).catch(() => undefined);
+    setWhen(last.was); setLast(null);
+  }
+
   const who = p.people.length ? p.people.join(", ") : "Nobody named yet";
-  const whereWhen = [p.where, p.when].filter(Boolean).join(" · ") || "Where and when: not known yet";
   const plays = p.video && p.play === "ok" && !failed;
   const noun = p.video ? "video" : "photo";
   const still = !p.video ? null : plays ? null
     : failed || p.play === "unplayable" ? "This video can't play on this phone; the picture is a still from it."
     : "This video isn't ready to play yet; the picture is a still from it.";
+  // Previous and Next keep their words while there is room; on a cramped
+  // screen they become arrows beside About and Send (Squeeze, globals.css)
+  const turn = (h: string | null, way: "prev" | "next") => {
+    const name = way === "prev" ? "Previous photo" : "Next photo";
+    const body = way === "prev"
+      ? <><span aria-hidden="true">‹</span><span className="word" aria-hidden="true">Previous</span></>
+      : <><span className="word" aria-hidden="true">Next</span><span aria-hidden="true">›</span></>;
+    return h
+      ? <Link className={`btn ${way}`} aria-label={name} replace href={`/photo/${encodeURIComponent(h)}?q=${encodeURIComponent(q)}`}>{body}</Link>
+      : <button type="button" className={`btn ${way}`} aria-label={name} disabled>{body}</button>;
+  };
+  const turns = !!(q && nav);
+
   return (
-    <div className="game">
-      {!about ? (plays
+    <div className={mode === "when" ? "game picking" : "game"}>
+      {mode !== "about" ? (plays && mode === "view"
         ? <Clip hash={p.hash} alt={p.alt} onFail={fail} />
         : <Shot src={`/img/v/${encodeURIComponent(p.hash)}`} alt={p.alt} />
       ) : (
@@ -88,33 +143,60 @@ export default function PhotoView({ p, back }: { p: P; back: string }) {
               <div className="about-text" ref={box}>
                 <div><h3>Who</h3><p>{p.people.length ? who : <span className="muted">Nobody named yet</span>}</p></div>
                 <div><h3>Where</h3><p>{p.where || <span className="muted">Not known yet</span>}</p></div>
-                <div><h3>When</h3><p>{p.when || <span className="muted">Not known yet</span>}</p></div>
+                <div><h3>When</h3><p>{when || <span className="muted">Not known yet</span>}</p></div>
                 {still && <p>{still}</p>}
                 {p.what && <div><h3>What</h3><p className="what" ref={what}>{p.what}</p></div>}
               </div>
               <div className="stack" style={{ gap: 8, flex: "none" }}>
-                {p.needs && <Link className="btn block mint small" href={`/story?photo=${encodeURIComponent(p.hash)}`}><Pin /> I know where or when</Link>}
+                {p.needs && !p.where && <Link className="btn block mint small" href={`/story?photo=${encodeURIComponent(p.hash)}`}><Pin /> I know where it was</Link>}
                 <button className="btn block quiet small" onClick={() => setSure(true)}><Eye /> This {noun} shouldn&apos;t be here</button>
               </div>
             </>
           )}
         </div>
       )}
-      <div className="panel">
-        {!about && (
-          <div className="caption">
-            <p><b>{who}</b></p>
-            <p>{plays ? "A video · " : p.video ? "A still from a video · " : ""}{whereWhen}</p>
+      <Squeeze className="panel photo-panel" levels={4}>
+        {err && <p className="notice error" role="alert">{err}</p>}
+        {mode === "when" && (
+          <YearPicker ask={`When was this ${noun} taken?`} cancel="Cancel" onCancel={() => setMode("view")} onPick={pick} />
+        )}
+        {mode === "same" && picked && (
+          <>
+            <h2>Change the {p.sameDay.length} other {p.sameDay.length === 1 ? "photo" : "photos"}
+              {p.dayText ? ` dated ${p.dayText}` : " from that day"} to {whenLabel(picked)} too?</h2>
+            <div className="strip">{p.sameDay.slice(0, 4).map((h) => <img key={h} src={`/img/t/${encodeURIComponent(h)}`} alt="" />)}</div>
+            <div className="row">
+              <button className="btn" onClick={() => saveYear(picked, [p.hash])}>Just this one</button>
+              <button className="btn mint" onClick={() => saveYear(picked, [p.hash, ...p.sameDay])}>Yes, all {p.sameDay.length + 1}</button>
+            </div>
+          </>
+        )}
+        {mode === "view" && (
+          <>
+            <div className="caption">
+              <p><b>{who}</b></p>
+              <p>{plays ? "A video · " : p.video ? "A still from a video · " : ""}{p.where || "Place not known yet"}</p>
+            </div>
+            <button type="button" className="btn block when" onClick={() => setMode("when")}
+              aria-label={when ? `Taken ${when}. Change the year` : "Year not known. Add the year"}>
+              <span className="when-date">{when || "Year not known"}</span>
+              <span className="when-do">{when ? "Change" : "Add"}</span>
+            </button>
+          </>
+        )}
+        {(mode === "view" || mode === "about") && (
+          <div className={turns ? "turnrow turns" : "turnrow"}>
+            {turns && turn(nav!.prev, "prev")}
+            {turns && turn(nav!.next, "next")}
+            <button className="btn grape about-btn" onClick={() => { setMode(about ? "view" : "about"); setSure(false); }}>
+              {about ? <>Show<span className="word"> the {noun}</span></> : <>About<span className="word"> this {noun}</span></>}
+            </button>
+            <button className="btn sky send" onClick={share}><Share /> Send</button>
           </div>
         )}
-        <button className="btn block grape" onClick={() => { setAbout(!about); setSure(false); }}>
-          {about ? `Show the ${noun}` : `About this ${noun}`}
-        </button>
-        <div className="row">
-          <Link className="btn" href={back}><Back /> Back to photos</Link>
-          <button className="btn sky" onClick={share}><Share /> Send</button>
-        </div>
-      </div>
+        {last && mode === "view" && <Undo text={last.text} onUndo={undo} onDone={() => setLast(null)} />}
+      </Squeeze>
     </div>
   );
 }
+

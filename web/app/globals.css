@@ -152,6 +152,36 @@ p { margin: 0; }
 .btn.small { min-height: 56px; font-size: 20px; padding: 8px 18px; }
 .btn[disabled] { opacity: .55; }
 .btn svg { width: 28px; height: 28px; flex: none; }
+/* the year under a photo (Krish, 2026-10-06): the whole row is the button - the
+   date on the left, what a tap does on the right - so a wrong year is one
+   obvious tap from being put right */
+.btn.when { justify-content: space-between; text-align: left; box-shadow: none; padding-right: 10px; }
+.btn.when .when-date { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* decades and years: a tight grid, so all ten years of a decade fit at once */
+.chips.when-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(76px, 1fr)); }
+.chips.when-grid .chip { justify-content: center; padding-left: 6px; padding-right: 6px; }
+/* choosing a year: the photo gives the years more of the room */
+.game.picking > .slot { flex-grow: .5; }
+/* under a photo: Previous / Next above About / Send while there is room;
+   squeezed (components/Squeeze measures the page on the phone itself) the
+   place line goes first, then the turning buttons become arrows beside About
+   and Send, then the caption - never a word laid over a word */
+.turnrow { flex: none; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 12px; }
+.turnrow.turns { grid-template-areas: "prev next" "about send"; }
+.turnrow .prev { grid-area: prev; } .turnrow .next { grid-area: next; }
+.turnrow.turns .about-btn { grid-area: about; } .turnrow.turns .send { grid-area: send; }
+.turnrow .prev .word { margin-left: 8px; } .turnrow .next .word { margin-right: 8px; }
+.photo-panel:is([data-fit="2"], [data-fit="3"], [data-fit="4"]) .turnrow.turns {
+  grid-template-columns: auto minmax(0, 1fr) minmax(0, 1fr) auto; grid-template-areas: "prev about send next"; gap: 8px; }
+.photo-panel:is([data-fit="2"], [data-fit="3"], [data-fit="4"]) .turnrow .word { display: none; }
+.photo-panel:is([data-fit="2"], [data-fit="3"], [data-fit="4"]) .turnrow .btn { padding-left: 12px; padding-right: 12px; }
+.photo-panel:is([data-fit="2"], [data-fit="3"], [data-fit="4"]) .turnrow .send svg { display: none; }
+.photo-panel:is([data-fit="2"], [data-fit="3"], [data-fit="4"]) .turnrow :is(.prev, .next) { font-size: 28px; }
+.photo-panel:is([data-fit="1"], [data-fit="2"]) .caption p + p { display: none; }
+.photo-panel:is([data-fit="3"], [data-fit="4"]) .caption { display: none; }
+/* while "Saved · Undo" shows, it already says the year: on a cramped screen the year row steps aside */
+.photo-panel[data-fit="4"]:has(.undo) .btn.when { display: none; }
+.btn.when .when-do { flex: none; background: var(--sun); border: var(--line); border-radius: 999px; padding: 4px 16px; font-size: 20px; }
 
 /* ---------- big home tiles ---------- */
 .tile {

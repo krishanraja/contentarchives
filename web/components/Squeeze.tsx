@@ -19,18 +19,26 @@ export default function Squeeze({ className, levels, children }: { className: st
     const el = ref.current;
     const page = el?.closest(".page") as HTMLElement | null;
     if (!el || !page) return;
+    // nothing spills off the page, nor out of the box these sit in (a photo
+    // screen's column can overflow by a few pixels while the page does not)
+    const box = el.parentElement;
+    const fits = (x: HTMLElement | null) => !x || x.scrollHeight <= x.clientHeight + 1;
     const fit = () => {
       for (let lv = 0; lv <= levels; lv++) {
         el.dataset.fit = String(lv);
-        if (page.scrollHeight <= page.clientHeight + 1) return;
+        if (fits(page) && fits(box)) return;
       }
     };
     fit();
     const ro = new ResizeObserver(fit);
     ro.observe(page);
+    // what is inside can change without the page changing size (a row that
+    // arrives after the script, an Undo that comes and goes): measure again
+    const mo = new MutationObserver(fit);
+    mo.observe(el, { childList: true, subtree: true });
     let live = true;
     document.fonts?.ready.then(() => { if (live) fit(); });
-    return () => { live = false; ro.disconnect(); };
+    return () => { live = false; ro.disconnect(); mo.disconnect(); };
   }, [levels]);
   return <div ref={ref} className={className}>{children}</div>;
 }

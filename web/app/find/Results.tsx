@@ -1,10 +1,11 @@
 "use client";
 import Link from "next/link";
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Fit from "@/components/Fit";
 import type { Card } from "@/lib/data";
 
 function label(c: Card) {
+  if (c.family_when) return /s$/.test(c.family_when) ? "the " + c.family_when : c.family_when;   // the family's year wins
   if (c.year) return String(c.year);
   if (c.approx_year) return "about " + c.approx_year;
   return "";
@@ -28,6 +29,10 @@ export default function Results({ q, first, total }: { q: string; first: Card[];
     if (got.length) setCards((c) => [...c, ...got.filter((g) => !c.some((x) => x.hash === g.hash))]);
     busy.current = false;
   }, [cards.length, q, total]);
+  // the photo screen turns through these with Previous and Next
+  useEffect(() => {
+    try { sessionStorage.setItem("photos:" + q, JSON.stringify(cards.map((c) => c.hash))); } catch { /* private mode */ }
+  }, [cards, q]);
   return (
     <Fit className="grid" cells label="Photos" more="More photos" total={total} need={need}>
       {cards.map((c, i) => (
