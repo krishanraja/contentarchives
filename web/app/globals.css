@@ -61,14 +61,14 @@
   .page.find > .fit { grid-column: 1 / -1; min-height: 0; }
   /* results with a row of choices: search, sentence and choices on the left,
      the photographs on the right at full height */
-  .page.find:has(> .fit.one) { grid-template-rows: auto auto minmax(0, 1fr); align-content: start; }
-  .page.find:has(> .fit.one) > form { grid-column: 1; grid-row: 1; }
-  .page.find:has(> .fit.one) > .sentence { grid-column: 1; grid-row: 2; align-self: start; }
-  .page.find:has(> .fit.one) > .fit.one { grid-column: 1; grid-row: 3; align-self: start; }
-  .page.find:has(> .fit.one) > .fit:not(.one) { grid-column: 2; grid-row: 1 / -1; }
+  .page.find:has(> .sentence) { grid-template-rows: auto auto minmax(0, 1fr); align-content: start; }
+  .page.find:has(> .sentence) > form { grid-column: 1; grid-row: 1; }
+  .page.find:has(> .sentence) > .sentence { grid-column: 1; grid-row: 2; align-self: start; }
+  .page.find:has(> .sentence) > .fit.one { grid-column: 1; grid-row: 3; align-self: start; }
+  .page.find:has(> .sentence) > .fit:not(.one) { grid-column: 2; grid-row: 1 / -1; }
   .fit.one .chip img { width: 36px; height: 36px; }
   .fit.one .more-word { display: none; }   /* a narrow column: "›" alone, still read out as "More" */
-  .page.find .sentence { font-size: 20px; padding: 6px 12px; }
+  .page.find .sentence { padding: 6px 12px; }
   .page.find > .sentence { align-self: center; }
 }
 /* "Someone else" opens in place of the list of names */
