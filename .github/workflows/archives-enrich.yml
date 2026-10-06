@@ -54,6 +54,10 @@ on:
         description: "Most videos watched whole so they can play (a Gemini spend)"
         required: false
         default: "0"
+      personal:
+        description: "Most Personal files looked at for the owner's chosen people (no spend)"
+        required: false
+        default: "20000"
 
 permissions:
   contents: read
@@ -147,6 +151,7 @@ jobs:
           WORKERS: ${{ inputs.workers || '16' }}
           FRAMES_PER_RUN: ${{ inputs.frames || '1500' }}
           VIDEOS_PER_RUN: ${{ inputs.videos || vars.ARCHIVES_VIDEOS_PER_RUN || '0' }}
+          PERSONAL_PER_RUN: ${{ inputs.personal || '20000' }}
           SPEND_CAP_USD: "60"
           MAX_MINUTES: "320"
         run: python stages/13_app/cloud_enrich.py

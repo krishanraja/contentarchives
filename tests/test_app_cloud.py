@@ -255,6 +255,10 @@ def main():
     videos(out)
 
     print()
+    print("8e. the owner's Personal folder: in when someone he chose is clearly in it")
+    personal(out)
+
+    print()
     print("8b. a rate limit waits and tries again; a refusal does not")
     class FakeCL:
         def __init__(self, fails, code):
@@ -739,6 +743,131 @@ def videos(out):
         check("an upload is deleted even when the look fails", gm.http.log[-1][0], "delete")
     db.close()
     shutil.rmtree(tmp, ignore_errors=True)
+
+
+class PersonalDrive:
+    """Communal under 'root', the owner's Personal folder under 'proot'."""
+    def __init__(self, communal, personal):
+        self.communal, self.personal, self.seen = communal, personal, []
+
+    def list_tree(self, root, prefix):
+        src = self.communal if root == "root" else self.personal
+        return [{"id": i, "rel": "{}/2019/secret-{}.jpg".format(prefix, i), "mime": "image/jpeg", "md5": "m" + i,
+                 "time": "2019:06:01 12:00:00", "lat": None, "lon": None, "w": 1024, "h": 768} for i in src]
+
+    def image(self, fid, px):
+        self.seen.append(fid)
+        return ("JPEG:" + fid).encode()
+
+    def find(self, name):
+        return None
+
+
+def personal(out):
+    """The owner's Personal folder: a photograph comes in when a person he
+    ticked is clearly in it (Krish, 2026-10-06). Made-up names only."""
+    db = fresh_db(NAME + "_pers")
+    O, P, AU, CO = unit(201), unit(202), unit(203), unit(204)      # owner, partner, aunt, cousin
+    for cid, name, v in (("c-o", "Owner", O), ("c-p", "Partner", P), ("c-a", "Aunt Secretname", AU),
+                         ("c-c", "Cousin Secretname", CO)):
+        db.execute("insert into clusters (cluster_id, group_id, name, centroid, n) "
+                   "values (%s, %s, %s, %s::extensions.vector, 5)", (cid, cid, name, CE.vec(v)))
+    for n in ("Owner", "Partner"):
+        db.execute("insert into private_rules (kind, name) values ('ignore', %s)", (n,))
+    db.execute("insert into personal_people (name) values ('Aunt Secretname')")
+    db.commit()
+    face = lambda base, seed, share=.3: (unit(seed, base, .25), .9, share)      # noqa: E731
+    spec = {   # file -> (faces, what the classifier says)
+        "c1": ([face(AU, 1)], OK),
+        "pa": ([face(AU, 2)], OK),                                   # the aunt alone
+        "pb": ([face(O, 3), face(P, 4)], OK),                        # the owner and partner
+        "pc": ([face(O, 5), face(AU, 6)], OK),                       # the owner with the aunt
+        "pd": ([face(AU, 7), (unit(777), .9, .3)], OK),              # the aunt and a stranger
+        "pe": ([face(AU, 8), face(CO, 9)], OK),                      # the aunt and someone not ticked
+        "pf": ([face(AU, 10, .03), face(O, 11)], OK),                # the aunt far in the back
+        "pg": ([face(AU, 12)], dict(OK, nudity="partial", subject_age="adult")),
+        "ph": ([face(O, 13)], OK),                                   # the owner alone
+    }
+
+    class Faces:
+        def detect(self, jpeg):
+            return [{"bbox": [.2, .2, .5, .6], "det": d, "emb": e, "share": s}
+                    for e, d, s in spec[jpeg.decode().split(":")[1]][0]]
+
+    class Gem:
+        def __init__(self):
+            self.seen = []
+
+        def classify(self, jpeg):
+            fid = jpeg.decode().split(":")[1]
+            self.seen.append(fid)
+            return dict(spec[fid][1]), 0.001
+
+        def embed(self, text):
+            return [0.01] * 768, 0.0
+
+    drive = PersonalDrive(["c1"], ["pa", "pb", "pc", "pd", "pe", "pf", "pg", "ph"])
+
+    def go(n=100):
+        g = Gem()
+        w = CE.Worker(db, drive, g, Faces(), None, "root", "Media/Communal", workers=2, budget=100, personal=n)
+        with contextlib.redirect_stdout(out):
+            w.run()
+        return g
+
+    def shown():
+        return sorted(r[0] for r in q(db, "select drive_id from photos where visible and rel_path like 'Media/Personal/%%'"))
+
+    g = go()
+    check("before the folder is set up, nothing Personal is looked at",
+          (sorted(set(drive.seen) - {"c1"}), q(db, "select count(*) from personal_seen")[0][0]), ([], 0))
+    db.execute("insert into sync_state (key, value) values ('personal_folder', 'proot')")
+    db.commit()
+    clusters = q(db, "select count(*) from clusters")[0][0]
+    g = go()
+    check("in: the aunt alone, and with the owner; out: the owner alone, the two of them, the aunt far away",
+          shown(), ["pa", "pc"])
+    check("and with the switch on, out: a stranger beside her, or someone not ticked",
+          ("pd" in shown(), "pe" in shown()), (False, False))
+    check("only what qualifies is described (the spend)", sorted(g.seen), ["pa", "pc", "pg"])
+    check("a Personal photo with adult nudity is held like any other",
+          q(db, "select reason is not null from held where drive_id = 'pg'"), [(True,)])
+    check("a Personal photo starts no new face for the family to name",
+          q(db, "select count(*) from clusters")[0][0], clusters)
+    g = go()
+    check("a second run looks at nothing again and spends nothing", (g.seen, q(db, "select max(tries) from personal_seen")[0][0]),
+          ([], 1))
+    db.execute("insert into personal_people (name) values ('Cousin Secretname')")
+    db.commit()
+    go()
+    check("ticking someone later brings their photographs in, without looking again",
+          (shown(), q(db, "select max(tries) from personal_seen")[0][0]), (["pa", "pc", "pe"], 1))
+    db.execute("insert into sync_state (key, value) values ('personal_strict', 'false')")
+    db.commit()
+    go()
+    check("with the switch off, a stranger beside a ticked person no longer keeps it out", shown(),
+          ["pa", "pc", "pd", "pe"])
+    check("and the stranger in it is never put in front of the family to name",
+          q(db, "select count(*) from clusters")[0][0], clusters)
+    db.execute("delete from personal_people where name = 'Aunt Secretname'")
+    db.commit()
+    go()
+    check("unticking someone hides their photographs again; one with another ticked person stays",
+          (shown(), q(db, "select count(*) from photos where hidden_by = 'rule:personal'")[0][0]), (["pe"], 3))
+    db.execute("insert into personal_people (name) values ('Aunt Secretname')")
+    db.commit()
+    go()
+    check("and ticking them again shows them again", shown(), ["pa", "pc", "pd", "pe"])
+    drive.personal.remove("pa")
+    go()
+    check("a Personal file gone from Drive leaves the index", (shown(), q(db, "select count(*) from personal_seen "
+          "where drive_id = 'pa'")[0][0]), (["pc", "pd", "pe"], 0))
+    db.execute("delete from sync_state where key = 'personal_folder'")
+    db.commit()
+    go()
+    check("the Communal listing never removes a Personal photograph, nor its holds",
+          (shown(), q(db, "select count(*) from held where drive_id = 'pg'")[0][0]), (["pc", "pd", "pe"], 1))
+    db.close()
 
 
 def library(out):

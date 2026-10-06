@@ -86,6 +86,19 @@ nudity in this".
   it back. The `/video` route streams a video only while `video_checks` says `ok`,
   in pieces of at most 3.5 MB; a format no phone plays keeps its still and costs
   nothing. Migration 0009 holds the states
+- a photograph from the owner's Personal folder comes in only when a person he
+  ticked is clearly in it (Krish, 2026-10-06); he and his partner never count, so a
+  photograph of just them stays out, and with the switch on everyone clearly in it
+  must be ticked or one of them, so someone the app does not know keeps it out.
+  THE CHOICES ARE PRIVATE: the names, the folder and the switch live only in the
+  database (`personal_people`, `sync_state`), never in this public repository. Each
+  file is looked at once (faces only, no spend); names are resolved in the database
+  when asked (`personal_verdicts`), so a later tick or a newly named face changes the
+  verdict without looking again. Only what qualifies is described, and it then meets
+  every rule a Communal file does (nudity, private places, whole-video check). It
+  starts no new face for the family to name, it is hidden again the moment it stops
+  qualifying (`hidden_by = 'rule:personal'`), and each folder's listing removes only
+  its own files. Migration 0010 holds the mechanism
 - every size rule asks the space the page really has (`@container screen`), never
   the window (Krish, 2026-10-06): a phone's browser answers `@media (max-height)`
   as if its address bar were hidden, so a rule written that way did not fire on

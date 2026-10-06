@@ -118,6 +118,8 @@ SUGGEST_MIN = 0.40
 FACE_PX, VIEW_PX = 512, 1024
 MAX_QUEUE = 5000
 FRAME_PX, FRAME_MATCH = 960, 0.50          # a video frame's size; the same person, found again in it
+PERSONAL_PREFIX = "Media/Personal"       # where the owner's own photographs sit, beside Communal
+PERSONAL_SHARE = 0.08                      # a face this big (of the short side) is clearly in the photograph
 VIDEO_SEGMENT = 20 * 60                    # seconds per look: a long tape is watched in parts that fit the model
 VIDEO_MAX_BYTES = 2_000_000_000            # the Gemini File API's ceiling for one file
 VIDEO_TRIES = 3                            # an unjudged video is tried again on this many runs
@@ -599,12 +601,13 @@ def when(f: dict):
 
 class Worker:
     def __init__(self, db, drive, gemini, faces, geo, folder, prefix,
-                 budget=300, cap_usd=60.0, workers=8, max_minutes=None, frames=0, videos=0):
+                 budget=300, cap_usd=60.0, workers=8, max_minutes=None, frames=0, videos=0, personal=0):
         self.db, self.drive, self.gemini, self.faces, self.geo = db, drive, gemini, faces, geo
         self.folder, self.prefix = folder, prefix
         self.budget, self.cap, self.workers = budget, cap_usd, workers
         self.frames_per_run = frames
         self.videos_per_run = videos
+        self.personal_per_run = personal
         # A DEADLINE, NOT A KILL: GitHub ends a job at 6 h, and a killed run
         # never reaches group(), rebuild() or its receipt - the parts the app
         # reads. Past the deadline nothing new starts, exactly like the cap.
@@ -642,8 +645,10 @@ class Worker:
         self.next_id = max(int(r[0]) if r else 1, (int(top[0]) + 1) if top and top[0] is not None else 1)
         self.dirty = set()
 
-    def assign(self, emb, det):
-        """-> cluster id, or None for a weak face that matches nobody."""
+    def assign(self, emb, det, start=True):
+        """-> cluster id, or None for a weak face that matches nobody. With
+        start=False a face that matches nobody starts no cluster: a Personal
+        photograph never puts a new face in front of the family."""
         import numpy as np
         k = len(self.cid)
         if k:
@@ -655,7 +660,7 @@ class Worker:
                 self.C[j] = self.S[j] / (float(np.linalg.norm(self.S[j])) or 1.0)
                 self.dirty.add(j)
                 return self.cid[j]
-        if det < START:
+        if det < START or not start:
             return None
         if k == len(self.C):                         # grow, as cluster_faces does
             self.C = np.resize(self.C, (2 * k, 512))
@@ -690,11 +695,18 @@ class Worker:
         files = self.drive.list_tree(self.folder, self.prefix)
         self.c["listed"] = len(files)
         say("listed", files=len(files))
-        self.reconcile(files)
+        pfolder = self.state("personal_folder")
+        pfiles = self.drive.list_tree(pfolder, PERSONAL_PREFIX) if pfolder else None
+        if pfiles is not None:
+            self.c["personal_listed"] = len(pfiles)
+            say("personal listed", files=len(pfiles))
+        self.reconcile(files, pfiles)
         self.import_library()
-        self.bind(files)
+        self.bind(files + (pfiles or []))
         self.load_clusters()
-        self.process(files)
+        self.personal_scan(pfiles or [])
+        self.process(files + self.personal_wanted(pfiles or []))
+        self.personal_show()
         self.save_clusters()
         self.group()
         self.frames()
@@ -721,23 +733,39 @@ class Worker:
         self.c["private_hidden"] = int(h)
         say("private", hidden=int(h), shown_again=int(s), covered=int(c))
 
-    def reconcile(self, files):
-        ids = {f["id"] for f in files}
-        known = [r[0] for r in self.db.execute(
-            "select drive_id from photos where drive_id is not null").fetchall()]
-        gone = [k for k in known if k not in ids]
-        if not files or (len(known) > 20 and len(gone) > len(known) * 0.2):
-            self.c["refused_removal"] = len(gone)
-            say("refused removal", gone=len(gone), known=len(known))
-        elif gone:
-            # what the cloud made is made again if the file returns; what the
-            # LIBRARY knew can never be made again, so it is unbound, not lost
-            self.db.execute("delete from photos where drive_id = any(%s) and source = 'cloud'", (gone,))
-            self.db.execute("update photos set drive_id = null, updated_at = now() "
-                            "where drive_id = any(%s) and source = 'seed'", (gone,))
-            self.c["removed"] = len(gone)
+    def reconcile(self, files, pfiles=None):
+        """Each folder answers only for its own files: a Communal listing never
+        removes a Personal photograph, and a Personal folder that is not listed
+        this run (not set up, or not shared) removes nothing of its own."""
+        rows = self.db.execute("select drive_id, rel_path from photos where drive_id is not null").fetchall()
+        ours = PERSONAL_PREFIX + "/"
+        for name, listing, known in (
+                ("", files, [d for d, rel in rows if not (rel or "").startswith(ours)]),
+                ("personal ", pfiles, [d for d, rel in rows if (rel or "").startswith(ours)])):
+            if listing is None:
+                continue
+            ids = {f["id"] for f in listing}
+            gone = [k for k in known if k not in ids]
+            if not listing or (len(known) > 20 and len(gone) > len(known) * 0.2):
+                if gone:
+                    self.c[name.replace(" ", "_") + "refused_removal"] = len(gone)
+                    say(name + "refused removal", gone=len(gone), known=len(known))
+            elif gone:
+                # what the cloud made is made again if the file returns; what the
+                # LIBRARY knew can never be made again, so it is unbound, not lost
+                self.db.execute("delete from photos where drive_id = any(%s) and source = 'cloud'", (gone,))
+                self.db.execute("update photos set drive_id = null, updated_at = now() "
+                                "where drive_id = any(%s) and source = 'seed'", (gone,))
+                self.c[name.replace(" ", "_") + "removed"] = len(gone)
         if files:
-            self.db.execute("delete from held where not (drive_id = any(%s))", (list(ids),))
+            ids = [f["id"] for f in files]
+            self.db.execute("delete from held where not (drive_id = any(%s)) and not (rel_path like %s)",
+                            (ids, ours + "%"))
+        if pfiles:
+            ids = [f["id"] for f in pfiles]
+            self.db.execute("delete from held where not (drive_id = any(%s)) and rel_path like %s",
+                            (ids, ours + "%"))
+            self.db.execute("delete from personal_seen where not (drive_id = any(%s))", (ids,))
         self.db.commit()
 
     # -- the library, once (LIBRARY-EXPORT.md) ---------------------------
@@ -1131,7 +1159,7 @@ class Worker:
         n_here = len(faces)
         frows, crows, hrows = [], [], []
         for i, fc in enumerate(faces):
-            cid = self.assign(fc["emb"], fc["det"])
+            cid = self.assign(fc["emb"], fc["det"], start=not f.get("personal"))
             if cid is None:
                 continue
             frows.append(("{}::{}".format(h, i), h, cid, cid, [round(x, 5) for x in fc["bbox"]], n_here == 1,
@@ -1151,6 +1179,118 @@ class Worker:
             self.c["faces"] += len(frows)
         self.db.commit()
         self.c["added"] += 1
+
+    # -- the owner's Personal folder (migration 0010) ----------------------
+    def nearest(self, emb):
+        """The cluster a face belongs to, as assign() would place it, or None -
+        without moving any centroid: looking is not joining."""
+        import numpy as np
+        k = len(self.cid)
+        if not k:
+            return None
+        sims = self.C[:k] @ np.asarray(emb, dtype=np.float32)
+        j = int(np.argmax(sims))
+        return self.cid[j] if sims[j] >= JOIN else None
+
+    def personal_scan(self, pfiles):
+        """Each Personal file is looked at once: Drive's own rendering, the
+        faces clearly in it, and the cluster each belongs to. Nothing is
+        classified and nothing is spent here; whether it comes in is decided
+        in the database (personal_verdicts), from the names as they are then."""
+        if self.personal_per_run <= 0 or self.faces is None or not pfiles:
+            return
+        db = self.db
+        seen = dict(db.execute("select drive_id, status from personal_seen").fetchall())
+        tries = dict(db.execute("select drive_id, tries from personal_seen where status = 'error'").fetchall())
+        todo = [f for f in sorted(pfiles, key=lambda f: f["rel"])
+                if seen.get(f["id"]) is None or (seen[f["id"]] == "error" and tries.get(f["id"], 0) < VIDEO_TRIES)]
+        self.c["personal_waiting"] = len(todo)
+        todo = todo[:self.personal_per_run]
+        if not todo:
+            return
+        import threading
+        lock = threading.Lock()
+
+        def look(f):
+            try:
+                jpeg = self.drive.image(f["id"], VIEW_PX)
+                if not jpeg:
+                    return f, None
+                with lock:                                   # one detector, shared
+                    found = self.faces.detect(jpeg)
+                return f, [self.nearest(x["emb"]) or "" for x in found
+                           if x["det"] >= START and x["share"] >= PERSONAL_SHARE]
+            except Exception as e:                           # noqa: BLE001
+                self.errors["personal_" + err_name(e)] += 1
+                return f, None
+
+        rows, done = [], 0
+
+        def flush():
+            if rows:
+                with db.cursor() as cur:
+                    cur.executemany(
+                        "insert into personal_seen (drive_id, rel_path, subjects, status) values (%s,%s,%s,%s) "
+                        "on conflict (drive_id) do update set subjects = excluded.subjects, status = excluded.status, "
+                        "rel_path = excluded.rel_path, tries = personal_seen.tries + 1, at = now()", rows)
+                db.commit()
+                rows.clear()
+
+        with cf.ThreadPoolExecutor(max_workers=self.workers) as pool:
+            futs, it = set(), iter(todo)
+            for f in it:                                    # a few in flight, never the whole list
+                futs.add(pool.submit(look, f))
+                if len(futs) >= self.workers * 2:
+                    break
+            while futs:
+                fut = next(cf.as_completed(futs))
+                futs.discard(fut)
+                f, subjects = fut.result()
+                rows.append((f["id"], f["rel"], subjects or [], "seen" if subjects is not None else "error"))
+                self.c["personal_seen" if subjects is not None else "personal_error"] += 1
+                done += 1
+                if done % 200 == 0:
+                    flush()
+                if done % 1000 == 0:
+                    say("personal", seen=done, of=len(todo))
+                if self.deadline is not None and time.time() >= self.deadline:
+                    self.c["personal_stopped"] = 1
+                    continue                               # in flight finish; nothing new starts
+                nxt = next(it, None)
+                if nxt is not None:
+                    futs.add(pool.submit(look, nxt))
+        flush()
+
+    def personal_wanted(self, pfiles):
+        """The Personal files that qualify now and are not in the index yet:
+        they go through process() like any new file - the library's three
+        passes and the nudity rule - and start no new face cluster."""
+        if not pfiles:
+            return []
+        ok = {d for (d,) in self.db.execute("select drive_id from personal_verdicts where qualifies").fetchall()}
+        self.c["personal_qualify"] = len(ok)
+        return [dict(f, personal=True) for f in pfiles if f["id"] in ok]
+
+    def personal_show(self):
+        """A Personal photograph in the index shows exactly while it qualifies:
+        a name unticked hides its photographs again, a name ticked or a face
+        named shows them. Only ever un-hides what this rule hid."""
+        db = self.db
+        hid = db.execute(
+            "update photos p set hidden = true, hidden_by = 'rule:personal', hidden_at = now() "
+            "where p.rel_path like %s and not p.hidden and p.drive_id is not null and not exists "
+            "(select 1 from personal_verdicts v where v.drive_id = p.drive_id and v.qualifies)",
+            (PERSONAL_PREFIX + "/%",)).rowcount
+        back = db.execute(
+            "update photos p set hidden = false, hidden_by = null, hidden_at = null "
+            "where p.hidden_by = 'rule:personal' and exists "
+            "(select 1 from personal_verdicts v where v.drive_id = p.drive_id and v.qualifies)").rowcount
+        db.commit()
+        n = db.execute("select count(*) from photos where rel_path like %s and visible",
+                       (PERSONAL_PREFIX + "/%",)).fetchone()[0]
+        self.c["personal_shown"] = int(n)
+        if n or hid or back:
+            say("personal shown", shown=int(n), hidden_now=max(hid, 0), shown_again=max(back, 0))
 
     # -- video faces: a frame of their own -------------------------------
     def frames(self):
@@ -1552,6 +1692,8 @@ def main() -> int:
                     help="most video faces given a judged frame of their own this run")
     ap.add_argument("--videos", type=int, default=int(os.environ.get("VIDEOS_PER_RUN", "0")),
                     help="most videos watched whole this run, so they can play (a spend: 0 unless asked)")
+    ap.add_argument("--personal", type=int, default=int(os.environ.get("PERSONAL_PER_RUN", "0")),
+                    help="most Personal files looked at for the owner's chosen people this run (no spend)")
     ap.add_argument("--no-faces", action="store_true")
     a = ap.parse_args()
     need = ["DATABASE_URL", "GOOGLE_SERVICE_ACCOUNT_JSON", "GOOGLE_API_KEY_ARCHIVES",
@@ -1568,7 +1710,7 @@ def main() -> int:
                os.environ["DRIVE_COMMUNAL_FOLDER_ID"],
                os.environ.get("DRIVE_REL_PREFIX", "Media/Communal"),
                budget=a.budget, cap_usd=a.cap_usd, workers=a.workers, max_minutes=a.max_minutes,
-               frames=a.frames, videos=a.videos)
+               frames=a.frames, videos=a.videos, personal=a.personal)
     w.run()
     return 0
 
