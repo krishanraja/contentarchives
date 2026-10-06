@@ -148,7 +148,8 @@ test("every screen, in every state, fits every screen size without scrolling", a
   const first = await page.locator(".grid a").first().getAttribute("href");
   const hash = decodeURIComponent(first!.split("/photo/")[1].split("?")[0]);
   await db`update photos set description = ${"A long afternoon in the garden with everyone gathered round the table under the old mango tree, plates of food, children running between the chairs, a dog asleep in the shade, grandparents in the middle laughing at something just out of the picture, cousins on the steps, and the light coming low through the leaves so every face is half in sun. ".repeat(2).slice(0, 556)},
-             people = ${["Asha Raja", "Ravi Raja", "Meera Shah", "Dev Shah", "Priya Kapoor", "Sam Kapoor", "Kamala Raja", "Sunil Raja", "Usha Raja", "Ashvin Raja", "Isha Patel", "Tara Patel", "Vikram Patel"]}::text[]
+             place = null, year = null, approx_year = null, taken_at = null,   -- both actions show: "I know where or when" too
+           people = ${["Asha Raja", "Ravi Raja", "Meera Shah", "Dev Shah", "Priya Kapoor", "Sam Kapoor", "Kamala Raja", "Sunil Raja", "Usha Raja", "Ashvin Raja", "Isha Patel", "Tara Patel", "Vikram Patel"]}::text[]
            where hash = ${hash}`;
   await page.goto(first!);
   await fits(page, "photo");

@@ -322,6 +322,10 @@ label.big { font-family: var(--font-display), system-ui; font-weight: 600; font-
   .page.gate { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); column-gap: 24px; align-content: center; max-width: 980px; }
   .page.gate > .card { grid-column: 2; grid-row: 1 / span 2; align-self: center; }
   .page.gate > :not(.card) { grid-column: 1; }
+  /* a photo's details: its two actions side by side, so the words keep room */
+  .about .stack { flex-direction: row; }
+  .about .stack .btn { flex: 1 1 0; min-width: 0; font-size: 18px; padding: 6px 8px; }
+  .about .stack .btn svg { display: none; }
   /* your name: the box and its button side by side */
   .card.nameform { display: grid; grid-template-columns: minmax(0, 1fr) auto; }
   .card.nameform label { grid-column: 1 / -1; margin-bottom: 0; }
