@@ -51,9 +51,9 @@ on:
         required: false
         default: "1500"
       videos:
-        description: "Most videos watched whole so they can play (a Gemini spend)"
+        description: "Most videos watched whole so they can play (a Gemini spend, about $0.0007 each)"
         required: false
-        default: "0"
+        default: "3000"
       personal:
         description: "Most Personal files looked at for the owner's chosen people (no spend)"
         required: false
@@ -150,7 +150,7 @@ jobs:
           BUDGET: ${{ inputs.budget || '5000' }}
           WORKERS: ${{ inputs.workers || '16' }}
           FRAMES_PER_RUN: ${{ inputs.frames || '1500' }}
-          VIDEOS_PER_RUN: ${{ inputs.videos || vars.ARCHIVES_VIDEOS_PER_RUN || '0' }}
+          VIDEOS_PER_RUN: ${{ inputs.videos || vars.ARCHIVES_VIDEOS_PER_RUN || '3000' }}
           PERSONAL_PER_RUN: ${{ inputs.personal || '20000' }}
           SPEND_CAP_USD: "60"
           MAX_MINUTES: "320"

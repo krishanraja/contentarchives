@@ -77,7 +77,7 @@ nudity in this".
   what it hid itself (`hidden_by = 'rule:private'`)
 - a video plays only after the WHOLE of it has been judged (Krish, 2026-10-06): its
   still was all that had been checked, and playing shows every frame. The worker
-  (`videos()`, `--videos` per run, 0 unless asked: it is a spend) downloads it, has
+  (`videos()`, `--videos` per run: 0 from the command line, 3,000 a night in the workflow since Krish's go on 2026-10-06; it is a spend, measured at about $0.0007 a video) downloads it, has
   the library's sensitivity pass watch the picture (no sound) a frame a second in
   parts that cover every second, and the most revealing moment decides by the
   photograph's own rule. A part the model will not look at holds it; an unreadable
