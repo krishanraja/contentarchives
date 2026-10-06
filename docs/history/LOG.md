@@ -9,6 +9,11 @@ duplicate: `docs/rescues/` holds one dated record per source, and
 `docs/LEARNINGS.md` holds the numbered rules in the order they were paid for.
 This log records what the steward did to the documentation and when.
 
+## 2026-10-06
+
+- reconciled at `7cd3261`: NOW.md brought forward from `a1bb769` over 29 commits, adding the library export and cloud-as-system-of-record decision, the live-site speed and first-use fixes, and the Gemini retry and video-frame work; the nightly index build is recorded as on by default. No file moved, nothing rolled (no bullet older than 30 days).
+- decision: `RESUME.md`, `docs/ROADMAP.md` and `docs/HANDOVER.md` left unedited because their bodies were not checked against the family app; NOW.md's "Do not trust" names the gap.
+
 ## 2026-10-04
 
 - reconciled at `a1bb769`: `main` gained 5 non-steward commits since the previous reconciliation's stated head (`d983a8f`), all the family app (`74772f6`, `045764e`, `4875565`, `4669d21`, `a1bb769`): a new `web/` app, a new stage `stages/13_app/`, and a cloud writer for its index after Krish ruled that nothing may depend on D: or any PC. NOW.md gained the app in "Where it is right now", four "What changed recently" bullets, one waiting item, and four more `never_publish` entries. `README.md` said twelve stages; there are thirteen, corrected.
