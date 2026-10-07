@@ -9,6 +9,11 @@ duplicate: `docs/rescues/` holds one dated record per source, and
 `docs/LEARNINGS.md` holds the numbered rules in the order they were paid for.
 This log records what the steward did to the documentation and when.
 
+## 2026-10-07
+
+- reconciled at `139995b`: NOW.md brought forward from `7cd3261` over 10 non-steward commits, all the family app. The commits had already added bullets for who and where, the year, Personal photographs, video playback, private places and the home screen; this run added the nightly 3,000-video go to the first "Where it is right now" bullet and one bullet for the phone-on-its-side fixes. No file moved, nothing rolled (no bullet older than 30 days).
+- checked and dismissed: `stages/13_app/STAGE.md` was edited in the same commits as the code it describes. `docs/HANDOVER.md` and `state/PROGRESS.md` stay unedited for the same reason as every cycle since 2026-09-09 (they describe the library, not the app); NOW.md's "Do not trust" names the gap.
+
 ## 2026-10-06
 
 - reconciled at `7cd3261`: NOW.md brought forward from `a1bb769` over 29 commits, adding the library export and cloud-as-system-of-record decision, the live-site speed and first-use fixes, and the Gemini retry and video-frame work; the nightly index build is recorded as on by default. No file moved, nothing rolled (no bullet older than 30 days).
