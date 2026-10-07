@@ -1271,20 +1271,43 @@ class Worker:
         self.c["personal_qualify"] = len(ok)
         return [dict(f, personal=True) for f in pfiles if f["id"] in ok]
 
+    # A Personal photograph shows only while it qualifies AS IT WAS STORED, not
+    # only as it was first looked at: between the look and the store, a face's
+    # nearest group can move (centroids learn as faces join), and on the first
+    # live run 30 of 1,100 photos looked like a ticked person but were stored
+    # as someone the app does not know. So: a ticked person must be among the
+    # photo's people as the app shows them (photo_people - which also follows
+    # the family's "not in it"), and with the switch on no face clearly in it,
+    # as stored, may belong to anyone but a ticked person, the owner or his
+    # partner.
+    SHOWN = """
+        with ours as materialized (select hash, drive_id from photos where rel_path like %(prefix)s and drive_id is not null),
+        pp as materialized (select x.hash, x.name from photo_people x where x.hash in (select hash from ours)),
+        us as (select name from private_rules where kind = 'ignore'),
+        stranger as (
+          select distinct f.hash from faces f join ours o on o.hash = f.hash
+          left join clusters c on c.cluster_id = f.cluster_id left join group_names g on g.group_id = c.group_id
+          where f.share >= %(share)s and f.score >= %(det)s
+            and (g.name is null or (g.name not in (select name from personal_people) and g.name not in (select name from us)))),
+        good as (
+          select o.hash from ours o join personal_verdicts v on v.drive_id = o.drive_id and v.qualifies
+          where exists (select 1 from pp where pp.hash = o.hash and pp.name in (select name from personal_people))
+            and (coalesce((select value from sync_state where key = 'personal_strict'), 'true') <> 'true'
+                 or o.hash not in (select hash from stranger)))"""
+
     def personal_show(self):
         """A Personal photograph in the index shows exactly while it qualifies:
         a name unticked hides its photographs again, a name ticked or a face
         named shows them. Only ever un-hides what this rule hid."""
         db = self.db
-        hid = db.execute(
-            "update photos p set hidden = true, hidden_by = 'rule:personal', hidden_at = now() "
-            "where p.rel_path like %s and not p.hidden and p.drive_id is not null and not exists "
-            "(select 1 from personal_verdicts v where v.drive_id = p.drive_id and v.qualifies)",
-            (PERSONAL_PREFIX + "/%",)).rowcount
-        back = db.execute(
-            "update photos p set hidden = false, hidden_by = null, hidden_at = null "
-            "where p.hidden_by = 'rule:personal' and exists "
-            "(select 1 from personal_verdicts v where v.drive_id = p.drive_id and v.qualifies)").rowcount
+        args = {"prefix": PERSONAL_PREFIX + "/%", "share": PERSONAL_SHARE, "det": START}
+        hid = db.execute(self.SHOWN + """
+            update photos p set hidden = true, hidden_by = 'rule:personal', hidden_at = now()
+            where p.hash in (select hash from ours) and not p.hidden and p.hash not in (select hash from good)""",
+                         args).rowcount
+        back = db.execute(self.SHOWN + """
+            update photos p set hidden = false, hidden_by = null, hidden_at = null
+            where p.hidden_by like 'rule:personal%%' and p.hash in (select hash from good)""", args).rowcount
         db.commit()
         n = db.execute("select count(*) from photos where rel_path like %s and visible",
                        (PERSONAL_PREFIX + "/%",)).fetchone()[0]

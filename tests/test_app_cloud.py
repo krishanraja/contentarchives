@@ -884,6 +884,28 @@ def personal(out):
     db.commit()
     go()
     check("and ticking them again shows them again", shown(), ["pa", "pc", "pd", "pe"])
+    # as stored, not only as first looked at: a face that moved to someone the app
+    # does not know keeps it out; a family's "not in it" for the ticked person too
+    db.execute("insert into clusters (cluster_id, group_id, n) values ('c-x', 'c-x', 1)")
+    # (the aunt stays; the owner's face is stored as someone unknown)
+    db.execute("update faces set cluster_id = 'c-x', group_id = 'c-x' where hash = 'drive:pc' and cluster_id = 'c-o'")
+    db.execute("update cluster_hashes set cluster_id = 'c-x', group_id = 'c-x' where hash = 'drive:pc' and cluster_id = 'c-o'")
+    db.execute("insert into sync_state (key, value) values ('personal_strict', 'true') "
+               "on conflict (key) do update set value = excluded.value")
+    db.execute("insert into answers (id, who, scope, target, field, value, hashes) values "
+               "(gen_random_uuid(), 'gran', 'file', 'drive:pe', 'not_in_photo', 'Aunt Secretname', array['drive:pe']), "
+               "(gen_random_uuid(), 'gran', 'file', 'drive:pe', 'not_in_photo', 'Cousin Secretname', array['drive:pe'])")
+    db.commit()
+    go()
+    check("a face stored as someone unknown, or a ticked name the family took off, keeps it out",
+          ("pc" in shown(), "pe" in shown(), "pa" in shown()), (False, False, True))
+    db.execute("update answers set status = 'undone' where field = 'not_in_photo'")
+    db.execute("update faces set cluster_id = 'c-o', group_id = 'c-o' where hash = 'drive:pc' and cluster_id = 'c-x'")
+    db.execute("update cluster_hashes set cluster_id = 'c-o', group_id = 'c-o' where hash = 'drive:pc' and cluster_id = 'c-x'")
+    db.execute("update sync_state set value = 'false' where key = 'personal_strict'")
+    db.commit()
+    go()
+    check("and puts it back when they agree again", ("pc" in shown(), "pe" in shown()), (True, True))
     drive.personal.remove("pa")
     go()
     check("a Personal file gone from Drive leaves the index", (shown(), q(db, "select count(*) from personal_seen "

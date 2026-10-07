@@ -98,7 +98,9 @@ nudity in this".
   every rule a Communal file does (nudity, private places, whole-video check). It
   starts no new face for the family to name, it is hidden again the moment it stops
   qualifying (`hidden_by = 'rule:personal'`), and each folder's listing removes only
-  its own files. Migration 0010 holds the mechanism
+  its own files. Migration 0010 holds the mechanism. It shows only while it
+  qualifies AS STORED too (a face's group can move between the look and the store:
+  30 of the first 1,100 did), and a family's "not in it" for the ticked person counts
 - when the family says when a photograph was taken, that is when it was taken
   (Krish, 2026-10-06: a file's date is often the day it was scanned or copied).
   Their settled answer (`family_when`, each person's latest answer one vote) wins
