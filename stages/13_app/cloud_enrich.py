@@ -709,7 +709,11 @@ class Worker:
         self.save_clusters()
         self.group()
         self.personal_show()                # after group(): a new face's group is known only then
-        self.frames()
+        try:
+            self.frames()                   # extra: its failure must not stop the rules and checks after it
+        except Exception as e:              # noqa: BLE001
+            self.db.rollback()
+            self.errors["frames_" + err_name(e)] += 1
         self.private()
         self.videos()
         self.rebuild()
@@ -1330,15 +1334,17 @@ class Worker:
             return
         import numpy as np
         db = self.db
+        # materialized: inlined, the planner misjudged the candidates as one row
+        # and re-ran the per-group count for each of ~18,000 (run #16 timed out)
         rows = db.execute("""
-            with g as (select group_id, name, answered, flagged from group_names),
-            pc as (
+            with g as materialized (select group_id, name, answered, flagged from group_names),
+            pc as materialized (
               select f.group_id, count(distinct f.hash) as photos,
                      bool_or(coalesce(f.share, 0) >= %s
                              and not (p.source = 'seed' and p.media = 'video' and f.frame is null)) as askable
               from faces f join photos p on p.hash = f.hash and p.visible
               where f.group_id is not null group by f.group_id),
-            want as (
+            want as materialized (
               select pc.group_id, g.flagged, pc.photos from pc join g using (group_id)
               where not pc.askable
                 and ((not g.answered and (g.flagged or pc.photos >= 2)) or g.name is not null))
@@ -1351,7 +1357,7 @@ class Worker:
             where f.frame is null and f.embedding is not null
               and split_part(f.key, ':', 2) ~ '_t[0-9]+$'
               and (fr.key is null or fr.status = 'error')
-            order by w.flagged desc, w.photos desc, w.group_id, f.score desc nulls last""",
+            order by w.flagged desc, w.photos desc, w.group_id, f.score desc nulls last, f.key""",
             (SUBJECT_SHARE,)).fetchall()
         todo = rows[:self.frames_per_run]
         self.c["frames_wanted"] = len(rows)

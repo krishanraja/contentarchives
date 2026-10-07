@@ -930,6 +930,19 @@ def personal(out):
     go()
     check("a photo whose person is known only once the run groups it shows on that same run",
           ("pi" in shown(), q(db, "select hidden_by from photos where drive_id = 'pi'")), (True, [(None,)]))
+    # the frames step is extra: a database error in it (run #16: a statement
+    # timeout) must not stop the private rules, the video checks or the receipt
+    real = CE.Worker.frames
+    CE.Worker.frames = lambda self: self.db.execute("select 1 / 0")
+    try:
+        before = q(db, "select count(*) from snapshots")[0][0]
+        go()
+    finally:
+        CE.Worker.frames = real
+    check("a failure picking video frames still runs the private rules and writes the receipt",
+          (q(db, "select count(*) from snapshots")[0][0] - before,
+           q(db, "select counts ? 'private_hidden', (counts->>'errors')::int from snapshots order by at desc limit 1")),
+          (1, [(True, 1)]))
     db.close()
 
 
