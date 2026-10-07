@@ -706,9 +706,9 @@ class Worker:
         self.load_clusters()
         self.personal_scan(pfiles or [])
         self.process(files + self.personal_wanted(pfiles or []))
-        self.personal_show()
         self.save_clusters()
         self.group()
+        self.personal_show()                # after group(): a new face's group is known only then
         self.frames()
         self.private()
         self.videos()
@@ -1279,7 +1279,9 @@ class Worker:
     # photo's people as the app shows them (photo_people - which also follows
     # the family's "not in it"), and with the switch on no face clearly in it,
     # as stored, may belong to anyone but a ticked person, the owner or his
-    # partner.
+    # partner. It runs after group(): store() files a new face under its own
+    # cluster until grouping, so before it a ticked person in a grouped
+    # cluster is not yet among the photo's people (411 hidden on run #15).
     SHOWN = """
         with ours as materialized (select hash, drive_id from photos where rel_path like %(prefix)s and drive_id is not null),
         pp as materialized (select x.hash, x.name from photo_people x where x.hash in (select hash from ours)),

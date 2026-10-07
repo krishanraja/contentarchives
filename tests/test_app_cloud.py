@@ -915,6 +915,21 @@ def personal(out):
     go()
     check("the Communal listing never removes a Personal photograph, nor its holds",
           (shown(), q(db, "select count(*) from held where drive_id = 'pg'")[0][0]), (["pc", "pd", "pe"], 1))
+    # a new photo whose face joins a cluster grouped under another id (the
+    # library's groups are pinned so): who is in it is known only once the run
+    # has grouped it, so it is judged after grouping (411 hidden on the 2nd run)
+    U, U2 = unit(205), unit(206)
+    db.execute("insert into clusters (cluster_id, group_id, name, centroid, n, pinned) values "
+               "('c-u', 'g-u', 'Uncle Secretname', %s::extensions.vector, 5, true), "
+               "('c-u2', 'g-u', null, %s::extensions.vector, 5, true)", (CE.vec(U), CE.vec(U2)))
+    db.execute("insert into personal_people (name) values ('Uncle Secretname')")
+    db.execute("insert into sync_state (key, value) values ('personal_folder', 'proot')")
+    db.commit()
+    spec["pi"] = ([face(U2, 14)], OK)
+    drive.personal.append("pi")
+    go()
+    check("a photo whose person is known only once the run groups it shows on that same run",
+          ("pi" in shown(), q(db, "select hidden_by from photos where drive_id = 'pi'")), (True, [(None,)]))
     db.close()
 
 
