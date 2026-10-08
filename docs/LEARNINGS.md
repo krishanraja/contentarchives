@@ -2504,3 +2504,29 @@ Three numbers this session were confidently wrong, in both directions:
 **A log is not an inventory, and a percentage is a fraction of a population you
 have to name.** Before acting on a count, state what it counted and check that
 population against disk.
+
+## 78. A decision made on a look must be re-checked on what was stored
+
+The family app's Personal pull decides from one look at a file (which named face
+is nearest), then stores the file, and storing moves the centroids it was judged
+against. On the first live run 30 of 1,100 photographs had qualified on the look
+and, as stored, held a face the app did not know, so a stranger was on show. The
+second time the same shape bit, the check ran too EARLY in the run: new faces are
+filed under their own cluster until grouping, so 411 photographs that did
+qualify looked as if nobody chosen was in them and were hidden.
+
+**Judge what the reader will see, from the stored record, after every step that
+can change it.** A verdict from an intermediate state is a forecast, not a fact.
+
+## 79. An optional step must not be able to take the mandatory ones down with it
+
+A run that picks video frames for faces (nice to have) died on one statement
+timeout, and with it went the owner's private rules, the video nudity checks and
+the run's receipt, all of which come after it. The query itself was fine on the
+day it was written; the planner later mis-estimated one join as a single row and
+re-ran an 82,000-row aggregate about 18,000 times. Materialising the CTEs made it
+1.2 seconds, and a tie-break by key made its order independent of the plan.
+
+**Order safety steps so they cannot be skipped, isolate optional steps so their
+failure is counted and survived, and never let a result depend on the plan the
+database happens to choose.**
