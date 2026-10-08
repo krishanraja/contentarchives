@@ -1,8 +1,8 @@
 ---
 repo: krishanraja/contentarchives
 product: contentarchives
-as_of: 2026-10-07
-head: 139995b
+as_of: 2026-10-08
+head: 7ca32e4
 lifecycle: building
 production_url: none
 state_doc: RESUME.md
@@ -39,7 +39,7 @@ Stories a writer can carry without asking Krish:
 
 Objection it answers: "AI agents will quietly wreck our data." Here is the record of one doing exactly that, once, and the rules that made it unrepeatable, plus the newer record of one auditing its own honesty about how much it has actually learned, and finding the answer wanting.
 
-## Where it is right now (as of 2026-10-07)
+## Where it is right now (as of 2026-10-08)
 
 Lifecycle: building.
 
@@ -61,6 +61,7 @@ Lifecycle: building.
 
 ## What changed recently
 
+- 2026-10-07 **The first live Personal runs hid photographs that qualified, showed ones that did not, and one crashed on a slow query** (`1fbdb98`, `dcc313e`, `7ca32e4`). Why: the commits' own words. The first live run added 1,100 photographs and checking them found 30 where "the faces as STORED disagreed with the faces as first looked at", because a face's nearest group can move between the look and the store; a photograph now shows only while it qualifies as stored too, and the 30 were hidden at once. Run #15 then "hid 411 Personal photographs that qualify", because the check ran before grouping, when a ticked person in a pinned group was not yet among a new photo's people; it now runs after grouping, and all 411 were checked live to qualify. Run #16 "died in frames() on a statement timeout": the planner ran a per-group face count over 82k faces about 18,000 times, and with the CTEs materialized the same query takes 1.2 s and returns the same 127 groups. Picking frames is extra, so its failure is now rolled back and counted, and the owner's private rules, the video checks and the receipt still run (`stages/13_app/cloud_enrich.py`, `tests/test_app_cloud.py`, `stages/13_app/STAGE.md`).
 - 2026-10-06 **A photo's details and the search results now fit a phone held on its side, with both actions showing** (`f6c26d1`, `fc0be84`). Why: the commits' own words are "a photo's details fit a phone on its side with both actions showing" and "search results fit a phone on its side, however long the sentence"; neither carries a longer explanation, so the cause is not recorded here. The no-scroll test (`web/e2e/noscroll.spec.ts`) and the style test (`web/tests/style.test.ts`) were extended in the same range.
 - 2026-10-06 **Who is in a photo and where it was taken can now be put right from the photo itself, and the family's answer wins.** Why: Krish asked for the app to be "10x more intuitive", starting with these. Under every photo, Who, Where and When are three cards, each a button. Who lists the names, and a wrong one is taken off with one tap; "Add someone" catches a misspelling ("Did you mean ...?"). Where offers the family's places or a typed one, and can cover the other photos from the same day. As with the year, each person's latest answer is one vote, it changes only that photo, Undo puts it back, and search follows it (migration `0012_family_where_who.sql`). A place the family types can make a photo private under the owner's rules but can never make a private one public. The results heading no longer looks like a button, and the search box says "Type here".
 - 2026-10-06 **A wrong year on a photo can be put right in two taps, and the family's year now wins over the file's date everywhere.** Why: Krish: the metadata "just reports on when the picture came into existence on the computer, which might be completely wrong", and "everything needs to be 10x more intuitive". Before this, a family answer about the year was saved only when a photo had no year at all, so a wrong date could never be corrected. Now the year under every photo is a button: a decade, then a year (or just the decade), and the other photos the file dates to the same day, typically a batch of scans, can be fixed in the same answer. The family's year shows on the photo, on the grid, in search and in the year chips (migration `0011_family_when.sql`). The photo screen also gained Previous and Next, so a search's photos can be turned through without going back to the grid each time.
@@ -112,7 +113,7 @@ Lifecycle: building.
 - Waiting on Krish (`RESUME.md`, "Waiting on the user"): the origins in `Archive\99-Unsorted\`; `_Review\`'s remaining files awaiting review.
 - Settled, no longer waiting: the identity documents that used to sit unflagged in the chronology are found and moved (eleven, `f67166d`); the four staged source zips are deleted, verified by the mount-based check (`d38e973`).
 - Next, per `docs/ROADMAP.md`: **the consolidation of scattered sources is finished** - the library is 85,480 files / 926.5 GB on both D: and H: with zero internal duplicates, a chronology one level deep, and it can now be searched and grouped into events. Phase B is the front line: three sources are still arriving, VHS captures, ten old communal phones, and photographs of old albums - two of the three carry no EXIF at all, so naming the folders with their year before ingesting is the single highest-value minute available. This session closed sixteen defects the same shape as ones those sources would otherwise have hit first (learnings 70 to 77), and wrote all of them down this time.
-- Waiting on Krish: share the Personal folder on Drive with the app's read-only account (Viewer), so the Personal pull can start; the sharing connector is refused for an outside account.
+- Unverified: the Personal folder share. The 2026-10-07 commits describe a live Personal run that added 1,100 photographs, which implies the share was made, but this repo holds no record of it; confirm and remove this line.
 - Waiting on Krish: confirm the nightly index build has completed at least once. It is on by default since 2026-10-05 (set `ARCHIVES_ENRICH` to "off" to pause it), and no run's result can be verified from the code.
 - Still open: Bharti's naming game itself (the mobile app; her data queue, 1,192 clusters, already exists and is not the same thing); whether `_Review` is ever emptied and by what rule; Phase D (a second local copy on E:, not started) and Phase E's onward plan once Phase B adds more to mirror.
 
