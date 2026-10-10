@@ -11,6 +11,7 @@ This log records what the steward did to the documentation and when.
 
 ## 2026-10-10
 
+- reconciled at `2003686`: one non-steward commit since `bd589c8`, the family app's tap latency (`web/`, learning 80, `stages/13_app/STAGE.md`). One "What changed recently" bullet added; the learnings count line moved from 77/69 to 80/72 per the commit body, with the old code-file count marked unverified. `docs/HANDOVER.md` and `state/PROGRESS.md` stay unedited, as every cycle since 2026-09-09 (they describe the library, not the app).
 - stamped at `bd589c8`: one non-steward commit since `7ca32e4`, docs only (learnings 78 and 79 in `docs/LEARNINGS.md`, owned by `stages/13_app/STAGE.md`). The commit already updated NOW.md with the finished Personal pull and video state, so only `head` and `as_of` move.
 - checked and dismissed: `docs/HANDOVER.md` and `state/PROGRESS.md` stamps are older than the newest code, unedited for the same reason as every cycle since 2026-09-09 (they describe the library, not the app).
 
