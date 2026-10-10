@@ -42,6 +42,14 @@ export function exact(typed: string, known: string[]): string | null {
   return known.find((n) => fold(n) === k) || null;
 }
 
+// The spelling a saved answer takes: a known one it folds to, else one given
+// since the known list was read (another phone, a minute ago), else as typed.
+// `recent` is asked only when the list has no match, so a save that picked a
+// known name never touches the database for it.
+export async function spellAs(typed: string, known: string[], recent: () => Promise<string[]>): Promise<string> {
+  return exact(typed, known) || exact(typed, await recent()) || typed;
+}
+
 // The known names a typed one is probably meant to be, closest first (at most
 // `max`). Whole names are compared, and so is each word, so "Ashwin" finds
 // "Ashvin Raja" and "Usha Rja" finds "Usha Raja".

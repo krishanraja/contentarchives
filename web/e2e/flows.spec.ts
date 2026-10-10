@@ -218,11 +218,30 @@ test("Who is this: a strong match is a yes/no, and the name lands in the databas
   await page.click("button:has-text('Save this name')");
   await expect(page.getByText("now say")).toBeVisible();
   await floor(page, "celebration");
-  const rows = await db`select who, scope, field, value, status from answers where field = 'person'`;
-  expect(rows).toEqual([{ who: "grandma", scope: "cluster", field: "person", value: "Kamala Raja", status: "new" }]);
+  // the thank-you shows at the tap; the answer lands a moment later
+  await expect.poll(async () => [...await db`select who, scope, field, value, status from answers where field = 'person'`]).toEqual([{ who: "grandma", scope: "cluster", field: "person", value: "Kamala Raja", status: "new" }]);
   // instantly searchable, before any pull or re-seed
   await page.goto("/find?q=Kamala");
   await expect(page.locator(".sentence")).toContainText("of Kamala Raja");
+});
+
+test("the next face is already there: no blank Finding screen between faces", async ({ page }) => {
+  await cleanSlate();
+  await signIn(page);
+  await page.goto("/help");
+  await expect(page.getByText("Is this Ravi Raja?")).toBeVisible();
+  await page.click("button:has-text('Yes!')");
+  await expect(page.getByText("now say")).toBeVisible();
+  await page.waitForLoadState("networkidle");          // the next face, fetched while this one was answered
+  await page.evaluate(() => {
+    (window as unknown as { blank: boolean }).blank = false;
+    new MutationObserver(() => {
+      if (document.body.textContent?.includes("Finding a face")) (window as unknown as { blank: boolean }).blank = true;
+    }).observe(document.body, { childList: true, subtree: true, characterData: true });
+  });
+  await page.click("button:has-text('Next face')");
+  await expect(page.getByText(/Is this |Who is this\?|People said different names/).first()).toBeVisible();
+  expect(await page.evaluate(() => (window as unknown as { blank: boolean }).blank)).toBe(false);
 });
 
 test("Undo really takes the answer back", async ({ page }) => {
@@ -503,14 +522,14 @@ test("two people who disagree are both kept, and the next person settles it", as
   await expect(grandpa.getByText("Is this Ravi Raja?")).toBeVisible();
   await grandma.click("button:has-text('Yes!')");
   await expect(grandma.getByText("now say")).toBeVisible();
+  await expect.poll(async () => (await db`select 1 from answers where scope = 'cluster'`).length).toBe(1);
   await grandpa.click("button:has-text('No')");
   await grandpa.click("button:has-text('Someone else')");
   await grandpa.fill("#nm", "Kamala Raja");
   await grandpa.click("button:has-text('Save this name')");
   await expect(grandpa.getByText("now say")).toBeVisible();
   // neither answer replaced the other
-  const kept = await db`select who, value, status from answers where scope = 'cluster' order by at`;
-  expect(kept).toEqual([{ who: "grandma", value: "Ravi Raja", status: "new" }, { who: "grandpa", value: "Kamala Raja", status: "new" }]);
+  await expect.poll(async () => [...await db`select who, value, status from answers where scope = 'cluster' order by at`]).toEqual([{ who: "grandma", value: "Ravi Raja", status: "new" }, { who: "grandpa", value: "Kamala Raja", status: "new" }]);
   // one each: the first given shows, and the face is still asked of everyone else
   expect(await named("g7")).toEqual({ name: "Ravi Raja", answered: false, contested: true });
 
@@ -521,7 +540,7 @@ test("two people who disagree are both kept, and the next person settles it", as
   await floor(meera, "contested");
   await meera.click("[aria-label='Names people have given'] button:has-text('Kamala Raja')");
   await expect(meera.getByText("now say")).toBeVisible();
-  expect(await named("g7")).toEqual({ name: "Kamala Raja", answered: true, contested: false });
+  await expect.poll(() => named("g7")).toEqual({ name: "Kamala Raja", answered: true, contested: false });
   // the two who already answered are not asked it again
   expect((await grandma.request.get("/api/face/next").then((r) => r.json())).group).toBe("g8");
   for (const p of [grandma, grandpa, meera]) await p.context().close();
@@ -581,6 +600,7 @@ test("a misspelt name is caught, and the same name typed differently is the same
   await floor(page, "did you mean");
   await page.click("[aria-label='Names we already know'] button:has-text('Meera Shah')");
   await expect(page.getByText("now say")).toBeVisible();
+  await expect.poll(async () => (await db`select 1 from answers where scope = 'cluster'`).length).toBe(1);
   // case and spacing are not spelling: stored as the family already spells it
   const r = await page.request.post("/api/answers", { data: { id: crypto.randomUUID(), kind: "person", group: "g8", value: "  ASHA   raja " } });
   expect(r.ok()).toBe(true);
@@ -595,7 +615,7 @@ test("a misspelt name is caught, and the same name typed differently is the same
   await page.click("button:has-text('Save this name')");
   await page.click("button:has-text('No, save')");
   await expect(page.getByText("now say")).toBeVisible();
-  expect((await db`select value from answers where scope = 'cluster'`)[0].value).toBe("Dev Sha");
+  await expect.poll(async () => (await db`select value from answers where scope = 'cluster'`).map((r) => r.value)).toEqual(["Dev Sha"]);
 });
 
 test("places: a misspelling is caught, a second opinion is counted not written over, the family's place wins and the library's is kept", async ({ page, browser }) => {

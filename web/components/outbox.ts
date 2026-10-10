@@ -34,6 +34,8 @@ async function flushOne(id: string) {
   try {
     const r = await fetch("/api/answers", {
       method: "POST", headers: { "content-type": "application/json" },
+      // the screen has already moved on: leaving the page must not cancel it
+      keepalive: true,
       body: JSON.stringify({ ...item.body, client_at: item.body.client_at || new Date().toISOString() }),
     });
     const j = await r.json().catch(() => ({}));

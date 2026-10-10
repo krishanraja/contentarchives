@@ -1,11 +1,12 @@
 "use client";
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Shot from "@/components/Shot";
 import Fit from "@/components/Fit";
 import Undo from "@/components/Undo";
 import Confetti from "@/components/Confetti";
 import { send, uuid } from "@/components/outbox";
+import { ahead } from "@/components/ahead";
 import { close, exact, fold } from "@/lib/spelling";
 
 type Face = { key: string; bbox: number[] };
@@ -19,6 +20,11 @@ const RELATION = new Set(["nani", "nana", "dadi", "dada", "mama", "mami", "masi"
   "bhaiya", "didi", "bhabhi", "jiju", "baby", "me", "myself", "cousin", "brother", "sister"]);
 
 const faceUrl = (k: string, whole = false) => `/face/${encodeURIComponent(k)}${whole ? "?whole=1" : ""}`;
+const getFace = (after: string[]): Promise<Q | undefined> =>
+  fetch(`/api/face/next?after=${after.join(",")}`).then((x) => x.json()).catch(() => undefined);
+// every picture the question will show
+const pictures = (q: NonNullable<Q>) => [faceUrl(q.hero.key, true), ...q.samples.slice(0, 4).map((f) => faceUrl(f.key)),
+  ...(q.ask ? [faceUrl(q.ask.face)] : []), ...q.suggestions.map((s) => faceUrl(s.face))];
 
 export default function NameGame() {
   const [q, setQ] = useState<Q | undefined>(undefined);
@@ -31,12 +37,19 @@ export default function NameGame() {
   const [seen, setSeen] = useState<string[]>([]);
   const [skipped, setSkipped] = useState(0);
   const [err, setErr] = useState("");
+  const next = useRef(ahead<Q>());
+  // an answer still on its way: undo waits for it, or it would arrive after the undo
+  const sending = useRef(new Map<string, Promise<unknown>>());
 
   const load = useCallback(async (after: string[]) => {
-    setQ(undefined); setErr("");
-    const r = await fetch(`/api/face/next?after=${after.join(",")}`).then((x) => x.json()).catch(() => undefined);
+    const held = next.current.take(after.join(","));
+    if (!held?.ready) setQ(undefined);
+    setErr("");
+    let r = held ? await held.p : undefined;
+    if (r === undefined) r = await getFace(after);
     if (r === undefined) { setErr("No internet connection. Your answers are safe on this phone."); setQ(null); return; }
     setQ(r); setMode(r?.ask ? "ask" : "choose"); setTyped(""); setWarn("");
+    if (r) { const then = [...after, r.group]; next.current.start(then.join(","), () => getFace(then), pictures); }
   }, []);
 
   useEffect(() => { void load([]); fetch("/api/names").then((r) => r.json()).then((j) => setNames(j.people || [])).catch(() => undefined); }, [load]);
@@ -47,21 +60,34 @@ export default function NameGame() {
     return names.filter((n) => fold(n).split(" ").some((w) => w.startsWith(t)) || fold(n).startsWith(t)).slice(0, 6);
   }, [typed, names]);
 
+  // The screen moves on at the tap; the outbox keeps the answer until the
+  // server has it. An answer the server refuses outright puts the face back,
+  // with the reason, exactly as when the screen used to wait.
   async function answer(kind: "person" | "mixed", value: string) {
     if (!q) return;
+    const asked = q, before = seen;
     const id = uuid();
-    const r = await send({ id, kind, group: q.group, cluster: q.cluster, value });
-    if (!r.ok && r.error && !r.error.startsWith("offline")) { setErr(r.error); return; }
-    setSeen((s) => [...s, q.group]);
-    if (kind === "person") setDone({ name: value, n: r.labelled ?? q.photos, id, group: q.group });
-    else void load([...seen, q.group]);
+    const p = send({ id, kind, group: asked.group, cluster: asked.cluster, value });
+    sending.current.set(id, p);
+    setSeen([...before, asked.group]);
+    if (kind === "person") setDone({ name: value, n: asked.photos, id, group: asked.group });
+    else void load([...before, asked.group]);
+    const r = await p;
+    sending.current.delete(id);
+    if (!r.ok && r.error && !r.error.startsWith("offline")) {
+      setDone(null); setSeen(before); setQ(asked); setMode(asked.ask ? "ask" : "choose"); setErr(r.error);
+      return;
+    }
+    if (kind === "person" && r.labelled !== undefined) setDone((d) => (d && d.id === id ? { ...d, n: r.labelled! } : d));
   }
 
-  async function dontKnow() {
+  // the skip is recorded while the next face is shown: it is left out by
+  // `after` whether or not the skip has landed yet
+  function dontKnow() {
     if (!q) return;
-    await fetch("/api/skip", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ key: q.group }) }).catch(() => undefined);
-    const next = [...seen, q.group];
-    setSeen(next); setSkipped((n) => n + 1); void load(next);
+    void fetch("/api/skip", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ key: q.group }) }).catch(() => undefined);
+    const after = [...seen, q.group];
+    setSeen(after); setSkipped((n) => n + 1); void load(after);
   }
 
   function submitTyped() {
@@ -82,6 +108,7 @@ export default function NameGame() {
 
   async function undo() {
     if (!done) return;
+    await sending.current.get(done.id);
     await fetch("/api/answers/undo", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ id: done.id }) }).catch(() => undefined);
     const g = done.group;
     setDone(null); setSeen((s) => s.filter((x) => x !== g)); void load(seen.filter((x) => x !== g));

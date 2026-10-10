@@ -1,17 +1,22 @@
 "use client";
 import Link from "next/link";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Undo from "@/components/Undo";
 import Confetti from "@/components/Confetti";
 import Shot from "@/components/Shot";
 import YearPicker from "@/components/YearPicker";
 import PlacePicker from "@/components/PlacePicker";
 import { send, uuid } from "@/components/outbox";
+import { ahead } from "@/components/ahead";
 
 type S = { hash: string; needPlace: boolean; needYear: boolean; day: string[]; places: string[] } | null;
 type Step = "place" | "day" | "decade" | "thanks";
 
 const img = (h: string, size = "v") => `/img/${size}/${encodeURIComponent(h)}`;
+const getStory = (after: string[], one: string | null): Promise<S | undefined> =>
+  fetch(`/api/story/next?after=${after.join(",")}${one ? `&photo=${encodeURIComponent(one)}` : ""}`)
+    .then((x) => x.json()).catch(() => undefined);
+const pictures = (s: NonNullable<S>) => [img(s.hash), ...s.day.slice(0, 4).map((h) => img(h, "t"))];
 
 export default function StoryGame({ only }: { only: string | null }) {
   const [s, setS] = useState<S | undefined>(undefined);
@@ -22,15 +27,35 @@ export default function StoryGame({ only }: { only: string | null }) {
   const [seen, setSeen] = useState<string[]>([]);
   const [err, setErr] = useState("");
   const [single, setSingle] = useState(only);
+  const upcoming = useRef(ahead<S>());
+  // an answer still on its way: undo waits for it, or it would arrive after the undo
+  const sending = useRef(new Map<string, Promise<unknown>>());
 
   const load = useCallback(async (after: string[], one: string | null) => {
-    setS(undefined); setErr(""); setPlace(""); setLabelled(0);
-    const r = await fetch(`/api/story/next?after=${after.join(",")}${one ? `&photo=${encodeURIComponent(one)}` : ""}`)
-      .then((x) => x.json()).catch(() => undefined);
+    const held = upcoming.current.take(`${after.join(",")}|${one || ""}`);
+    if (!held?.ready) setS(undefined);
+    setErr(""); setPlace(""); setLabelled(0);
+    let r = held ? await held.p : undefined;
+    if (r === undefined) r = await getStory(after, one);
     if (r === undefined) { setErr("No internet connection. Your answers are safe on this phone."); setS(null); return; }
     setS(r);
-    if (r) setStep(r.needPlace ? "place" : r.needYear ? "decade" : "thanks");
+    if (r) {
+      setStep(r.needPlace ? "place" : r.needYear ? "decade" : "thanks");
+      const then = [...after, r.hash];
+      upcoming.current.start(`${then.join(",")}|`, () => getStory(then, null), pictures);
+    }
   }, []);
+
+  // The step moves on at the tap; the outbox keeps the answer until the
+  // server has it, and a refusal is shown in the panel as before.
+  function keep(body: Record<string, unknown> & { id: string }) {
+    const p = send(body);
+    sending.current.set(body.id, p);
+    void p.then((r) => {
+      sending.current.delete(body.id);
+      if (!r.ok && r.error && !r.error.startsWith("offline")) setErr(r.error);
+    });
+  }
   useEffect(() => { void load([], only); }, [load, only]);
 
   function after() {
@@ -39,11 +64,10 @@ export default function StoryGame({ only }: { only: string | null }) {
     else setStep("thanks");
   }
 
-  async function savePlace(hashes: string[]) {
+  function savePlace(hashes: string[]) {
     const id = uuid();
-    const r = await send({ id, kind: "place", hashes, value: place });
-    if (!r.ok && r.error && !r.error.startsWith("offline")) { setErr(r.error); return; }
-    setLabelled((n) => n + (r.labelled ?? hashes.length));
+    keep({ id, kind: "place", hashes, value: place });
+    setLabelled((n) => n + hashes.length);
     setLast({ id, text: `Saved: ${place}` });
     after();
   }
@@ -51,30 +75,29 @@ export default function StoryGame({ only }: { only: string | null }) {
   function pickPlace(p: string) {
     setPlace(p);
     if (s && s.day.length) setStep("day");
-    else void (async () => {
+    else {
       const id = uuid();
-      const r = await send({ id, kind: "place", hashes: [s!.hash], value: p });
-      if (!r.ok && r.error && !r.error.startsWith("offline")) { setErr(r.error); return; }
+      keep({ id, kind: "place", hashes: [s!.hash], value: p });
       setLabelled((n) => n + 1); setLast({ id, text: `Saved: ${p}` }); after();
-    })();
+    }
   }
 
-  async function saveYear(v: string) {
+  function saveYear(v: string) {
     if (!s) return;
     const id = uuid();
-    const r = await send({ id, kind: "year", hashes: [s.hash], value: v });
-    if (!r.ok && r.error && !r.error.startsWith("offline")) { setErr(r.error); return; }
+    keep({ id, kind: "year", hashes: [s.hash], value: v });
     setLabelled((n) => Math.max(n, 1)); setLast({ id, text: `Saved: ${v}` }); setStep("thanks");
   }
 
   // "I don't know" sends this photo to the back of THIS person's queue (it comes
   // back once they have seen the rest); everyone else is still asked it
-  async function shrug() {
+  function shrug() {
     if (!s) return;
-    await fetch("/api/skip", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ key: "story:" + s.hash }) }).catch(() => undefined);
+    void fetch("/api/skip", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ key: "story:" + s.hash }) }).catch(() => undefined);
   }
-  async function skip() {
-    await shrug();
+  // the skip is recorded while the next photo is shown: `after` leaves it out
+  function skip() {
+    shrug();
     next();
   }
   function next() {
@@ -83,6 +106,7 @@ export default function StoryGame({ only }: { only: string | null }) {
   }
   async function undo() {
     if (!last) return;
+    await sending.current.get(last.id);
     await fetch("/api/answers/undo", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ id: last.id }) }).catch(() => undefined);
     setLast(null); void load(seen, s?.hash || null);
   }

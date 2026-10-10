@@ -2,7 +2,8 @@ import type postgres from "postgres";
 import { sql } from "./db";
 import { embed, hasGemini } from "./gemini";
 import { describe, parseQuery, type Parsed } from "./search";
-import { exact } from "./spelling";
+import { spellAs } from "./spelling";
+import { memo } from "./memo";
 
 export type Card = {
   hash: string; media: string; year: number | null; approx_year: string | null;
@@ -15,7 +16,16 @@ export async function players(): Promise<string[]> {
   return rows.map((r) => r.name as string);
 }
 
-export async function vocab() {
+// Every known name and place. Reading the names means walking photo_people,
+// a view over every photo and every face group's votes: measured at 1.9 s on
+// 2026-10-10, and it ran on EVERY saved answer, so each tap waited for it. A
+// per-save query must not scan the library: the list is kept for a minute per
+// server instance, and a save checks the few answers given since (spellAs).
+const VOCAB_TTL_MS = 60_000;
+const vocabMemo = memo(loadVocab, VOCAB_TTL_MS);
+export function vocab() { return vocabMemo.get(); }
+
+async function loadVocab() {
   const db = sql();
   const [people, places] = await Promise.all([
     db`select distinct name from photo_people where name is not null`,
@@ -329,11 +339,19 @@ export async function saveAnswer(who: string, a: AnswerIn): Promise<{ labelled: 
   let value = a.value.trim().replace(/\s+/g, " ");
   // a name or place that differs from a known one only in case, spacing or
   // punctuation IS that one, spelled the way the family already spells it
+  let known = true;
   if (a.kind === "person" || a.kind === "place" || a.kind === "in" || a.kind === "out") {
     const v = await vocab();
-    value = exact(value, a.kind === "place" ? v.places : v.people) || value;
+    const list = a.kind === "place" ? v.places : v.people;
+    // the list is at most a minute old: the answers since cover the gap, by
+    // the database's own clock, with room to spare
+    const fields = a.kind === "place" ? ["place"] : ["person", "in_photo", "not_in_photo"];
+    value = await spellAs(value, list, async () => (await db`select distinct value from answers
+      where at > now() - interval '3 minutes' and field = any(${fields}::text[])
+        and status in ('new', 'ingested')`).map((r) => r.value as string));
+    known = list.includes(value);
   }
-  return db.begin(async (tx) => {
+  const out = await db.begin(async (tx) => {
     if (a.kind === "person" || a.kind === "mixed") {
       // The answer names the CLUSTER the person was shown - frozen, never
       // renumbered - so a later merge of groups cannot detach it.
@@ -362,6 +380,9 @@ export async function saveAnswer(who: string, a: AnswerIn): Promise<{ labelled: 
     if (ins.length && (field === "place" || field === "approx_year")) await settle(tx, field, hashes);
     return { labelled: hashes.length };
   });
+  // a name or place new to the list: the next reader on this instance sees it
+  if (!known) vocabMemo.clear();
+  return out;
 }
 
 // What a photo shows for a place or a year the FAMILY gave: each person's latest

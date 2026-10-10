@@ -2530,3 +2530,19 @@ re-ran an 82,000-row aggregate about 18,000 times. Materialising the CTEs made i
 **Order safety steps so they cannot be skipped, isolate optional steps so their
 failure is counted and survived, and never let a result depend on the plan the
 database happens to choose.**
+
+## 80. Work that runs on every tap must not grow with the library
+
+Every answer the family app saved first read the whole list of known names, to
+store "asha raja" as the "Asha Raja" the family already spells. That list comes
+from a view over every photograph and every face group's votes, and on
+2026-10-10 it took 1.9 seconds, on every single tap, before the screen could
+move on. It was correct on the day it was written, when the library was small;
+nothing failed, the app just got slower as the library grew, and the family
+felt it as "every button is a few seconds late".
+
+**A per-request step must cost what the request is, not what the library is.**
+Keep whole-library answers for a while and check only what changed since (the
+name list is kept a minute; a save checks the answers given in the last few
+minutes, 0.3 ms). Then let the screen move at the tap: a durable outbox already
+owns delivery, so waiting for the server bought nothing but delay.
