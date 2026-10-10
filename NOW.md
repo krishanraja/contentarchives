@@ -1,8 +1,8 @@
 ---
 repo: krishanraja/contentarchives
 product: contentarchives
-as_of: 2026-10-08
-head: 7ca32e4
+as_of: 2026-10-10
+head: bd589c8
 lifecycle: building
 production_url: none
 state_doc: RESUME.md
@@ -39,7 +39,7 @@ Stories a writer can carry without asking Krish:
 
 Objection it answers: "AI agents will quietly wreck our data." Here is the record of one doing exactly that, once, and the rules that made it unrepeatable, plus the newer record of one auditing its own honesty about how much it has actually learned, and finding the answer wanting.
 
-## Where it is right now (as of 2026-10-08)
+## Where it is right now (as of 2026-10-10)
 
 Lifecycle: building.
 

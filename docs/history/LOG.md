@@ -9,6 +9,11 @@ duplicate: `docs/rescues/` holds one dated record per source, and
 `docs/LEARNINGS.md` holds the numbered rules in the order they were paid for.
 This log records what the steward did to the documentation and when.
 
+## 2026-10-10
+
+- stamped at `bd589c8`: one non-steward commit since `7ca32e4`, docs only (learnings 78 and 79 in `docs/LEARNINGS.md`, owned by `stages/13_app/STAGE.md`). The commit already updated NOW.md with the finished Personal pull and video state, so only `head` and `as_of` move.
+- checked and dismissed: `docs/HANDOVER.md` and `state/PROGRESS.md` stamps are older than the newest code, unedited for the same reason as every cycle since 2026-09-09 (they describe the library, not the app).
+
 ## 2026-10-08
 
 - reconciled at `7ca32e4`: NOW.md brought forward from `139995b` over 4 non-steward commits, all the family app's Personal-photo rule and frame picking (`stages/13_app/cloud_enrich.py`). One "What changed recently" bullet added. The "share the Personal folder" waiting item is reworded as unverified, because the commits describe a live Personal run. No file moved, nothing rolled (no bullet older than 30 days).
