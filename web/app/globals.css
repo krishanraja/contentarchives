@@ -482,7 +482,8 @@ summary.btn::-webkit-details-marker { display: none; }
 }
 /* All · Photos · Videos: one row, on every Find screen */
 .types { display: flex; gap: 8px; flex: none; }
-.types .btn { flex: 1 1 0; min-width: 0; padding: 4px 6px; gap: 6px; box-shadow: 3px 3px 0 var(--ink); }
+.types .btn { flex: 1 1 auto; min-width: 0; padding: 4px 6px; gap: 6px; box-shadow: 3px 3px 0 var(--ink); }
+@container screen (max-width: 420px) { .types .play-dot { display: none; } }
 .types .btn[aria-current="page"] { background: var(--sun); }
 .types .n, .chip .n {
   font-size: 14px; font-weight: 700; padding: 1px 7px; border-radius: 999px;
