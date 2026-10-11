@@ -21,7 +21,11 @@
 
 create index if not exists photos_media on photos (media) where not hidden and drive_id is not null;
 
-drop function if exists search_photos(extensions.vector, text, text[], text, int, int, int, int);
+-- The old eight-argument function is renamed aside, not dropped: this is
+-- exactly what was applied to the live database on 2026-10-11 (its migration
+-- tool held back a DROP), and leaving it under the old name would make an
+-- eight-argument call ambiguous between the two.
+alter function search_photos(extensions.vector, text, text[], text, int, int, int, int) rename to search_photos_0012;
 
 create or replace function search_photos(
   q_embedding extensions.vector(768) default null,
