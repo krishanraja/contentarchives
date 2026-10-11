@@ -13,7 +13,7 @@ test("screenshots", async ({ page }, info) => {
   await page.click("text=Grandma");
   await page.waitForURL((u) => u.pathname === "/");
   await page.screenshot({ path: `${out}/03-home.png`, fullPage: true });
-  await page.click("text=Find photos");
+  await page.click("text=Find photos & videos");
   await page.waitForLoadState("networkidle");
   await page.screenshot({ path: `${out}/04-find.png`, fullPage: true });
   await page.fill("#q", "Ravi in Goa");

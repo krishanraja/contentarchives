@@ -123,7 +123,7 @@ test("the app's icon shows everywhere, even before the code is typed", async ({ 
 
 test("find photos by a first name, a place and a year", async ({ page }) => {
   await signIn(page);
-  await page.click("text=Find photos");
+  await page.click("text=Find photos & videos");
   await floor(page, "find");
   await page.fill("#q", "Ravi in Goa");
   await page.click("button:has-text('Search')");
@@ -138,7 +138,7 @@ test("find photos by a first name, a place and a year", async ({ page }) => {
   await expect(page.getByRole("heading", { name: "Who" })).toBeVisible();
   await expect(page.locator(".about")).toContainText("Ravi Raja");
   await floor(page, "photo, about");
-  await page.click("text=Back to photos");
+  await page.click("text=Back to results");
   await expect(page.locator(".sentence")).toContainText("Ravi Raja");
   await page.fill("#q", "1990s");
   await page.click("button:has-text('Search')");
@@ -562,7 +562,7 @@ test("Previous and Next turn through the photos a search found", async ({ page }
   await page.getByRole("link", { name: "Previous photo" }).click();
   await page.waitForURL((u) => u.pathname === new URL(hrefs[0], "http://x").pathname);
   await expect(page.getByRole("button", { name: "Previous photo" })).toBeDisabled();       // the first has none before it
-  await page.click("text=Back to photos");
+  await page.click("text=Back to results");
   await expect(page.locator(".sentence")).toContainText("Asha Raja");
 });
 

@@ -1,7 +1,10 @@
 # archives.krishraja.com
 
-The family's Communal photographs on a phone: find them, and tell us who, where
+The family's photographs and videos on a phone: find them, and tell us who, where
 and roughly when. Built for grandparents. Owned by `stages/13_app/STAGE.md`.
+
+As of 2026-10-11 the live app shows 18,726 photographs and 6,718 videos (read
+from the live database the day this was written; `photos where visible`).
 
 ## How it fits together
 
@@ -32,18 +35,81 @@ built from Drive in the cloud. When the library machine is connected it can
 optionally add what only it knows (`seed_index.py`, the bridge) and copy answers
 into the journal (`pull_answers.py`); the app never waits for it.
 
+## What it does, screen by screen
+
+- **Gate** (`/gate`): one family code for everyone (`ACCESS_CODE`, case and
+  spaces ignored). Wrong tries are counted per hashed IP in `gate_attempts` and
+  lock out; a lockout can alert `ALERT_WEBHOOK_URL` if that is set. Then **Who
+  are you?** (`/who`): a name kept only in a signed cookie, so answers carry it.
+  Every other route is behind both (`middleware.ts`).
+- **Home**: how many photos and videos there are, and three tiles.
+- **Find photos & videos** (`/find`): one search box (typed, or said with the
+  phone browser's own speech recognition where it has one), All / Photos /
+  Videos as one joined switch, and Who / Where / When / Say as four buttons
+  that narrow whatever the search started from, each choice with its count
+  (`search_photos` and `search_facets`, migration 0013). Words are ranked by
+  meaning with Gemini embeddings when `GOOGLE_API_KEY_ARCHIVES` is set, by
+  plain word match otherwise. The state is the URL (`?q=`, `?type=`, `?pick=`).
+- **A photo or video** (`/photo/[hash]`): Who, Where and When, each a button
+  that puts it right (the family's answer wins); a video plays only once it has
+  been watched whole and judged clear (`video_checks`), otherwise its still.
+  Anyone can hide a photo for everyone.
+- **Who is this?** (`/help`) and **Where and when?** (`/story`): the naming
+  games; every answer is one person's vote in `answers`.
+- Sizes: every control at least 48px, body text 18px, no text under 14px
+  (Ruling, Krish, 2026-10-11); nothing on any screen scrolls.
+
+## Everything it has access to
+
+Names only. Values, ids, the family code and the project's identifiers are
+never written in this public repository.
+
+| System | What | Access | Used by |
+|---|---|---|---|
+| Google Drive | the Communal folder | service account, **Viewer**, that folder | the app (images, video, health check) and the nightly writer |
+| Google Drive | the owner's Personal folder | the same service account, **Viewer**; the folder id is kept in the database (`sync_state`), not in env | the nightly writer only: a Personal photo is shown only while someone the owner chose is clearly in it (migration 0010) |
+| Google Gemini | `gemini-3.1-flash-lite` (describe, judge videos), `gemini-embedding-001` (search by meaning) | the app's own capped key, `GOOGLE_API_KEY_ARCHIVES` | the nightly writer (spend capped per run) and the app (one embedding per words search) |
+| Supabase project "archives" (Sydney) | Postgres: the index and the family's answers | `DATABASE_URL` (transaction pooler) | the app reads and records answers; the writer writes the index |
+| Supabase Storage | private bucket `media`: cut face crops and frames | `SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY` | the app |
+| Vercel project "archives" | hosting, region `syd1`, root `web`, production branch `main` | deploys from GitHub on every push to `main` | the app |
+| GitHub Actions | `.github/workflows/archives-enrich.yml`, nightly 04:17 Brisbane | repository secrets below | the writer, `stages/13_app/cloud_enrich.py` |
+
+**The app's environment (Vercel, all "sensitive" ones are write-only and cannot
+be read back, even by the owner):** `DATABASE_URL`, `SUPABASE_URL`,
+`SUPABASE_SERVICE_ROLE_KEY`, `ACCESS_CODE`, `SESSION_SECRET`, `SESSION_VERSION`,
+`IMAGE_SOURCE=drive`, `GOOGLE_SERVICE_ACCOUNT_JSON`, `DRIVE_COMMUNAL_FOLDER_ID`,
+`DRIVE_REL_PREFIX`, `GOOGLE_API_KEY_ARCHIVES`, `CRON_SECRET`; optional
+`ALERT_WEBHOOK_URL`.
+
+**The writer's secrets (GitHub Actions):** `DATABASE_URL`,
+`GOOGLE_SERVICE_ACCOUNT_JSON`, `GOOGLE_API_KEY_ARCHIVES`,
+`DRIVE_COMMUNAL_FOLDER_ID`; repository variables `ARCHIVES_ENRICH` (`off`
+pauses the nightly run) and `ARCHIVES_VIDEOS_PER_RUN`.
+
+**Database functions the app calls:** `search_photos` (nine arguments since
+0013; `q_media` last and optional) and `search_facets`. Neither can be run by
+`anon` or `authenticated`: only the server's own connection reaches them.
+`search_photos_0012` is the pre-0013 search, renamed aside when 0013 went
+live because the live migration tool held back a DROP; nothing calls it.
+Migrations 0001-0012 were applied to the live database as plain SQL; only
+`0012a` and `0013_facets` appear in its migration history, so check the live
+functions themselves rather than that history.
+
 ## Develop and test (synthetic family only)
 
 ```bash
 npm install
-# a local Postgres 16 with pgvector, then:
-psql -f supabase/test/shim.sql -f supabase/migrations/0001_archives.sql \
-     -f supabase/migrations/0002_harden.sql -f supabase/migrations/0003_cloud.sql
+# a local Postgres 16 with pgvector, then the shim and EVERY migration in order:
+psql -f supabase/test/shim.sql
+for m in supabase/migrations/*.sql; do psql -v ON_ERROR_STOP=1 -f "$m"; done
 cp .env.example .env.local      # DATABASE_URL, ACCESS_CODE, SESSION_SECRET, IMAGE_SOURCE=fixture
 npm run seed:fixtures            # cartoon photos of made-up people - never real ones
 npm run dev
-npm test                         # vitest: parser, gate, cookie, nudity-rule parity, prompt drift
-npm run e2e                      # Playwright at 360 / 390 / 430 px: floor, axe, every flow vs the stored row
+npm test                         # vitest: parser, facets' links, gate, cookie, nudity-rule parity, prompt drift
+npm run e2e                      # Playwright at 360 / 390 / 430 px: floor, axe, every flow vs the stored row;
+                                 # noscroll.spec.ts walks every screen at 19 sizes
+# the database side, against the same local Postgres:
+TEST_PG_DSN=postgresql://... python tests/test_app_cloud.py   # from the repo root
 ```
 
 ## Running it
@@ -66,8 +132,9 @@ npm run e2e                      # Playwright at 360 / 390 / 430 px: floor, axe,
 - **Health check** (read-only): `GET /api/cron/drive-sync` with
   `Authorization: Bearer $CRON_SECRET` returns the folder's file count on Drive,
   what is indexed, held and queued, and the last run's receipt.
-- **The Communal share**: the service account is a **Viewer** on that one folder,
-  and the folder's general access is **Restricted**. Nothing else is shared with it.
+- **The Drive shares**: the service account is a **Viewer** on the Communal
+  folder and on the owner's Personal folder, and nothing else; both folders'
+  general access is **Restricted**.
 - Retire Bharti's claude.ai artifact game, so two front ends never answer the same faces.
 
 ## Safety, in one place

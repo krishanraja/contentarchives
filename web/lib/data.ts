@@ -185,8 +185,9 @@ export async function counts() {
          where not g.answered) faces,
       (select count(*)::int from photos where visible and media = 'photo'
          and ((place is null and family_place is null) or (year is null and approx_year is null and family_when is null))) story,
-      (select count(*)::int from photos where visible) photos`;
-  return r as { faces: number; story: number; photos: number };
+      (select count(*)::int from photos where visible and media = 'photo') photos,
+      (select count(*)::int from photos where visible and media = 'video') videos`;
+  return r as { faces: number; story: number; photos: number; videos: number };
 }
 
 // ---------- the naming game ----------

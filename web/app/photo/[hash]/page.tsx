@@ -31,7 +31,7 @@ export default async function Photo({ params, searchParams }: { params: Promise<
   const back = q ? `/find?q=${encodeURIComponent(q)}${type ? `&type=${type}` : ""}` : type ? `/find?type=${type}` : "/find";
   return (
     <>
-      <Bar title={p.media === "video" ? "Video" : "Photo"} back={{ href: back, label: type === "video" ? "Back to videos" : "Back to photos" }} />
+      <Bar title={p.media === "video" ? "Video" : "Photo"} back={{ href: back, label: type === "video" ? "Back to videos" : type === "photo" ? "Back to photos" : q ? "Back to results" : "Back to Find" }} />
       <main className="page">
         <PhotoView q={q} type={type} p={{
           hash: p.hash, alt: p.description || "A family photo", people: p.people, where, when: when(p),

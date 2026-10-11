@@ -17,7 +17,7 @@ export default async function Gate({ searchParams }: { searchParams: Promise<{ e
           </svg>
         </div>
         <h1>Family Archives</h1>
-        <p className="muted sub">All our photos, in one place.</p>
+        <p className="muted sub">All our photos and videos, in one place.</p>
       </div>
       {inAppBrowser(ua) && (
         <div className="notice" style={{ flex: "none" }}>

@@ -42,7 +42,7 @@ export default async function Find({ searchParams }: { searchParams: Promise<SP>
     const listKey = findHref(p);
     return (
       <>
-        <Bar title="Find photos" />
+        <Bar title="Photos & videos" />
         <main className="page find results">
           <SearchBox initial={q} type={p.media} />
           <TypeSwitch active={p.media} counts={f.media} href={(m) => findHref(p, { media: m }, pick)} />
@@ -78,7 +78,7 @@ export default async function Find({ searchParams }: { searchParams: Promise<SP>
   };
   return (
     <>
-      <Bar title="Find photos" />
+      <Bar title="Photos & videos" />
       <main className="page find">
         <SearchBox initial="" type={type} example={exampleYears(b.decades)} />
         <TypeSwitch active={type} counts={b.media} href={(m) => tab(show || "", m)} />

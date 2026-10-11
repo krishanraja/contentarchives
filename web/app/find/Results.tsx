@@ -19,7 +19,7 @@ function spoken(seconds: number | null) {
   return `Video, ${m ? `${m} minute${m === 1 ? "" : "s"} ` : ""}${s} second${s === 1 ? "" : "s"}`;
 }
 
-// As many photos as the screen holds, and "More photos" for the next lot: the
+// As many as the screen holds, and "More" for the next lot: the
 // page never scrolls. The next lot is fetched before it is asked for. A video
 // carries a play mark and its length, and keeps its year (Krish, 2026-10-11:
 // "see if an individual piece of content is a video or a photo").
@@ -45,7 +45,7 @@ export default function Results({ q, type, first, total }: { q: string; type: Me
     try { sessionStorage.setItem(listKey(q, type), JSON.stringify(cards.map((c) => c.hash))); } catch { /* private mode */ }
   }, [cards, q, type]);
   return (
-    <Fit className="grid" cells label="Photos" more="More photos" total={total} need={need}>
+    <Fit className="grid" cells label={type === "video" ? "Videos" : type === "photo" ? "Photos" : "Photos and videos"} more="More" total={total} need={need}>
       {cards.map((c, i) => (
         <Link key={c.hash} href={`/photo/${encodeURIComponent(c.hash)}?q=${encodeURIComponent(q)}${tq}`}
           aria-label={`Open ${c.media === "video" ? spoken(c.seconds).replace(/^Video/, "video") : "photo"}${label(c) ? " from " + label(c) : ""}${c.place ? " in " + c.place : ""}`}>

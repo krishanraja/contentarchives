@@ -17,7 +17,12 @@ nudity in this".
 - face groups and assignments (06 faces), the answers journal and Bharti's queue (07 people)
 - `desc-vectors` and `EVENTS.json` (08 index), `h-mirror.csv` (11 mirror) for Drive md5s
 - `app.players` in the profile (outside the repo)
-- Google Drive's Communal folder, read by the app's service account (Viewer on that folder only)
+- Google Drive's Communal folder, read by the app's service account (Viewer)
+- the owner's Personal folder, read by the same service account (Viewer), by
+  the nightly writer only; its id lives in the database (`sync_state`), never here
+- Gemini through the app's own capped key: describing and judging (the writer),
+  one embedding per words search (the app)
+- the full access inventory, by name only: `web/README.md` "Everything it has access to"
 
 ## Outputs
 - the cloud index (Supabase): photos, faces, clusters, groups, queue, people -

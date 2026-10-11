@@ -14,12 +14,14 @@ export default async function Home() {
     <main className="page">
       <div style={{ flex: "none" }}>
         <h1>Hello{who ? `, ${cap(who)}` : ""}!</h1>
-        <p className="muted" style={{ marginTop: 6 }}>{c.photos.toLocaleString("en-GB")} family photos are here.</p>
+        {/* photos AND videos (Krish, 2026-10-11): the opening screens had only ever said photos */}
+        <p className="muted" style={{ marginTop: 6 }}>{c.photos.toLocaleString("en-GB")} family photos
+          {c.videos ? <> and {c.videos.toLocaleString("en-GB")} videos</> : null} are here.</p>
       </div>
       <Squeeze className="tiles" levels={3}>
       <Link href="/find" className="tile" style={{ background: "var(--sun)" }}>
         <span className="icon"><Search /></span>
-        <span><h2>Find photos</h2><p>Look for a person, a place or a year.</p></span>
+        <span><h2>Find photos &amp; videos</h2><p>Look for a person, a place or a year, or say what is in it.</p></span>
       </Link>
       <Link href="/help" className="tile" style={{ background: "var(--pink)" }}>
         <span className="icon"><Face /></span>

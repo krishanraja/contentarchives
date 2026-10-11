@@ -480,11 +480,21 @@ summary.btn::-webkit-details-marker { display: none; }
   padding: 3px 10px; border-radius: 999px; background: var(--ink); color: var(--paper);
   font: 700 15px/1.2 var(--font-body), system-ui, sans-serif; pointer-events: none;
 }
-/* All · Photos · Videos: one row, on every Find screen */
-.types { display: flex; gap: 8px; flex: none; }
-.types .btn { flex: 1 1 auto; min-width: 0; padding: 4px 6px; gap: 6px; box-shadow: 3px 3px 0 var(--ink); }
+/* All · Photos · Videos, on every Find screen: ONE joined switch - what to
+   show - so it never reads as three more of the Who / Where / When / Say
+   buttons under it (Krish, 2026-10-11). One outline round all three, no
+   gaps or shadows between them, the one chosen filled with ink. */
+.types { display: flex; flex: none; padding: 3px; gap: 3px; border: var(--line); border-radius: 999px;
+  background: var(--paper); box-shadow: var(--pop); }
+.types .btn { flex: 1 1 auto; min-width: 0; padding: 4px 6px; gap: 6px; border: 0; border-radius: 999px;
+  box-shadow: none; background: transparent; }
+.types .btn:active { transform: none; }
+.types .btn[aria-current="page"] { background: var(--ink); color: var(--paper); }
+.types .btn[aria-current="page"] .n { background: var(--sun); color: var(--ink); }
+.types .btn[aria-current="page"] .play-dot { border-left-color: var(--paper); }
 @container screen (max-width: 420px) { .types .play-dot { display: none; } }
-.types .btn[aria-current="page"] { background: var(--sun); }
+/* the narrowing buttons below it: their own row, a little apart */
+.types + .dims { margin-top: 2px; }
 .types .n, .chip .n {
   font-size: 14px; font-weight: 700; padding: 1px 7px; border-radius: 999px;
   background: var(--ink); color: var(--paper); line-height: 1.3;
