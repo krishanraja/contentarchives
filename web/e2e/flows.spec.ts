@@ -108,6 +108,19 @@ test("nothing is reachable without the code", async ({ request }) => {
   }
 });
 
+test("the app's icon shows everywhere, even before the code is typed", async ({ request, page }) => {
+  // a phone fetches its home-screen icon without the cookie: behind the gate it would be blank
+  for (const [u, type] of [["/favicon.ico", "image/"], ["/icon.svg", "image/svg+xml"], ["/apple-icon.png", "image/png"],
+    ["/icon-192.png", "image/png"], ["/icon-maskable-512.png", "image/png"], ["/manifest.webmanifest", "manifest"]]) {
+    const r = await request.get(u, { maxRedirects: 0 });
+    expect(r.status(), u).toBe(200);
+    expect(r.headers()["content-type"], u).toContain(type);
+  }
+  await page.goto("/gate");
+  for (const sel of ["link[rel='icon'][href*='icon.svg']", "link[rel='apple-touch-icon']", "link[rel='manifest']"])
+    await expect(page.locator(sel), sel).toHaveCount(1);
+});
+
 test("find photos by a first name, a place and a year", async ({ page }) => {
   await signIn(page);
   await page.click("text=Find photos");
