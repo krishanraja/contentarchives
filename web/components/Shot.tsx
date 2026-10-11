@@ -7,7 +7,7 @@ import { useEffect, useRef, useState } from "react";
 // - a person is recognisable from their clothes and the room long before a
 // tiny face is (people_sheet.context(), 2026-09-18) - in the same place at any
 // size the picture is drawn.
-export default function Shot({ src, alt, bbox }: { src: string; alt: string; bbox?: number[] }) {
+export default function Shot({ src, alt, bbox, tag }: { src: string; alt: string; bbox?: number[]; tag?: React.ReactNode }) {
   const [ar, setAr] = useState(4 / 3);
   const img = useRef<HTMLImageElement>(null);
   const took = (i: HTMLImageElement | null) => {
@@ -35,6 +35,7 @@ export default function Shot({ src, alt, bbox }: { src: string; alt: string; bbo
       <div className="frame" style={{ ["--ar" as string]: ar }}>
         <img ref={img} src={src} alt={alt} onLoad={(e) => took(e.currentTarget)} />
         {ring}
+        {tag}
       </div>
     </div>
   );

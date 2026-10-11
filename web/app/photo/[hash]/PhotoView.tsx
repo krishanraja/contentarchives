@@ -12,8 +12,9 @@ import { whenLabel } from "@/lib/when";
 import { close, exact } from "@/lib/spelling";
 import { send, uuid } from "@/components/outbox";
 import { Eye, Share } from "@/components/icons";
+import { listKey, type Media } from "@/lib/search";
 
-type P = { hash: string; alt: string; people: string[]; where: string; when: string | null; what: string | null; video: boolean;
+type P = { hash: string; alt: string; people: string[]; where: string; when: string | null; what: string | null; video: boolean; length: string | null;
   play: "ok" | "unplayable" | null; sameDay: string[]; sameDayPlace: string[]; dayText: string | null };
 type Mode = "view" | "about" | "when" | "sameWhen" | "where" | "sameWhere" | "who" | "add";
 type Last = { id: string; text: string; undo: () => void };
@@ -25,7 +26,7 @@ type Last = { id: string; text: string; undo: () => void };
 // family's answer wins everywhere, and only on this photograph. Previous and
 // Next turn through the photos the search found. Nothing scrolls (2026-10-05):
 // on a cramped screen the panel squeezes (components/Squeeze, globals.css).
-export default function PhotoView({ p, q }: { p: P; q: string }) {
+export default function PhotoView({ p, q, type = null }: { p: P; q: string; type?: Media | null }) {
   const [mode, setMode] = useState<Mode>("view");
   const [failed, setFailed] = useState(false);
   const fail = useCallback(() => setFailed(true), []);
@@ -49,14 +50,14 @@ export default function PhotoView({ p, q }: { p: P; q: string }) {
   useEffect(() => {
     if (!q) return;
     try {
-      const list = JSON.parse(sessionStorage.getItem("photos:" + q) || "null");
+      const list = JSON.parse(sessionStorage.getItem(listKey(q, type)) || "null");
       const i = Array.isArray(list) ? list.indexOf(p.hash) : -1;
       if (i >= 0) {
         setNav({ prev: list[i - 1] ?? null, next: list[i + 1] ?? null });
         if (list[i + 1]) new Image().src = `/img/v/${encodeURIComponent(list[i + 1])}`;   // the next one is ready
       }
     } catch { /* no list: no turning */ }
-  }, [q, p.hash]);
+  }, [q, type, p.hash]);
   useEffect(() => {
     if (mode !== "add" || names.length) return;
     fetch("/api/names").then((r) => r.json()).then((j) => setNames(j.people || [])).catch(() => undefined);
@@ -156,6 +157,8 @@ export default function PhotoView({ p, q }: { p: P; q: string }) {
   const who = people.length ? people.join(", ") : "Nobody named yet";
   const plays = p.video && p.play === "ok" && !failed;
   const noun = p.video ? "video" : "photo";
+  // a video says so on the picture itself, whatever the panel has room for
+  const tag = p.video ? <span className="vtag"><span className="tri" aria-hidden="true" />Video{p.length ? ` · ${p.length}` : ""}</span> : null;
   const still = !p.video ? null : plays ? null
     : failed || p.play === "unplayable" ? "This video can't play on this phone; the picture is a still from it."
     : "This video isn't ready to play yet; the picture is a still from it.";
@@ -167,7 +170,7 @@ export default function PhotoView({ p, q }: { p: P; q: string }) {
       ? <><span aria-hidden="true">‹</span><span className="word" aria-hidden="true">Previous</span></>
       : <><span className="word" aria-hidden="true">Next</span><span aria-hidden="true">›</span></>;
     return h
-      ? <Link className={`btn ${way}`} aria-label={name} replace href={`/photo/${encodeURIComponent(h)}?q=${encodeURIComponent(q)}`}>{body}</Link>
+      ? <Link className={`btn ${way}`} aria-label={name} replace href={`/photo/${encodeURIComponent(h)}?q=${encodeURIComponent(q)}${type ? `&type=${type}` : ""}`}>{body}</Link>
       : <button type="button" className={`btn ${way}`} aria-label={name} disabled>{body}</button>;
   };
   const turns = !!(q && nav);
@@ -182,8 +185,8 @@ export default function PhotoView({ p, q }: { p: P; q: string }) {
   return (
     <div className={picking ? "game picking" : "game"}>
       {mode !== "about" ? (plays && mode === "view"
-        ? <Clip hash={p.hash} alt={p.alt} onFail={fail} />
-        : <Shot src={`/img/v/${encodeURIComponent(p.hash)}`} alt={p.alt} />
+        ? <Clip hash={p.hash} alt={p.alt} onFail={fail} tag={tag} />
+        : <Shot src={`/img/v/${encodeURIComponent(p.hash)}`} alt={p.alt} tag={tag} />
       ) : (
         <div className="card about">
           {hidden ? <p className="notice">This {noun} is now hidden for everyone. Thank you.</p> : sure ? (
@@ -248,7 +251,7 @@ export default function PhotoView({ p, q }: { p: P; q: string }) {
 
         {mode === "who" && (
           <>
-            <h2>Who is in this {noun}? <span className="muted" style={{ fontSize: 20, fontWeight: 400 }}>
+            <h2>Who is in this {noun}? <span className="muted" style={{ fontSize: 17, fontWeight: 400 }}>
               {people.length ? "Tap a name that's wrong to take it off." : "Nobody is named yet."}</span></h2>
             {people.length > 0 && (
               <Fit label="People in it" more="More names">

@@ -17,7 +17,7 @@ export default function YearPicker({ ask = "Roughly what year?", cancel, onCance
   if (decade === null) {
     return (
       <>
-        <h2>{ask} <span className="muted" style={{ fontSize: 20, fontWeight: 400 }}>A guess is fine.</span></h2>
+        <h2>{ask} <span className="muted" style={{ fontSize: 17, fontWeight: 400 }}>A guess is fine.</span></h2>
         <Fit label="Decades" className="chips when-grid">
           {DECADES.map((d) => <button key={d} type="button" className="chip" onClick={() => setDecade(d)}>{d}s</button>)}
         </Fit>

@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import Bar from "@/components/Bar";
 import { photo } from "@/lib/data";
+import { asMedia, clock } from "@/lib/search";
 import { whenLabel } from "@/lib/when";
 import PhotoView from "./PhotoView";
 
@@ -18,21 +19,23 @@ function when(p: { family_when: string | null; year: number | null; approx_year:
   return null;
 }
 
-export default async function Photo({ params, searchParams }: { params: Promise<{ hash: string }>; searchParams: Promise<{ q?: string }> }) {
+export default async function Photo({ params, searchParams }: { params: Promise<{ hash: string }>; searchParams: Promise<{ q?: string; type?: string }> }) {
   const { hash } = await params;
-  const q = (await searchParams).q || "";
+  const sp = await searchParams;
+  const q = sp.q || "";
+  const type = asMedia(sp.type);
   const p = await photo(decodeURIComponent(hash));
   if (!p) notFound();
   // what the family said wins over the library's guess (migration 0012)
   const where = p.family_place || [p.place, p.country && p.country !== p.place ? p.country : null].filter(Boolean).join(", ");
-  const back = q ? `/find?q=${encodeURIComponent(q)}` : "/find";
+  const back = q ? `/find?q=${encodeURIComponent(q)}${type ? `&type=${type}` : ""}` : type ? `/find?type=${type}` : "/find";
   return (
     <>
-      <Bar title="Photo" back={{ href: back, label: "Back to photos" }} />
+      <Bar title={p.media === "video" ? "Video" : "Photo"} back={{ href: back, label: type === "video" ? "Back to videos" : "Back to photos" }} />
       <main className="page">
-        <PhotoView q={q} p={{
+        <PhotoView q={q} type={type} p={{
           hash: p.hash, alt: p.description || "A family photo", people: p.people, where, when: when(p),
-          what: p.description || null, video: p.media === "video", play: p.play,
+          what: p.description || null, video: p.media === "video", play: p.play, length: clock(p.seconds),
           sameDay: p.sameDay, sameDayPlace: p.sameDayPlace, dayText: p.taken_at ? day(p.taken_at) : null,
         }} />
       </main>

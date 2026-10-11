@@ -52,9 +52,9 @@ export default function Fit({ children, className = "chips", label, more = "More
         const cellW = (l.clientWidth - SHADOW - (cols - 1) * gap) / cols;
         let rows = Math.max(1, Math.round((room + gap) / (cellW + gap)));
         while (rows > 1 && (room - (rows - 1) * gap) / rows < cellW * 0.6) rows--;
-        const rowH = Math.max(56, Math.min((room - (rows - 1) * gap) / rows, cellW * 1.35));
+        const rowH = Math.max(48, Math.min((room - (rows - 1) * gap) / rows, cellW * 1.35));
         const used = Math.ceil(Math.min(left, rows * cols) / cols);
-        put({ shown: rows * cols, rowH, natural: used * rowH + (used - 1) * gap + SHADOW, floor: 56 + SHADOW + pagerH });
+        put({ shown: rows * cols, rowH, natural: used * rowH + (used - 1) * gap + SHADOW, floor: 48 + SHADOW + pagerH });
         return;
       }
       // Try n items (and "More ›" after them when any are left) straight on the

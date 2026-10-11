@@ -1,6 +1,8 @@
 /* archives - fun to look at, impossible to get lost in.
-   The floor (tested in e2e/floor.spec.ts): body text >= 20px, every control
-   >= 56px tall, ink-on-colour contrast >= AA, nothing that needs a swipe.
+   The floor (tested by floor() in e2e/helpers.ts): body text >= 18px, any
+   text >= 14px, every control >= 48px tall, ink-on-colour contrast >= AA,
+   nothing that needs a swipe. One step down from 56px / 20px (Krish,
+   2026-10-11: "everything is overly 'accessibility-friendly' right now").
 
    NOTHING SCROLLS, ON ANY DEVICE (Krish, 2026-10-05; e2e/noscroll.spec.ts).
    Every screen is exactly the height of the window: a photograph takes the
@@ -33,40 +35,33 @@
   --pop: 5px 5px 0 var(--ink);
   --pop-press: 2px 2px 0 var(--ink);
   --r: 22px;
-  --tap: 64px;
-  --body: 21px;
+  --tap: 52px;
+  --body: 18px;
   --gutter: 18px;
   --col: 560px;
   --gap: 18px;
   --pad: 16px;
-  --field: 72px;
-  --h1: 40px;
-  --h2: 30px;
+  --field: 60px;
+  --h1: 34px;
+  --h2: 26px;
   color-scheme: light;
 }
 /* a shorter screen: the same screen, packed closer - never smaller than the floor */
 @container screen (max-height: 800px) {
-  .bar, .page { --tap: 60px; --gap: 14px; --pad: 12px; --field: 64px; --h1: 34px; --h2: 26px; }
+  .bar, .page { --tap: 50px; --gap: 12px; --pad: 12px; --field: 56px; --h1: 30px; --h2: 23px; }
 }
 @container screen (max-height: 680px) {
-  .bar, .page { --tap: 56px; --gap: 10px; --pad: 10px; --field: 58px; --h1: 30px; --h2: 24px; --gutter: 14px; }
+  .bar, .page { --tap: 48px; --gap: 8px; --pad: 10px; --field: 52px; --h1: 26px; --h2: 21px; --gutter: 14px; }
 }
 @container screen (max-height: 460px) {
-  .bar, .page { --gap: 8px; --pad: 8px; --field: 56px; --h1: 26px; --h2: 22px; }
+  .bar, .page { --gap: 6px; --pad: 8px; --field: 48px; --h1: 23px; --h2: 19px; }
   .sub { display: none; }
 }
 /* a phone on its side: the search and the list switch share the top row */
 @container screen (orientation: landscape) and (max-height: 520px) {
   .page.find { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); max-width: 980px; }
   .page.find > .fit { grid-column: 1 / -1; min-height: 0; }
-  /* results with a row of choices: search, sentence and choices on the left,
-     the photographs on the right at full height */
-  .page.find:has(> .sentence) { grid-template-rows: auto auto minmax(0, 1fr); align-content: start; }
-  .page.find:has(> .sentence) > form { grid-column: 1; grid-row: 1; }
-  .page.find:has(> .sentence) > .sentence { grid-column: 1; grid-row: 2; align-self: start; }
-  .page.find:has(> .sentence) > .fit.one { grid-column: 1; grid-row: 3; align-self: start; }
-  .page.find:has(> .sentence) > .fit:not(.one) { grid-column: 2; grid-row: 1 / -1; }
-  .fit.one .chip img { width: 36px; height: 36px; }
+  .fit.one .chip img { width: 32px; height: 32px; }
   .fit.one .more-word { display: none; }   /* a narrow column: "›" alone, still read out as "More" */
   .page.find .sentence { padding: 6px 12px; }
   .page.find > .sentence { align-self: center; }
@@ -103,7 +98,7 @@ h1, h2, h3, .display {
 }
 h1 { font-size: var(--h1); }
 h2 { font-size: var(--h2); }
-h3 { font-size: 24px; }
+h3 { font-size: 20px; }
 p { margin: 0; }
 
 .page {
@@ -125,17 +120,17 @@ p { margin: 0; }
   border-bottom: var(--line);
   display: flex; align-items: center; justify-content: space-between; gap: 12px;
 }
-.bar .title { font-family: var(--font-display), system-ui; font-weight: 600; font-size: 24px; text-align: right; line-height: 1.1; }
+.bar .title { font-family: var(--font-display), system-ui; font-weight: 600; font-size: 21px; text-align: right; line-height: 1.1; }
 .bar-inner { width: 100%; max-width: var(--col); margin: 0 auto; display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 
 /* ---------- buttons ---------- */
 .btn {
   appearance: none; border: var(--line); border-radius: var(--r);
-  min-height: var(--tap); padding: 8px 20px;
-  font: 700 22px/1.15 var(--font-body), system-ui, sans-serif;
+  min-height: var(--tap); padding: 6px 18px;
+  font: 700 19px/1.15 var(--font-body), system-ui, sans-serif;
   color: var(--ink); background: var(--paper);
   box-shadow: var(--pop);
-  display: inline-flex; align-items: center; justify-content: center; gap: 12px;
+  display: inline-flex; align-items: center; justify-content: center; gap: 10px;
   text-decoration: none; cursor: pointer; text-align: center;
   transition: transform .08s ease, box-shadow .08s ease;
 }
@@ -149,17 +144,17 @@ p { margin: 0; }
 .btn.sky { background: var(--sky); }
 .btn.grape { background: var(--grape); }
 .btn.quiet { box-shadow: none; background: transparent; border-color: transparent; text-decoration: underline; text-underline-offset: 5px; font-weight: 700; }
-.btn.small { min-height: 56px; font-size: 20px; padding: 8px 18px; }
+.btn.small { min-height: 48px; font-size: 17px; padding: 6px 14px; }
 .btn[disabled] { opacity: .55; }
-.btn svg { width: 28px; height: 28px; flex: none; }
+.btn svg { width: 24px; height: 24px; flex: none; }
 /* who, where and when under a photo (Krish, 2026-10-06): each card is a
    button that puts it right - what it is on top, what it says below */
 .facts { flex: none; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); grid-template-areas: "who who" "where when"; gap: 10px; }
 .btn.fact { flex-direction: column; align-items: stretch; justify-content: center; gap: 0; text-align: left; box-shadow: none; padding: 4px 12px 6px; }
 .fact-who { grid-area: who; } .fact-where { grid-area: where; } .fact-when { grid-area: when; }
-.fact .fact-k { display: flex; justify-content: space-between; align-items: center; gap: 8px; font-size: 17px; color: var(--ink-soft); letter-spacing: .03em; }
-.fact .fact-do { background: var(--sun); color: var(--ink); border: 2px solid var(--ink); border-radius: 999px; padding: 0 10px; font-size: 17px; letter-spacing: 0; }
-.fact .fact-v { font-size: 21px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fact .fact-k { display: flex; justify-content: space-between; align-items: center; gap: 8px; font-size: 15px; color: var(--ink-soft); letter-spacing: .03em; }
+.fact .fact-do { background: var(--sun); color: var(--ink); border: 2px solid var(--ink); border-radius: 999px; padding: 0 10px; font-size: 15px; letter-spacing: 0; }
+.fact .fact-v { font-size: 18px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* decades and years: a tight grid, so all ten years of a decade fit at once */
 .chips.when-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(76px, 1fr)); }
 .chips.when-grid .chip { justify-content: center; padding-left: 6px; padding-right: 6px; }
@@ -199,12 +194,12 @@ p { margin: 0; }
 }
 .tile:active { transform: translate(3px, 3px); box-shadow: var(--pop-press); }
 .tile .icon {
-  width: 72px; height: 72px; border-radius: 50%; border: var(--line);
+  width: 60px; height: 60px; border-radius: 50%; border: var(--line);
   background: var(--paper); display: grid; place-items: center;
 }
-.tile .icon svg { width: 40px; height: 40px; }
+.tile .icon svg { width: 34px; height: 34px; }
 .tile h2 { font-size: calc(var(--h2) + 2px); }
-.tile p { font-size: 20px; margin-top: 4px; color: var(--ink); }
+.tile p { font-size: 17px; margin-top: 4px; color: var(--ink); }
 /* A tile is never smaller than its words. The tiles give up detail, a step at
    a time, until the screen fits (components/Squeeze.tsx measures it): 1 the
    sentence, 2 a smaller round icon, 3 no icon. */
@@ -219,30 +214,30 @@ p { margin: 0; }
 @container screen (max-height: 860px) { .tiles:not([data-fit]) .tile p { display: none; } }
 .count {
   display: inline-block; margin-top: 6px; padding: 3px 12px; border-radius: 14px; line-height: 1.25;
-  background: var(--ink); color: var(--paper); font-weight: 700; font-size: 18px;
+  background: var(--ink); color: var(--paper); font-weight: 700; font-size: 15px;
 }
 
 /* ---------- inputs ---------- */
 .field {
-  width: 100%; min-height: var(--field); padding: 10px 18px;
+  width: 100%; min-height: var(--field); padding: 8px 16px;
   border: var(--line); border-radius: var(--r); background: var(--paper);
-  font: 400 26px/1.2 var(--font-body), system-ui, sans-serif; color: var(--ink);
+  font: 400 21px/1.2 var(--font-body), system-ui, sans-serif; color: var(--ink);
   box-shadow: inset 0 3px 0 rgba(30, 20, 51, 0.08);
 }
 .field::placeholder { color: #6f6580; }
 label.big { font-family: var(--font-display), system-ui; font-weight: 600; font-size: calc(var(--h2) - 2px); display: block; margin-bottom: 6px; }
 
 /* ---------- chips ---------- */
-.chips { display: flex; flex-wrap: wrap; gap: 10px; align-content: flex-start; }
+.chips { display: flex; flex-wrap: wrap; gap: 8px; align-content: flex-start; }
 .chip {
-  min-height: 56px; padding: 8px 18px; border: var(--line); border-radius: 999px;
+  min-height: 48px; padding: 6px 14px; border: var(--line); border-radius: 999px;
   background: var(--paper); box-shadow: 3px 3px 0 var(--ink);
-  font: 700 20px/1.1 var(--font-body), system-ui; color: var(--ink);
-  display: inline-flex; align-items: center; gap: 10px; cursor: pointer; text-decoration: none;
+  font: 700 17px/1.1 var(--font-body), system-ui; color: var(--ink);
+  display: inline-flex; align-items: center; gap: 8px; cursor: pointer; text-decoration: none;
   max-width: 100%; text-align: left;
 }
 .chip:active { transform: translate(2px, 2px); box-shadow: 1px 1px 0 var(--ink); }
-.chip img { width: 44px; height: 44px; border-radius: 50%; border: 2px solid var(--ink); object-fit: cover; margin-left: -8px; }
+.chip img { width: 38px; height: 38px; border-radius: 50%; border: 2px solid var(--ink); object-fit: cover; margin-left: -8px; }
 
 /* ---------- photo grid ---------- */
 .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; align-content: start; }
@@ -256,7 +251,7 @@ label.big { font-family: var(--font-display), system-ui; font-weight: 600; font-
 .badge {
   font-family: var(--font-body), system-ui, sans-serif; color: var(--ink);
   position: absolute; left: 8px; bottom: 8px; padding: 2px 10px; border-radius: 999px;
-  background: var(--sun); border: 2px solid var(--ink); font-weight: 700; font-size: 16px;
+  background: var(--sun); border: 2px solid var(--ink); font-weight: 700; font-size: 14px;
 }
 
 /* what a search found, said in words - plain text, never mistaken for a button */
@@ -301,7 +296,7 @@ label.big { font-family: var(--font-display), system-ui; font-weight: 600; font-
 }
 /* "the same person?": a row of faces, as big as the screen can spare */
 .samples { flex: none; display: flex; align-items: center; gap: 8px; }
-.samples p { flex: 0 1 auto; font-size: 18px; line-height: 1.15; }
+.samples p { flex: 0 1 auto; font-size: 16px; line-height: 1.15; }
 .samples img { flex: none; width: clamp(40px, 7.5cqh, 72px); aspect-ratio: 1; object-fit: cover; border-radius: 50%; border: var(--line); background: var(--grape); }
 .strip { flex: none; display: flex; gap: 8px; }
 .strip img { flex: 1 1 0; min-width: 0; height: clamp(48px, 9cqh, 96px); object-fit: cover; border-radius: 14px; border: var(--line); background: var(--grape); }
@@ -327,13 +322,13 @@ label.big { font-family: var(--font-display), system-ui; font-weight: 600; font-
    question only; the box's own label is read out, not shown, when typing */
 @container screen (max-height: 520px) and (orientation: portrait) {
   .game > .samples, .game > .notsame { display: none; }
-  .game h2 { font-size: 22px; }
-  .game .chip img { width: 36px; height: 36px; }
-  .game .row .btn { font-size: 20px; }
+  .game h2 { font-size: 19px; }
+  .game .chip img { width: 32px; height: 32px; }
+  .game .row .btn { font-size: 17px; }
   .game label.big { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 }
 .panel, .contents { display: contents; }
-.game > .notsame { min-height: 56px; }
+.game > .notsame { min-height: 48px; }
 .game.middle { justify-content: center; }
 .game.middle > .undo { margin-top: auto; }
 /* a phone on its side: the photo on the left, the question on the right */
@@ -341,8 +336,8 @@ label.big { font-family: var(--font-display), system-ui; font-weight: 600; font-
   /* the photo is held by the screen's height, so the question gets more of the width */
   .game:has(> .slot), .game:has(> .about) { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 3fr); grid-template-rows: minmax(0, 1fr) auto auto; }
   .game > .samples p { display: none; }
-  .game > .notsame { font-size: 18px; }
-  .game .row .btn { font-size: 20px; padding-left: 8px; padding-right: 8px; }
+  .game > .notsame { font-size: 16px; }
+  .game .row .btn { font-size: 17px; padding-left: 8px; padding-right: 8px; }
   .chip.turn { padding-left: 14px; padding-right: 14px; }
   .game > .slot, .game > .about { height: 100%; min-height: 0; grid-column: 1; grid-row: 1; }
   .game > .about { grid-row: 1 / -1; }
@@ -372,7 +367,7 @@ label.big { font-family: var(--font-display), system-ui; font-weight: 600; font-
   .page.gate > :not(.card) { grid-column: 1; }
   /* a photo's details: its two actions side by side, so the words keep room */
   .about .stack { flex-direction: row; }
-  .about .stack .btn { flex: 1 1 0; min-width: 0; font-size: 18px; padding: 6px 8px; }
+  .about .stack .btn { flex: 1 1 0; min-width: 0; font-size: 16px; padding: 6px 8px; }
   .about .stack .btn svg { display: none; }
   /* your name: the box and its button side by side */
   .card.nameform { display: grid; grid-template-columns: minmax(0, 1fr) auto; }
@@ -387,12 +382,12 @@ label.big { font-family: var(--font-display), system-ui; font-weight: 600; font-
   display: flex; align-items: center; justify-content: space-between; gap: 12px;
   font-weight: 700; box-shadow: 5px 5px 0 var(--tomato);
 }
-.undo .btn { min-height: 56px; background: var(--sun); box-shadow: none; }
+.undo .btn { min-height: 48px; background: var(--sun); box-shadow: none; }
 .yay {
   background: var(--mint); border: var(--line); border-radius: 26px; padding: var(--pad) 20px;
   text-align: center; box-shadow: var(--pop); flex: none;
 }
-.yay .big { font-family: var(--font-display), system-ui; font-weight: 600; font-size: calc(var(--h1) + 14px); line-height: 1.2; }
+.yay .big { font-family: var(--font-display), system-ui; font-weight: 600; font-size: calc(var(--h1) + 12px); line-height: 1.2; }
 .confetti { position: fixed; inset: 0; pointer-events: none; z-index: 60; overflow: hidden; }
 .confetti i { position: absolute; top: -20px; width: 12px; height: 18px; border: 2px solid var(--ink); border-radius: 3px; }
 @media (prefers-reduced-motion: no-preference) {
@@ -423,7 +418,7 @@ summary.btn::-webkit-details-marker { display: none; }
 .chip.turn { background: var(--sun); padding-left: 14px; padding-right: 14px; }
 .chip[aria-current="true"] { background: var(--sun); outline: 3px solid var(--ink); outline-offset: 2px; }
 /* a row of choices above a grid: always exactly one row of chips */
-.fit.one { flex: none; height: calc(max(var(--tap), 66px) + 10px); min-height: 0; }   /* a chip with a face is 66px */
+.fit.one { flex: none; height: calc(max(var(--tap), 56px) + 10px); min-height: 0; }   /* a chip with a face is 56px */
 .fit.one .chips { flex-wrap: wrap; gap: 8px; }
 .fit.one .chip { padding-left: 14px; padding-right: 14px; }
 .chip.turn, .stack > .btn[data-turn] { flex: none; }
@@ -434,12 +429,12 @@ summary.btn::-webkit-details-marker { display: none; }
 .searchrow .field { flex: 1 1 auto; min-width: 0; }
 .searchrow .btn { flex: none; padding: 8px 16px; }
 .tabs { display: flex; gap: 8px; flex: none; }
-.tabs .btn { flex: 1 1 0; min-width: 0; padding: 8px 4px; font-size: 20px; }
+.tabs .btn { flex: 1 1 0; min-width: 0; padding: 6px 4px; font-size: 17px; }
 .tabs .btn[aria-current="page"] { background: var(--sun); }
 @container screen (max-height: 680px) { .hint { display: none; } }
 
 /* ---------- a photo: the picture, a line about it, and what you can do ---------- */
-.caption { flex: none; font-size: 20px; line-height: 1.3; }
+.caption { flex: none; font-size: 17px; line-height: 1.3; }
 .caption p { overflow: hidden; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 1; }
 .about { flex: 1 1 0; min-height: 0; display: flex; flex-direction: column; gap: var(--gap); }
 .about-text { flex: 1 1 0; min-height: 0; overflow: hidden; display: flex; flex-direction: column; gap: 6px; }
@@ -466,4 +461,94 @@ summary.btn::-webkit-details-marker { display: none; }
 /* the shortest screens: a slimmer top bar (after .bar, so it wins) */
 @container screen (max-height: 460px) {
   .bar { padding-top: calc(2px + env(safe-area-inset-top)); padding-bottom: 2px; }
+}
+
+/* ---------- photo or video (Krish, 2026-10-11) ---------- */
+/* a video in the grid: a play mark and its length, top right; the year stays
+   bottom left, as on a photo */
+.vmark {
+  position: absolute; right: 8px; top: 8px; display: inline-flex; align-items: center; gap: 4px;
+  padding: 3px 9px 3px 7px; border-radius: 999px; background: var(--ink); color: var(--paper);
+  font: 700 14px/1.1 var(--font-body), system-ui, sans-serif;
+}
+.tri { display: inline-block; width: 0; height: 0; border-style: solid; border-width: 6px 0 6px 10px;
+  border-color: transparent transparent transparent currentColor; flex: none; }
+.vmark .tri { margin: 0 2px; }
+/* on the photo screen, on the picture itself: it stays when the panel squeezes */
+.vtag {
+  position: absolute; left: 10px; top: 10px; display: inline-flex; align-items: center; gap: 6px;
+  padding: 3px 10px; border-radius: 999px; background: var(--ink); color: var(--paper);
+  font: 700 15px/1.2 var(--font-body), system-ui, sans-serif; pointer-events: none;
+}
+/* All · Photos · Videos: one row, on every Find screen */
+.types { display: flex; gap: 8px; flex: none; }
+.types .btn { flex: 1 1 0; min-width: 0; padding: 4px 6px; gap: 6px; box-shadow: 3px 3px 0 var(--ink); }
+.types .btn[aria-current="page"] { background: var(--sun); }
+.types .n, .chip .n {
+  font-size: 14px; font-weight: 700; padding: 1px 7px; border-radius: 999px;
+  background: var(--ink); color: var(--paper); line-height: 1.3;
+}
+.play-dot { display: inline-block; width: 0; height: 0; border-style: solid; border-width: 5px 0 5px 9px;
+  border-color: transparent transparent transparent var(--ink); }
+/* the row of what a search is narrowed by: a pill to change it, ✕ to take it off */
+.pill { display: inline-flex; align-items: stretch; flex: none; max-width: 100%; overflow: hidden;
+  border: 2px solid var(--ink); border-radius: 999px; background: var(--sun); box-shadow: 3px 3px 0 var(--ink); }
+.pill a { display: inline-flex; align-items: center; min-height: 48px; color: var(--ink); text-decoration: none;
+  font: 700 17px/1.1 var(--font-body), system-ui; }
+.pill .pill-go { padding: 0 6px 0 14px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pill .pill-off { justify-content: center; min-width: 44px; border-left: 2px solid var(--ink); font-size: 16px; }
+.pill.open .pill-go { background: var(--mint); }
+.dims { display: flex; gap: 8px; flex: none; }
+.dims .btn { flex: 1 1 0; min-width: 0; padding: 4px 4px; box-shadow: 3px 3px 0 var(--ink); }
+.dims .btn.set { background: var(--sun); }
+.dims .btn[aria-current="page"] { background: var(--mint); }
+/* one fact to choose, in the photos' place */
+.facet { flex: 1 1 0; min-height: 0; display: flex; flex-direction: column; gap: var(--gap); }
+.facet-top { flex: none; display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.facet-h { flex: none; font-size: calc(var(--h2) - 4px); min-width: 0; }
+.facet-top .facet-h { flex: 0 1 auto; }
+.facet-top .done { flex: none; }
+.facet .searchrow .btn { padding: 6px 12px; }
+/* "Say": the microphone beside the box; it says "Listening" while it does */
+.btn.mic { flex: none; padding: 6px 12px; gap: 6px; background: var(--sky); }
+.btn.mic.listening { background: var(--tomato); }
+@media (prefers-reduced-motion: no-preference) {
+  .btn.mic.listening svg { animation: pulse 1.2s ease-in-out infinite; }
+}
+/* a narrow phone, or one on its side (half the width each): the search row's
+   buttons keep only their pictures, still read out by name */
+@container screen (max-width: 400px) or ((orientation: landscape) and (max-height: 520px)) {
+  .searchrow .mic-word, .searchrow .search-word { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+  .searchrow .btn { padding-left: 10px; padding-right: 10px; }
+}
+/* short screens: the counts on the switch go, and the sentence is read out
+   but not shown - the pills above already say what the search is */
+@container screen (max-height: 520px) {
+  .types .n { display: none; }
+}
+@container screen (max-height: 600px) {
+  .facet > .facet-h, .page.find.results > .sentence { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; padding: 0; }
+}
+/* a phone on its side, results: search, switch, filters and sentence on the
+   left; the photographs (or the choices) on the right at full height */
+@container screen (orientation: landscape) and (max-height: 520px) {
+  .page.find.results { grid-template-rows: auto auto auto minmax(0, 1fr); align-content: start; }
+  .page.find.results > form { grid-column: 1; grid-row: 1; }
+  .page.find.results > .dims { grid-column: 1; grid-row: 2; }
+  .page.find.results > .fit.one { grid-column: 1; grid-row: 3; align-self: start; }
+  .page.find.results > .sentence { grid-column: 1; grid-row: 4; align-self: start; }
+  .page.find.results > .types { grid-column: 2; grid-row: 1; }
+  .page.find.results > .fit:not(.one), .page.find.results > .facet { grid-column: 2; grid-row: 2 / -1; min-height: 0; }
+  .page.find:not(.results) { grid-template-rows: auto auto minmax(0, 1fr); }
+  .page.find:not(.results) > .types { grid-column: 1; grid-row: 2; }
+  .page.find:not(.results) > .tabs { grid-column: 2; grid-row: 2; }
+  .page.find:not(.results) > form { grid-column: 1 / -1; grid-row: 1; }
+  .page.find:not(.results) > .fit { grid-row: 3; }
+}
+
+/* a narrow phone: the cards under a photo keep "Change" as a pencil, so a
+   card is never wider than its half of the row */
+@container screen (max-width: 360px) {
+  .fact .fact-do { display: none; }
+  .photo-panel[data-fit="0"] .fact .fact-v::after { content: " ✎"; }
 }

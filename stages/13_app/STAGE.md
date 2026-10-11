@@ -122,6 +122,24 @@ nudity in this".
   as if its address bar were hidden, so a rule written that way did not fire on
   his phone and the home screen's words spilled over each other.
   `web/tests/style.test.ts` fails on any window-sized rule
+- the size floor is one step down from where it started (Krish, 2026-10-11:
+  "everything is overly 'accessibility-friendly' right now"): every control at
+  least 48px tall, body text 18px, no text under 14px, contrast AA.
+  `floor()` in `web/e2e/helpers.ts` holds every screen of the flows to it at
+  360, 390 and 430px; nothing goes below it
+- a search narrows from wherever it starts (Krish, 2026-10-11: "if someone
+  enters with a name, they should then be able to filter the time, content type,
+  location or 'say' what they are actually looking for", and the same from a
+  place). Every results screen offers the same four - Who, Where, When, Say - and
+  All / Photos / Videos, whatever came first; each choice says how many it would
+  give against every OTHER filter in force, so a chosen year still shows its
+  neighbours (`search_facets`, migration 0013, read once per request: learning
+  80). Words rank and never narrow the counts; "Who" offers who ELSE is in them.
+  The state is the URL (`?q=`, `?type=`, `?pick=`), every choice a real link, so
+  it works before the script arrives. A video is marked as one wherever it shows
+  - a play mark and its length in the grid, "Video" on the picture itself - and
+  keeps its year. `tests/test_app_cloud.py` "8f" and the flows in
+  `web/e2e/flows.spec.ts` hold it
 - the app may write only person / unidentifiable (cluster) and place / approx_year
   (file, share-set hashes only); anything else is refused at the API AND at ingest
 - the seed reconciles; a Drive listing that looks broken removes nothing

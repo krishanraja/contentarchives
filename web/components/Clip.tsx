@@ -6,7 +6,7 @@ import { useEffect, useRef, useState } from "react";
 // (Krish, 2026-10-05). The phone's own controls - one big play button - and
 // its still as the picture until it plays. Nothing plays by itself. If the
 // phone cannot play it after all, `onFail` puts the still back.
-export default function Clip({ hash, alt, onFail }: { hash: string; alt: string; onFail: () => void }) {
+export default function Clip({ hash, alt, onFail, tag }: { hash: string; alt: string; onFail: () => void; tag?: React.ReactNode }) {
   const [ar, setAr] = useState(16 / 9);
   const v = useRef<HTMLVideoElement>(null);
   const h = encodeURIComponent(hash);
@@ -24,6 +24,7 @@ export default function Clip({ hash, alt, onFail }: { hash: string; alt: string;
       <div className="frame clip" style={{ ["--ar" as string]: ar }}>
         <video ref={v} controls playsInline preload="metadata" poster={`/img/v/${h}`} src={`/video/${h}`}
           aria-label={alt} onLoadedMetadata={(e) => took(e.currentTarget)} onError={onFail} />
+        {tag}
       </div>
     </div>
   );

@@ -1,9 +1,13 @@
 import Link from "next/link";
 import Bar from "@/components/Bar";
-import { browse, compose, refine, search, type Refine } from "@/lib/data";
-import type { Parsed } from "@/lib/search";
+import { browse, facets, search } from "@/lib/data";
+import { describe } from "@/lib/search";
+import { asMedia, findHref, PICKS, type Media, type Pick } from "@/lib/search";
 import SearchBox from "./SearchBox";
 import Results from "./Results";
+import TypeSwitch from "./TypeSwitch";
+import FilterBar from "./FilterBar";
+import FacetPanel from "./FacetPanel";
 import Fit from "@/components/Fit";
 
 export const dynamic = "force-dynamic";
@@ -14,97 +18,99 @@ function exampleYears(decades: { decade: number; n: number }[]) {
   return top ? `${top.decade}s` : "";
 }
 
-// One row of chips under a search: the years of the person (or place) chosen,
-// or the people in the year chosen. A chip is a link, so it works before the
-// page's script arrives; the row turns its pages with "More ›".
-function RefineRow({ rf, p }: { rf: Refine; p: Parsed }) {
-  const go = (q: string) => `/find?q=${encodeURIComponent(q)}`;
-  if (rf.kind === "years") {
-    return (
-      <Fit one label="Years" more="More years">
-        {[
-          ...(rf.active ? [<Link key="all" className="chip turn" href={go(compose(p, { year: null }))}>All years</Link>] : []),
-          ...rf.items.map((y) => (
-            <Link key={y.label} className="chip" href={go(compose(p, { year: y.label }))}
-              aria-current={rf.active === y.label ? "true" : undefined}>{y.label}</Link>
-          )),
-        ]}
-      </Fit>
-    );
-  }
-  return (
-    <Fit one label="Who is in these photos" more="More people">
-      {rf.items.map((x) => (
-        <Link key={x.name} className="chip" href={go(compose(p, { people: [x.name] }))}>
-          {x.cover && <img src={`/face/${encodeURIComponent(x.cover)}`} alt="" />}{x.name}
-        </Link>
-      ))}
-    </Fit>
-  );
-}
+// a browse link: the words, with the type in force carried along
+const go = (q: string, type: Media | null) => {
+  const qs = new URLSearchParams();
+  if (q) qs.set("q", q);
+  if (type) qs.set("type", type);
+  const s = qs.toString();
+  return s ? `/find?${s}` : "/find";
+};
 
-export default async function Find({ searchParams }: { searchParams: Promise<{ q?: string; show?: string }> }) {
+type SP = { q?: string; show?: string; type?: string; pick?: string; say?: string };
+
+export default async function Find({ searchParams }: { searchParams: Promise<SP> }) {
   const sp = await searchParams;
-  const q = (sp.q || "").trim();
-  if (q) {
-    const r = await search(q);
-    const rf = r.total ? await refine(r.parsed) : null;
+  // "say" is what the Say panel's form sends: more words for the same search
+  const q = [sp.q || "", sp.say || ""].join(" ").replace(/\s+/g, " ").trim();
+  const type = asMedia(sp.type);
+  const pick = PICKS.includes(sp.pick as Pick) ? (sp.pick as Pick) : null;
+  if (q || pick) {
+    const r = await search(q, 0, type);
+    const p = r.parsed;
+    const f = await facets(p);
+    const listKey = findHref(p);
     return (
       <>
         <Bar title="Find photos" />
-        <main className="page find">
-          <SearchBox initial={q} />
-          <p className="sentence" role="status">{r.total ? r.sentence : `Nothing found for “${q}”. Try a name, a place or a year.`}</p>
-          {rf && <RefineRow key={"refine:" + q} rf={rf} p={r.parsed} />}
-          {/* keyed by the words: a new search is a new grid, never the last one's photos under a new sentence */}
-          {r.total > 0 && <Results key={q} q={q} first={r.cards} total={r.total} />}
+        <main className="page find results">
+          <SearchBox initial={q} type={p.media} />
+          <TypeSwitch active={p.media} counts={f.media} href={(m) => findHref(p, { media: m }, pick)} />
+          <FilterBar p={p} open={pick} />
+          {pick
+            ? <FacetPanel key={pick} p={p} pick={pick} f={f} />
+            : <>
+                <p className="sentence" role="status">{r.total ? describe(p, r.total, r.mode, f.media)
+                  : q ? `Nothing found for “${q}”. Take something off above, or try a name, a place or a year.`
+                  : "Nothing found."}</p>
+                {/* keyed by the whole search: a new search is a new grid, never the last one's photos under a new sentence */}
+                {r.total > 0 && <Results key={listKey} q={r.q} type={p.media} first={r.cards} total={r.total} />}
+              </>}
         </main>
       </>
     );
   }
-  // One list at a time, chosen with three big buttons (real links, so they
+  // One list at a time, chosen with three buttons (real links, so they
   // work before the script arrives); the list turns like pages, never scrolls.
-  const b = await browse();
+  const b = await browse(type);
   const lists = [
     { key: "people", name: "People", n: b.people.length },
     { key: "places", name: "Places", n: b.places.length },
     { key: "years", name: "Years", n: b.decades.length },
   ].filter((l) => l.n > 0);
   const show = lists.find((l) => l.key === sp.show)?.key || lists[0]?.key;
+  const tab = (key: string, m: Media | null) => {
+    const qs = new URLSearchParams();
+    if (key !== lists[0]?.key) qs.set("show", key);
+    if (m) qs.set("type", m);
+    const s = qs.toString();
+    return s ? `/find?${s}` : "/find";
+  };
   return (
     <>
       <Bar title="Find photos" />
       <main className="page find">
-        <SearchBox initial="" example={exampleYears(b.decades)} />
+        <SearchBox initial="" type={type} example={exampleYears(b.decades)} />
+        <TypeSwitch active={type} counts={b.media} href={(m) => tab(show || "", m)} />
         {lists.length > 1 && (
           <nav className="tabs" aria-label="Look through">
             {lists.map((l) => (
-              <Link key={l.key} className="btn small" href={l.key === lists[0].key ? "/find" : `/find?show=${l.key}`}
+              <Link key={l.key} className="btn small" href={tab(l.key, type)}
                 aria-current={l.key === show ? "page" : undefined}>{l.name}</Link>
             ))}
           </nav>
         )}
         {show === "people" && (
-          <Fit key="people" label="People" more="More people">
-            {b.people.map((p) => (
-              <Link key={p.name} className="chip" href={`/find?q=${encodeURIComponent(p.name)}`}>
-                {p.cover && <img src={`/face/${encodeURIComponent(p.cover)}`} alt="" />}
-                {p.name}
+          <Fit key={"people" + type} label="People" more="More people">
+            {b.people.map((x) => (
+              <Link key={x.name} className="chip" href={go(x.name, type)}>
+                {x.cover && <img src={`/face/${encodeURIComponent(x.cover)}`} alt="" />}
+                {x.name}
               </Link>
             ))}
           </Fit>
         )}
         {show === "places" && (
-          <Fit key="places" label="Places" more="More places">
-            {b.places.map((p) => (
-              <Link key={p.place} className="chip" href={`/find?q=${encodeURIComponent(p.place)}`}>{p.place}</Link>
+          <Fit key={"places" + type} label="Places" more="More places">
+            {b.places.map((x) => (
+              <Link key={x.place} className="chip" href={go(x.place, type)}>{x.place}</Link>
             ))}
           </Fit>
         )}
         {show === "years" && (
-          <Fit key="years" label="Years">
+          <Fit key={"years" + type} label="Years">
             {b.decades.map((d) => (
-              <Link key={d.decade} className="chip" href={`/find?q=${d.decade}s`}>{d.decade}s</Link>
+              <Link key={d.decade} className="chip" href={go(`${d.decade}s`, type)}>{d.decade}s</Link>
             ))}
           </Fit>
         )}

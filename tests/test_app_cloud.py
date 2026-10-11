@@ -259,6 +259,10 @@ def main():
     personal(out)
 
     print()
+    print("8f. a search narrows from wherever it starts, and by photo or video")
+    facets()
+
+    print()
     print("8b. a rate limit waits and tries again; a refusal does not")
     class FakeCL:
         def __init__(self, fails, code):
@@ -307,6 +311,62 @@ def main():
         return 1
     print("all checks passed")
     return 0
+
+
+# ----------------------------------------------------------------- facets --
+def facets():
+    """search_photos(q_media) and search_facets, migration 0013 (Krish,
+    2026-10-11): a search narrows from wherever it starts - a person, a place,
+    a year - and by photo or video, and each choice offered says how many it
+    would give against every OTHER filter in force."""
+    db = fresh_db(NAME + "_facets")
+    rows = [  # hash, media, year, place, people
+        ("f1", "photo", 1990, "Goa", ["Asha"]),
+        ("f2", "video", 1990, "Goa", ["Asha", "Ravi"]),
+        ("f3", "photo", 1995, "Delhi", ["Asha"]),
+        ("f4", "video", 1995, "Goa", ["Ravi"]),
+        ("f5", "photo", 2001, "Goa", []),
+        ("f6", "video", 2001, None, ["Asha"]),
+    ]
+    for h, m, y, pl, ppl in rows:
+        db.execute("insert into photos (hash, drive_id, media, year, place, people) values (%s, %s, %s, %s, %s, %s)",
+                   (h, "d-" + h, m, y, pl, ppl))
+    db.execute("insert into photos (hash, drive_id, media, year, place, people, hidden) "
+               "values ('f7', 'd-f7', 'video', 1990, 'Goa', array['Asha'], true)")
+    db.commit()
+
+    def hits(*a):
+        return sorted(r[0] for r in q(db, "select hash from search_photos(null, null, %s::text[], %s, %s, %s, 60, 0, %s)", *a))
+
+    def facet(*a):
+        out = {}
+        for d, label, n, _ in q(db, "select * from search_facets(%s::text[], %s, %s, %s, %s)", *a):
+            out.setdefault(d, {})[label] = n
+        return out
+
+    check("the old eight-argument search still works (live before the code)",
+          sorted(r[0] for r in q(db, "select hash from search_photos(null, null, null, null, null, null, 60, 0)")),
+          ["f1", "f2", "f3", "f4", "f5", "f6"])
+    check("Videos finds only videos, and never a hidden one", hits(None, None, None, None, "video"), ["f2", "f4", "f6"])
+    check("Photos finds only photos", hits(None, None, None, None, "photo"), ["f1", "f3", "f5"])
+    check("a person, then a place, then videos", hits(["Asha"], "Goa", None, None, "video"), ["f2"])
+
+    f = facet(["Asha"], None, None, None, None)
+    check("from a person: how many photos and videos of them", f.get("media"), {"photo": 2, "video": 2})
+    check("from a person: the places their photos were taken", f.get("place"), {"Goa": 2, "Delhi": 1})
+    check("from a person: the years", f.get("year"), {"1990": 2, "1995": 1, "2001": 1})
+    check("from a person: who ELSE is in them, never themselves", f.get("person"), {"Ravi": 1})
+
+    f = facet(None, "Goa", None, None, "video")
+    check("from a place, videos only: the type counts ignore the type chosen", f.get("media"), {"photo": 2, "video": 2})
+    check("from a place, videos only: the places ignore the place chosen", f.get("place"), {"Goa": 2})
+    check("from a place, videos only: who is in them", f.get("person"), {"Asha": 1, "Ravi": 2})
+
+    f = facet(["Asha"], None, 1990, 1990, None)
+    check("a year chosen still shows its neighbours, so a person can switch", f.get("year"),
+          {"1990": 2, "1995": 1, "2001": 1})
+    check("but the other facts follow the year", f.get("media"), {"photo": 1, "video": 1})
+    db.close()
 
 
 # ------------------------------------------------------------- the library --

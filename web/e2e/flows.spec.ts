@@ -145,47 +145,130 @@ test("find photos by a first name, a place and a year", async ({ page }) => {
   await expect(page.locator(".sentence")).toContainText("from the 1990s");
 });
 
-test("a person, then a year: one tap narrows a person's photos to a year", async ({ page }) => {
+// A facet chip carries its count; what it chooses is its label's first part.
+const chosen = async (chip: import("@playwright/test").Locator) => ((await chip.getAttribute("aria-label")) || "").split(",")[0].trim();
+
+test("a person, then a year: the When panel narrows a person's photos to a year", async ({ page }) => {
   await signIn(page);
   await page.goto("/find");
   await page.click(".chip:has-text('Meera Shah')");
   await expect(page.locator(".sentence")).toContainText("of Meera Shah");
-  const years = page.locator("[aria-label='Years'] a.chip:not(.turn):visible");
+  await page.click(".dims a:has-text('When')");
+  await expect(page.locator(".facet-h")).toContainText("When were the");
+  const years = page.locator(".facet a.chip:not(.turn):visible");
   await expect(years.first()).toBeVisible();
-  await floor(page, "person then year");
-  let year = (await years.first().innerText()).trim();
+  await floor(page, "person then when");
+  let year = await chosen(years.first());
   if (year.endsWith("s")) {
     // many years arrive as decades first; a decade then offers its own years
     await years.first().click();
     await expect(page.locator(".sentence")).toContainText(`of Meera Shah from the ${year}`);
-    await expect(page.locator(`[aria-label='Years'] a[aria-current='true']`)).toHaveCount(0);
-    year = (await years.first().innerText()).trim();
+    await page.click(`.pill .pill-go:has-text('${year}')`);
+    year = await chosen(years.first());
     expect(year).toMatch(/^\d{4}$/);
   }
   await years.first().click();
   await expect(page.locator(".sentence")).toContainText(`of Meera Shah from ${year}`);
-  await expect(page.locator(`[aria-label='Years'] a[aria-current='true']`)).toHaveText(year);
+  await expect(page.locator(".pill .pill-go", { hasText: year })).toBeVisible();
   // every photo shown is that person's, from that year
   const truth = await (await page.request.get("/api/search?q=" + encodeURIComponent(`Meera Shah ${year}`))).json();
   expect(truth.total).toBeGreaterThan(0);
   for (const c of truth.cards) expect(c.year).toBe(Number(year));
-  await page.click("[aria-label='Years'] a:has-text('All years')");
+  // ✕ takes the year off again, and the person stays
+  await page.click(`.pill-off[aria-label*='${year}']`);
+  await expect(page.locator(".sentence")).toContainText("of Meera Shah");
   await expect(page.locator(".sentence")).not.toContainText(" from ");
 });
 
-test("a year, then a person: one tap narrows a decade to one person", async ({ page }) => {
+test("a year, then a person: the Who panel narrows a decade to one person", async ({ page }) => {
   await signIn(page);
   await page.goto("/find?show=years");
   await page.locator(".fit a.chip:has-text('2000s')").click();
   await expect(page.locator(".sentence")).toContainText("from the 2000s");
-  const people = page.locator("[aria-label='Who is in these photos'] a.chip:not(.turn):visible");
+  await page.click(".dims a:has-text('Who')");
+  const people = page.locator(".facet a.chip:not(.turn):visible");
   await expect(people.first()).toBeVisible();
-  await floor(page, "year then person");
-  const who = (await people.first().innerText()).trim();
+  await floor(page, "year then who");
+  const who = await chosen(people.first());
   await people.first().click();
   await expect(page.locator(".sentence")).toContainText(`of ${who} from the 2000s`);
-  // and the years row now offers that decade's years for that person
-  await expect(page.locator("[aria-label='Years'] a:has-text('All years')")).toBeVisible();
+  // and the next Who is "who else", among that person's photos
+  await page.click(".dims a:has-text('Who')");
+  await expect(page.locator(".facet-h")).toContainText("Who else is in these");
+  await expect(page.locator(`.facet a.chip[aria-label^='${who},']`)).toHaveCount(0);
+});
+
+test("from a place: add a person, then only the videos - every one marked as a video", async ({ page }) => {
+  await signIn(page);
+  await page.goto("/find?show=places");
+  await page.locator(".fit a.chip:has-text('Goa')").click();
+  await expect(page.locator(".sentence")).toContainText("in Goa");
+  await page.click(".dims a:has-text('Who')");
+  const people = page.locator(".facet a.chip:not(.turn):visible");
+  const who = await chosen(people.first());
+  await people.first().click();
+  await expect(page.locator(".sentence")).toContainText(`of ${who} in Goa`);
+  // the type switch says how many of each, and narrows to them
+  const all = await (await page.request.get("/api/search?q=" + encodeURIComponent(`${who} Goa`))).json();
+  const vids = all.cards.filter((c: { media: string }) => c.media === "video").length;
+  await expect(page.locator(".types a[aria-current='page']")).toHaveText(/^All/);
+  await expect(page.locator(".types a", { hasText: "Videos" })).toHaveAttribute("aria-label", `Videos, ${vids}`);
+  await page.click(".types a:has-text('Photos')");
+  await expect(page).toHaveURL(/type=photo/);
+  await expect(page.locator(".sentence")).toContainText(`photo`);
+  await expect(page.locator(".grid .vmark")).toHaveCount(0);
+  await floor(page, "place, person, photos only");
+  // the type stays while the other facts change: take the place off
+  await page.click(".pill-off[aria-label='Take Goa off']");
+  await expect(page).toHaveURL(/type=photo/);
+  await expect(page.locator(".sentence")).toContainText(`photos of ${who}`);
+  await expect(page.locator(".sentence")).not.toContainText("Goa");
+});
+
+test("a video is marked as a video in the grid and on its own screen, and Videos finds only videos", async ({ page }) => {
+  await signIn(page);
+  await page.goto("/find?type=video");
+  await expect(page.locator(".types a[aria-current='page']")).toHaveText(/^Videos/);
+  // browsing with Videos on: every list leads to videos
+  const first = page.locator(".fit a.chip").first();
+  await expect(first).toHaveAttribute("href", /type=video/);
+  await first.click();
+  await expect(page.locator(".sentence")).toContainText("video");
+  const cells = page.locator(".grid a");
+  const n = await cells.count();
+  expect(n).toBeGreaterThan(0);
+  await expect(page.locator(".grid a .vmark")).toHaveCount(n);
+  await floor(page, "videos only");
+  // "videos" typed in the box means the same thing
+  await page.goto("/find?q=videos");
+  await expect(page.locator(".types a[aria-current='page']")).toHaveText(/^Videos/);
+  const api = await (await page.request.get("/api/search?q=videos")).json();
+  expect(api.total).toBeGreaterThan(0);
+  for (const c of api.cards) expect(c.media).toBe("video");
+  // the one that plays: its length on the grid, and "Video" on its own screen
+  await page.goto("/find?q=videos");
+  const playing = page.locator(`.grid a[href*='${"0".repeat(63)}8']`);
+  await expect(playing.locator(".vmark")).toContainText("0:08");
+  await playing.click();
+  await expect(page.locator(".vtag")).toContainText("Video · 0:08");
+  await page.click("text=Back to videos");
+  await expect(page).toHaveURL(/type=video/);
+});
+
+test("Say: words added to a person's search rank within it, and come off again", async ({ page }) => {
+  await signIn(page);
+  await page.goto("/find?q=Asha%20Raja");
+  await page.click(".dims a:has-text('Say')");
+  await expect(page.locator("#say")).toBeVisible();
+  await floor(page, "say panel");
+  await page.fill("#say", "beach");
+  await page.press("#say", "Enter");
+  await expect(page.locator(".sentence")).toContainText("of Asha Raja");
+  await expect(page.locator(".sentence")).toContainText("beach");
+  await expect(page.locator(".pill .pill-go", { hasText: "beach" })).toBeVisible();
+  await page.click(".pill-off[aria-label*='beach']");
+  await expect(page.locator(".sentence")).not.toContainText("beach");
+  await expect(page.locator(".sentence")).toContainText("of Asha Raja");
 });
 
 test("a second search shows its own photos, never the last search's", async ({ page }) => {

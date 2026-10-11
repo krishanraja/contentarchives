@@ -149,6 +149,20 @@ test("every screen, in every state, fits every screen size without scrolling", a
   await fits(page, "results by person and year");
   await page.goto("/find?q=zebra%20crossing%201871");
   await fits(page, "results, nothing found");
+  // narrowing from any start (Krish, 2026-10-11): every panel, the type
+  // switch, and the most a search can be narrowed by at once
+  await page.goto("/find?type=video");
+  await fits(page, "find, videos only");
+  for (const pick of ["who", "where", "when", "say"]) {
+    await page.goto(`/find?q=Asha%20Raja&pick=${pick}`);
+    await fits(page, `results, choosing ${pick}`);
+  }
+  await page.goto("/find?q=Goa&pick=who&type=photo");
+  await fits(page, "a place, choosing who, photos only");
+  await page.goto("/find?q=" + encodeURIComponent("Asha Raja Ravi Raja Shri Venkateswara Temple, Tirumala Hills 1990s birthday cake") + "&type=video");
+  await fits(page, "results, every fact chosen, videos");
+  await page.goto("/find?q=" + encodeURIComponent("Asha Raja Ravi Raja Goa 1990s birthday cake") + "&pick=when");
+  await fits(page, "results, every fact chosen, choosing when");
 
   // a photo with the longest description and the most people the live library has
   await page.goto("/find?q=Asha");

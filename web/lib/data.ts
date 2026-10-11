@@ -1,7 +1,7 @@
 import type postgres from "postgres";
 import { sql } from "./db";
 import { embed, hasGemini } from "./gemini";
-import { describe, parseQuery, type Parsed } from "./search";
+import { compose, describe, foldYears, parseQuery, type Media, type Parsed } from "./search";
 import { spellAs } from "./spelling";
 import { memo } from "./memo";
 
@@ -9,6 +9,7 @@ export type Card = {
   hash: string; media: string; year: number | null; approx_year: string | null;
   family_when: string | null;       // what the family said: it wins over the file's date (migration 0011)
   place: string | null; width: number | null; height: number | null;
+  seconds: number | null;           // a video's length, once it has been judged (video_checks)
 };
 
 export async function players(): Promise<string[]> {
@@ -36,9 +37,10 @@ async function loadVocab() {
   return { people: people.map((r) => r.name as string), places: places.map((r) => r.place as string) };
 }
 
-export async function search(q: string, offset = 0) {
+export async function search(q: string, offset = 0, type: Media | null = null) {
   const { people, places } = await vocab();
   const p = parseQuery(q, people, places);
+  if (type) p.media = type;               // the switch on the page wins over a word in the box
   let vec: number[] | null = null;
   let mode = "filters";
   if (p.rest && hasGemini()) {
@@ -48,107 +50,86 @@ export async function search(q: string, offset = 0) {
   const rows = await db`
     select s.hash, s.score, s.total, ph.media, ph.year, ph.approx_year, ph.family_when,
            coalesce(ph.family_place, ph.place) place,
-           ph.width, ph.height
+           ph.width, ph.height, v.seconds
     from search_photos(
       ${vec ? `[${vec.join(",")}]` : null}::extensions.vector,
       ${!vec && p.rest ? p.rest : null},
       ${p.people.length ? p.people : null}::text[],
-      ${p.place}, ${p.yearFrom}, ${p.yearTo}, 60, ${offset}) s
-    join photos ph on ph.hash = s.hash`;
+      ${p.place}, ${p.yearFrom}, ${p.yearTo}, 60, ${offset}, ${p.media}) s
+    join photos ph on ph.hash = s.hash
+    left join video_checks v on v.hash = s.hash and ph.media = 'video'`;
   const total = rows.length ? Number(rows[0].total) : 0;
   return {
-    parsed: p, mode, total,
+    parsed: p, mode, total, q: compose(p),     // q: the search in the words the parser reads back
     sentence: describe(p, total, mode),
     cards: rows.map((r) => ({
       hash: r.hash, media: r.media, year: r.year, approx_year: r.approx_year, family_when: r.family_when,
-      place: r.place, width: r.width, height: r.height,
+      place: r.place, width: r.width, height: r.height, seconds: r.seconds ?? null,
     })) as Card[],
   };
 }
 
-// The second filter, after the first (Krish, 2026-10-06): tap a person, then
-// narrow by year; tap a year, then narrow by person. Whatever the search has
-// not chosen yet is offered as one row of chips. A meaning search ("at the
-// beach") ranks every photo, so there is nothing to narrow and no row.
-export type Refine =
-  | { kind: "years"; active: string | null; items: { label: string; n: number }[] }
-  | { kind: "people"; items: { name: string; n: number; cover: string | null }[] };
+// Narrowing from wherever a search starts (Krish, 2026-10-11): "if someone
+// enters with a name, they should then be able to filter the time, content
+// type, location or say what they are actually looking for", and the same from
+// a place. Every fact not yet chosen is offered, each choice with how many it
+// would give against the OTHER filters in force (search_facets, migration
+// 0013): a chosen year still shows its neighbours, so a person can switch, not
+// only narrow. Words rank and never narrow, so a meaning search can be
+// narrowed too. One call; photo_people is read once in it (learning 80).
+export type Facets = {
+  media: { photo: number; video: number };
+  people: { name: string; n: number; cover: string | null }[];
+  places: { place: string; n: number }[];
+  years: { label: string; n: number }[];
+};
 
-export async function refine(p: Parsed): Promise<Refine | null> {
-  if (p.rest) return null;
-  const db = sql();
-  const yearOf = db`ph.when_year`;          // the family's year first, then the file's (0011)
-  const where = db`(${p.place}::text is null or coalesce(ph.family_place,
-      coalesce(ph.place, '') || ' ' || coalesce(ph.region, '') || ' ' || coalesce(ph.country, '')) ilike '%' || ${p.place} || '%')`;
-  if (p.yearFrom !== null && !p.people.length) {
-    // a year (or a decade) first: who is in these photos?
-    const rows = await db`
-      select pp.name, count(distinct pp.hash)::int n,
-             (select pe.cover_face from people pe where pe.name = pp.name) cover
-      from photo_people pp join photos ph on ph.hash = pp.hash and ph.visible
-      where ${yearOf} between ${p.yearFrom} and ${p.yearTo} and ${where}
-      group by pp.name order by n desc, pp.name limit 80`;
-    return rows.length ? { kind: "people", items: rows.map((r) => ({ name: r.name as string, n: r.n as number, cover: r.cover as string | null })) } : null;
+export async function facets(p: Parsed): Promise<Facets> {
+  const rows = await sql()`select dim, label, n, cover from search_facets(
+      ${p.people.length ? p.people : null}::text[], ${p.place}, ${p.yearFrom}, ${p.yearTo}, ${p.media})`;
+  const out: Facets = { media: { photo: 0, video: 0 }, people: [], places: [], years: [] };
+  const years: { y: number; n: number }[] = [];
+  for (const r of rows) {
+    const n = Number(r.n);
+    if (r.dim === "media" && (r.label === "photo" || r.label === "video")) out.media[r.label as Media] = n;
+    else if (r.dim === "person") out.people.push({ name: r.label, n, cover: r.cover ?? null });
+    else if (r.dim === "place") out.places.push({ place: r.label, n });
+    else if (r.dim === "year") years.push({ y: Number(r.label), n });
   }
-  if (!p.people.length && !p.place) return null;
-  // a person or a place first: which years? Many years are offered as their
-  // decades first (a 15-year span would take seven "More" taps otherwise);
-  // inside a decade, or beside a year already chosen, that decade's years.
-  const decade = p.yearFrom !== null && p.yearFrom !== p.yearTo;
-  const rows = await db`
-    with wanted as materialized (
-      select pp.hash from photo_people pp
-      where ${p.people.length ? p.people : null}::text[] is not null
-        and lower(pp.name) in (select lower(w) from unnest(${p.people.length ? p.people : null}::text[]) w)
-      group by pp.hash
-      having count(distinct lower(pp.name)) = ${p.people.length})
-    select ${yearOf} y, count(*)::int n
-    from photos ph
-    where ph.visible and ${where}
-      and (${p.people.length ? p.people : null}::text[] is null or ph.hash in (select hash from wanted))
-    group by 1 having ${yearOf} is not null order by 1 desc`;
-  const years = rows.map((r) => ({ y: Number(r.y), n: r.n as number }));
-  const active = p.yearFrom === null ? null : decade ? `${p.yearFrom}s` : String(p.yearFrom);
-  const within = p.yearFrom === null ? null : Math.floor(p.yearFrom / 10) * 10;
-  let items: { label: string; n: number }[];
-  if (within !== null) {
-    items = years.filter((x) => x.y >= within && x.y <= within + 9).map((x) => ({ label: String(x.y), n: x.n }));
-  } else if (years.length > 6 && new Set(years.map((x) => Math.floor(x.y / 10))).size > 1) {
-    const by = new Map<number, number>();
-    for (const x of years) by.set(Math.floor(x.y / 10) * 10, (by.get(Math.floor(x.y / 10) * 10) || 0) + x.n);
-    items = [...by].sort((a, b) => b[0] - a[0]).map(([d, n]) => ({ label: `${d}s`, n }));
-  } else {
-    items = years.map((x) => ({ label: String(x.y), n: x.n }));
-  }
-  return items.length > 1 || active ? { kind: "years", active, items } : null;
+  out.years = foldYears(years, p.yearFrom);
+  return out;
 }
 
-// a search with one part changed, in the words the parser reads back
-export function compose(p: Parsed, change: { people?: string[]; year?: string | null }): string {
-  const people = change.people ?? p.people;
-  const year = change.year !== undefined ? change.year
-    : p.yearFrom === null ? null : p.yearFrom === p.yearTo ? String(p.yearFrom) : `${p.yearFrom}s`;
-  return [...people, p.place, year].filter(Boolean).join(" ");
-}
+// The Find page's lists before anything is typed. They are the same for every
+// visitor and change only when the index does, so they are kept a minute per
+// type: reading them walks photo_people (learning 80).
+const BROWSE_TTL_MS = 60_000;
+const browseMemo = { all: memo(() => loadBrowse(null), BROWSE_TTL_MS),
+  photo: memo(() => loadBrowse("photo"), BROWSE_TTL_MS), video: memo(() => loadBrowse("video"), BROWSE_TTL_MS) };
+export function browse(type: Media | null = null) { return browseMemo[type ?? "all"].get(); }
 
-export async function browse() {
+async function loadBrowse(type: Media | null) {
   const db = sql();
-  const [people, places, years] = await Promise.all([
+  const [people, places, years, media] = await Promise.all([
     db`select pp.name, count(distinct pp.hash)::int n,
               (select pe.cover_face from people pe where pe.name = pp.name) cover
        from photo_people pp join photos p on p.hash = pp.hash and p.visible
+       where ${type}::text is null or p.media = ${type}
        group by pp.name order by n desc limit 200`,
     db`select coalesce(family_place, place) place, count(*)::int n from photos
-       where coalesce(family_place, place) <> '' and visible
+       where coalesce(family_place, place) <> '' and visible and (${type}::text is null or media = ${type})
        group by 1 order by n desc limit 120`,
     db`select (when_year / 10 * 10) decade, count(*)::int n
-       from photos where visible and when_year is not null
+       from photos where visible and when_year is not null and (${type}::text is null or media = ${type})
        group by 1 order by 1`,
+    db`select media, count(*)::int n from photos where visible group by 1`,
   ]);
+  const count = (m: Media) => Number(media.find((r) => r.media === m)?.n || 0);
   return {
     people: people.map((r) => ({ name: r.name as string, n: r.n as number, cover: r.cover as string | null })),
     places: places.map((r) => ({ place: r.place as string, n: r.n as number })),
     decades: years.map((r) => ({ decade: r.decade as number, n: r.n as number })),
+    media: { photo: count("photo"), video: count("video") },
   };
 }
 
@@ -168,11 +149,11 @@ export type Play = "ok" | "unplayable" | null;
 // sameDay: the other photographs the file says were taken the same day. When
 // that date is the day a batch was scanned or copied, they are usually wrong
 // together, and one answer can put them all right (Krish, 2026-10-06).
-export async function photo(hash: string): Promise<(PhotoRow & { people: string[]; play: Play; sameDay: string[]; sameDayPlace: string[] }) | null> {
+export async function photo(hash: string): Promise<(PhotoRow & { people: string[]; play: Play; seconds: number | null; sameDay: string[]; sameDayPlace: string[] }) | null> {
   const db = sql();
-  const [p] = await db<(PhotoRow & { play: string | null })[]>`select p.hash, p.drive_id, p.media, p.taken_at, p.year,
+  const [p] = await db<(PhotoRow & { play: string | null; seconds: number | null })[]>`select p.hash, p.drive_id, p.media, p.taken_at, p.year,
       p.approx_year, p.place, p.region, p.country, p.description, p.occasion, p.width, p.height, p.hidden, p.visible,
-      p.family_when, p.family_place, p.day_key, v.status as play
+      p.family_when, p.family_place, p.day_key, v.status as play, v.seconds
     from photos p left join video_checks v on v.hash = p.hash and p.media = 'video'
     where p.hash = ${hash}`;
   if (!p || !p.visible) return null;
