@@ -2546,3 +2546,22 @@ Keep whole-library answers for a while and check only what changed since (the
 name list is kept a minute; a save checks the answers given in the last few
 minutes, 0.3 ms). Then let the screen move at the tap: a durable outbox already
 owns delivery, so waiting for the server bought nothing but delay.
+
+## 81. A tap that shows nothing gets tapped again
+
+Krish, 2026-10-12, on the family app's Find screen: "This multi-pull filter
+system does not work properly. It's so glitchy." Driven at phone size, every
+choice (When, a decade, a place) changed nothing on screen for about 1.3
+seconds while the server made the next screen. A second tap landed on the old
+screen: in the recording, the tap meant for "2010s" only finished opening the
+When panel, and the tap meant for a place only opened Where. Nothing was
+wrong in any one request; the screen simply gave no sign that it had heard.
+
+The same check found a second fault behind "glitchy": a place whose name has a
+comma ("Blue Lagoon, Iceland") never matched again from its own link, because
+the typed words lose their punctuation and the place list kept it.
+
+**Answer the tap at once.** Fetch what the visible choices lead to before they
+are touched, and mark the touched choice the moment it is pressed. Then make
+the server fast too, but never rely on it being fast. And read a value the
+same way on both sides of any round trip.

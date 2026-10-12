@@ -1,6 +1,6 @@
 import Link from "next/link";
 import Bar from "@/components/Bar";
-import { browse, facets, search } from "@/lib/data";
+import { browse, facets, parse, search } from "@/lib/data";
 import { describe } from "@/lib/search";
 import { asMedia, findHref, PICKS, type Media, type Pick } from "@/lib/search";
 import SearchBox from "./SearchBox";
@@ -36,9 +36,9 @@ export default async function Find({ searchParams }: { searchParams: Promise<SP>
   const type = asMedia(sp.type);
   const pick = PICKS.includes(sp.pick as Pick) ? (sp.pick as Pick) : null;
   if (q || pick) {
-    const r = await search(q, 0, type);
-    const p = r.parsed;
-    const f = await facets(p);
+    // the words are read once; the photos and the counts are fetched together
+    const p = await parse(q, type);
+    const [r, f] = await Promise.all([search(q, 0, type, p), facets(p)]);
     const listKey = findHref(p);
     return (
       <>

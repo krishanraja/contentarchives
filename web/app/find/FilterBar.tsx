@@ -1,6 +1,6 @@
-import Link from "next/link";
+import Go from "@/components/Go";
 import Fit from "@/components/Fit";
-import { findHref, yearWord, type Parsed, type Pick } from "@/lib/search";
+import { ABROAD, findHref, UK, yearWord, type Parsed, type Pick } from "@/lib/search";
 
 // What the search is narrowed by, and what it could be narrowed by next
 // (Krish, 2026-10-11: start with a name, then the time, the place or say what
@@ -15,23 +15,25 @@ const WORDS: Record<Pick, string> = { who: "Who", where: "Where", when: "When", 
 
 export default function FilterBar({ p, open }: { p: Parsed; open: Pick | null }) {
   const year = yearWord(p);
-  const set: Record<Pick, boolean> = { who: p.people.length > 0, where: !!p.place, when: !!year, say: !!p.rest };
+  const set: Record<Pick, boolean> = { who: p.people.length > 0, where: !!p.place || !!p.country, when: !!year, say: !!p.rest };
+  const countryText = p.country === UK ? "In the UK" : p.country === ABROAD ? "Abroad" : p.country;
   const ask: Record<Pick, string> = {
     who: p.people.length ? "Add someone else who is in them" : "Choose who is in them",
-    where: p.place ? `Where: ${p.place}. Change the place` : "Choose where",
+    where: p.place || countryText ? `Where: ${[p.place, countryText].filter(Boolean).join(", ")}. Change the place` : "Choose where",
     when: year ? `When: ${year}. Change the time` : "Choose when",
     say: p.rest ? `Words: ${p.rest}. Change the words` : "Say or type what is in them",
   };
   const pill = (key: string, pick: Pick, text: string, off: string, offLabel: string) => (
     <span key={key} className={open === pick ? "pill open" : "pill"}>
-      <Link className="pill-go" href={findHref(p, {}, pick)} aria-label={`${text}: change`}>{text}</Link>
-      <Link className="pill-off" href={off} aria-label={offLabel}>✕</Link>
+      <Go className="pill-go" href={findHref(p, {}, pick)} aria-label={`${text}: change`}>{text}</Go>
+      <Go className="pill-off" href={off} aria-label={offLabel}>✕</Go>
     </span>
   );
   const pills = [
     ...p.people.map((n) => pill("who:" + n, "who", n,
       findHref(p, { people: p.people.filter((x) => x !== n) }), `Take ${n} off`)),
     ...(p.place ? [pill("where", "where", p.place, findHref(p, { place: null }), `Take ${p.place} off`)] : []),
+    ...(countryText ? [pill("country", "where", countryText, findHref(p, { country: null }), `Anywhere, not just ${countryText.toLowerCase()}`)] : []),
     ...(year ? [pill("when", "when", year, findHref(p, { year: null }), `Any time, not just ${year}`)] : []),
     ...(p.rest ? [pill("say", "say", `“${p.rest}”`, findHref(p, { rest: "" }), `Take the words “${p.rest}” off`)] : []),
   ];
@@ -39,10 +41,10 @@ export default function FilterBar({ p, open }: { p: Parsed; open: Pick | null })
     <>
       <nav className="dims" aria-label="Narrow it down">
         {(Object.keys(WORDS) as Pick[]).map((k) => (
-          <Link key={k} className={set[k] ? "btn small set" : "btn small"} aria-label={ask[k]}
+          <Go key={k} className={set[k] ? "btn small set" : "btn small"} aria-label={ask[k]}
             href={open === k ? findHref(p) : findHref(p, {}, k)} aria-current={open === k ? "page" : undefined}>
             {WORDS[k]}
-          </Link>
+          </Go>
         ))}
       </nav>
       {pills.length > 0 && <Fit key={findHref(p)} one label="Chosen" more="More">{pills}</Fit>}

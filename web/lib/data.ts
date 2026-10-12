@@ -28,19 +28,28 @@ export function vocab() { return vocabMemo.get(); }
 
 async function loadVocab() {
   const db = sql();
-  const [people, places] = await Promise.all([
-    db`select distinct name from photo_people where name is not null`,
+  const [people, places, countries] = await Promise.all([
+    db`select distinct name from photo_people_mv`,
     db`select coalesce(family_place, place) place, count(*)::int n from photos
        where coalesce(family_place, place) <> '' and visible
        group by 1 order by n desc limit 400`,
+    db`select country from place_country union select country from photos where coalesce(country, '') <> ''`,
   ]);
-  return { people: people.map((r) => r.name as string), places: places.map((r) => r.place as string) };
+  return { people: people.map((r) => r.name as string), places: places.map((r) => r.place as string),
+    countries: countries.map((r) => r.country as string) };
 }
 
-export async function search(q: string, offset = 0, type: Media | null = null) {
-  const { people, places } = await vocab();
-  const p = parseQuery(q, people, places);
+// The words read into filters. Separate from the search, so a page can run
+// the search and its facets at the same time.
+export async function parse(q: string, type: Media | null = null): Promise<Parsed> {
+  const { people, places, countries } = await vocab();
+  const p = parseQuery(q, people, places, countries);
   if (type) p.media = type;               // the switch on the page wins over a word in the box
+  return p;
+}
+
+export async function search(q: string, offset = 0, type: Media | null = null, parsed?: Parsed) {
+  const p = parsed ?? await parse(q, type);
   let vec: number[] | null = null;
   let mode = "filters";
   if (p.rest && hasGemini()) {
@@ -55,7 +64,7 @@ export async function search(q: string, offset = 0, type: Media | null = null) {
       ${vec ? `[${vec.join(",")}]` : null}::extensions.vector,
       ${!vec && p.rest ? p.rest : null},
       ${p.people.length ? p.people : null}::text[],
-      ${p.place}, ${p.yearFrom}, ${p.yearTo}, 60, ${offset}, ${p.media}) s
+      ${p.place}, ${p.yearFrom}, ${p.yearTo}, 60, ${offset}, ${p.media}, ${p.country}) s
     join photos ph on ph.hash = s.hash
     left join video_checks v on v.hash = s.hash and ph.media = 'video'`;
   const total = rows.length ? Number(rows[0].total) : 0;
@@ -81,22 +90,25 @@ export type Facets = {
   media: { photo: number; video: number };
   people: { name: string; n: number; cover: string | null }[];
   places: { place: string; n: number }[];
+  countries: { country: string; n: number }[];
   years: { label: string; n: number }[];
 };
 
 export async function facets(p: Parsed): Promise<Facets> {
   const rows = await sql()`select dim, label, n, cover from search_facets(
-      ${p.people.length ? p.people : null}::text[], ${p.place}, ${p.yearFrom}, ${p.yearTo}, ${p.media})`;
-  const out: Facets = { media: { photo: 0, video: 0 }, people: [], places: [], years: [] };
+      ${p.people.length ? p.people : null}::text[], ${p.place}, ${p.yearFrom}, ${p.yearTo}, ${p.media}, ${p.country})`;
+  const out: Facets = { media: { photo: 0, video: 0 }, people: [], places: [], countries: [], years: [] };
   const years: { y: number; n: number }[] = [];
   for (const r of rows) {
     const n = Number(r.n);
     if (r.dim === "media" && (r.label === "photo" || r.label === "video")) out.media[r.label as Media] = n;
     else if (r.dim === "person") out.people.push({ name: r.label, n, cover: r.cover ?? null });
     else if (r.dim === "place") out.places.push({ place: r.label, n });
+    else if (r.dim === "country") out.countries.push({ country: r.label, n });
     else if (r.dim === "year") years.push({ y: Number(r.label), n });
   }
   out.years = foldYears(years, p.yearFrom);
+  out.countries.sort((a, b) => b.n - a.n || a.country.localeCompare(b.country));
   return out;
 }
 
@@ -113,7 +125,7 @@ async function loadBrowse(type: Media | null) {
   const [people, places, years, media] = await Promise.all([
     db`select pp.name, count(distinct pp.hash)::int n,
               (select pe.cover_face from people pe where pe.name = pp.name) cover
-       from photo_people pp join photos p on p.hash = pp.hash and p.visible
+       from photo_people_mv pp join photos p on p.hash = pp.hash and p.visible
        where ${type}::text is null or p.media = ${type}
        group by pp.name order by n desc limit 200`,
     db`select coalesce(family_place, place) place, count(*)::int n from photos
@@ -418,6 +430,15 @@ export async function undoAnswer(who: string, id: string): Promise<boolean> {
     if (a.scope === "file" && (a.field === "place" || a.field === "approx_year")) await settle(tx, a.field, a.hashes as string[]);
     return true;
   });
+}
+
+// Who is in each photograph, as Find reads it, is a kept copy
+// (photo_people_mv, migration 0014): after any answer about who someone is,
+// it is brought up to date. Never awaited by the person who answered.
+export const NAMES_KINDS = new Set(["person", "mixed", "in", "out"]);
+export async function refreshPeople() {
+  await sql()`select refresh_photo_people()`;
+  vocabMemo.clear();
 }
 
 export async function skip(who: string, key: string) {

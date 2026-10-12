@@ -1,5 +1,5 @@
-import { NextRequest, NextResponse } from "next/server";
-import { saveAnswer, validate, type AnswerIn } from "@/lib/data";
+import { after, NextRequest, NextResponse } from "next/server";
+import { NAMES_KINDS, refreshPeople, saveAnswer, validate, type AnswerIn } from "@/lib/data";
 import { me } from "@/lib/me";
 
 export async function POST(req: NextRequest) {
@@ -9,7 +9,10 @@ export async function POST(req: NextRequest) {
   const bad = validate(a as AnswerIn);
   if (bad) return NextResponse.json({ ok: false, error: bad }, { status: 400 });
   try {
-    return NextResponse.json({ ok: true, ...(await saveAnswer(who, a!)) });
+    const saved = await saveAnswer(who, a!);
+    // Find's copy of who is in each photo catches up straight after the reply
+    if (NAMES_KINDS.has(a!.kind)) after(() => refreshPeople().catch(() => undefined));
+    return NextResponse.json({ ok: true, ...saved });
   } catch (e) {
     // a database's own words never reach a grandmother's screen
     if ((e as { code?: string }).code) {

@@ -46,7 +46,7 @@ describe("parseQuery", () => {
 });
 
 describe("the sentence above the results", () => {
-  const p = (o: Partial<Parsed>): Parsed => ({ people: [], place: null, yearFrom: null, yearTo: null, media: null, rest: "", ...o });
+  const p = (o: Partial<Parsed>): Parsed => ({ people: [], place: null, country: null, yearFrom: null, yearTo: null, media: null, rest: "", ...o });
   it("a meaning search never claims the whole library looks like the words", () => {
     const s = sentence(p({ rest: "beach" }), 22752, "meaning");
     expect(s).toBe("Photos and videos that look most like “beach”, closest first");
@@ -138,5 +138,58 @@ describe("the years offered", () => {
   });
   it("a short span comes as years", () => {
     expect(foldYears(rows.slice(0, 3), null).map((x) => x.label)).toEqual(["1991", "1987", "1984"]);
+  });
+});
+
+describe("UK, abroad and countries (Krish, 2026-10-12: \"UK versus abroad, which would be handy\")", () => {
+  const COUNTRIES = ["United Kingdom", "India", "Iceland"];
+  const PL = [...PLACES, "Golden Temple, Amritsar, India", "India"];
+  it("reads UK and abroad, in the words a person would type", () => {
+    expect(parseQuery("Meera Shah in the UK", PEOPLE, PL, COUNTRIES).country).toBe("United Kingdom");
+    expect(parseQuery("Meera Shah U.K. 1990s", PEOPLE, PL, COUNTRIES)).toMatchObject({ country: "United Kingdom", yearFrom: 1990 });
+    expect(parseQuery("Meera Shah abroad", PEOPLE, PL, COUNTRIES)).toMatchObject({ country: "abroad", rest: "" });
+    expect(parseQuery("overseas 2010s", PEOPLE, PL, COUNTRIES)).toMatchObject({ country: "abroad", yearFrom: 2010 });
+  });
+  it("a country's name is the whole country, but a place that names one stays that place", () => {
+    expect(parseQuery("India", PEOPLE, PL, COUNTRIES)).toMatchObject({ country: "India", place: null });
+    expect(parseQuery("Golden Temple, Amritsar, India", PEOPLE, PL, COUNTRIES))
+      .toMatchObject({ place: "Golden Temple, Amritsar, India", country: null });
+  });
+  it("a chosen country rides in the link and reads back the same", () => {
+    const p = parseQuery("Meera Shah Goa", PEOPLE, PL, COUNTRIES);
+    for (const c of ["United Kingdom", "abroad", "India"]) {
+      const href = findHref(p, { country: c, place: null });
+      const q = new URLSearchParams(href.split("?")[1]).get("q") || "";
+      expect(parseQuery(q, PEOPLE, PL, COUNTRIES)).toMatchObject({ people: ["Meera Shah"], country: c, place: null });
+    }
+  });
+  it("the sentence says where", () => {
+    expect(sentence(parseQuery("Meera Shah abroad", PEOPLE, PL, COUNTRIES), 12, "filters", { photo: 12, video: 0 }))
+      .toBe("12 photos of Meera Shah abroad");
+    expect(sentence(parseQuery("Meera Shah UK", PEOPLE, PL, COUNTRIES), 3, "filters", { photo: 3, video: 0 }))
+      .toBe("3 photos of Meera Shah in the UK");
+  });
+});
+
+describe("a place with a comma in its name (it never matched before 2026-10-12)", () => {
+  it("chosen from the list, it is found again in its own link", () => {
+    const places = ["Blue Lagoon, Iceland", "Goa"];
+    const p = parseQuery("Meera Shah", PEOPLE, places);
+    const q = new URLSearchParams(findHref(p, { place: "Blue Lagoon, Iceland" }).split("?")[1]).get("q") || "";
+    expect(parseQuery(q, PEOPLE, places)).toMatchObject({ people: ["Meera Shah"], place: "Blue Lagoon, Iceland", rest: "" });
+  });
+});
+
+describe("the Find screen answers a tap at once (learning 81)", () => {
+  it("every choice on the Find screen answers the tap at once: each is a Go, never a bare Link", async () => {
+    const { readFileSync } = await import("node:fs");
+    for (const f of ["FilterBar.tsx", "FacetPanel.tsx", "TypeSwitch.tsx"]) {
+      const src = readFileSync(new URL(`../app/find/${f}`, import.meta.url), "utf8");
+      expect(src, f).not.toMatch(/from "next\/link"/);
+      expect(src, f).toMatch(/<Go /);
+    }
+    const go = readFileSync(new URL("../components/Go.tsx", import.meta.url), "utf8");
+    expect(go).toMatch(/<Link prefetch/);
+    expect(go).toMatch(/useLinkStatus/);
   });
 });

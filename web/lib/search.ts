@@ -8,6 +8,7 @@ export type Media = "photo" | "video";
 export type Parsed = {
   people: string[];
   place: string | null;
+  country: string | null;           // a country, "United Kingdom", or ABROAD (any country but the UK)
   yearFrom: number | null;
   yearTo: number | null;
   media: Media | null;              // null: photos and videos both
@@ -18,6 +19,13 @@ export type Parsed = {
 // Find page is one of these changed (lib/search compose / findHref).
 export type Pick = "who" | "where" | "when" | "say";
 export const PICKS: Pick[] = ["who", "where", "when", "say"];
+
+// "Abroad": any known country but the United Kingdom (migration 0014).
+export const UK = "United Kingdom";
+export const ABROAD = "abroad";
+// what a person may type for the UK, and for abroad
+const UK_WORDS = ["united kingdom", "great britain", "britain", "uk", "u k"];
+const ABROAD_WORDS = ["abroad", "overseas", "outside the uk", "not in the uk"];
 
 export function asMedia(v: unknown): Media | null {
   return v === "photo" || v === "video" ? v : null;
@@ -31,9 +39,14 @@ function escapeRe(s: string) {
   return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
-export function parseQuery(q: string, people: string[], places: string[]): Parsed {
-  let text = " " + (q || "").normalize("NFKC").toLowerCase().replace(/[^\p{L}\p{N}\s'-]/gu, " ") + " ";
-  const out: Parsed = { people: [], place: null, yearFrom: null, yearTo: null, media: null, rest: "" };
+// Words as the parser reads them: lower case, punctuation gone, one space.
+// A place name is read the same way, so "Blue Lagoon, Iceland" chosen from
+// the list is found again in the words its link carries.
+const plain = (t: string) => t.normalize("NFKC").toLowerCase().replace(/[^\p{L}\p{N}\s'-]/gu, " ").replace(/\s+/g, " ").trim();
+
+export function parseQuery(q: string, people: string[], places: string[], countries: string[] = []): Parsed {
+  let text = " " + plain(q || "") + " ";
+  const out: Parsed = { people: [], place: null, country: null, yearFrom: null, yearTo: null, media: null, rest: "" };
 
   // longest names first, so "Asha Raja" wins over "Asha"
   for (const name of [...people].sort((a, b) => b.length - a.length)) {
@@ -60,10 +73,30 @@ export function parseQuery(q: string, people: string[], places: string[]): Parse
       text = text.replace(new RegExp(`(?<=\\s)${escapeRe(word)}(?=\\s)`, "u"), " ");
     }
   }
+  // A place first, so "Golden Temple, Amritsar, India" stays one place; a
+  // "place" that is only a country's name is that country instead (below).
+  const asCountry = new Set([...UK_WORDS, ...ABROAD_WORDS, ...countries.map((c) => plain(c))]);
   for (const place of [...places].sort((a, b) => b.length - a.length)) {
-    const re = new RegExp(`(?<=\\s)${escapeRe(place.toLowerCase())}(?=\\s)`, "u");
+    const said = plain(place);
+    if (!said || asCountry.has(said)) continue;
+    const re = new RegExp(`(?<=\\s)${escapeRe(said)}(?=\\s)`, "u");
     if (place.length >= 3 && re.test(text)) {
       out.place = place;
+      text = text.replace(re, " ");
+      break;
+    }
+  }
+  // A country - or "UK", or "abroad" - after the place, so "India" means the
+  // whole country, not only the photographs whose place reads "India".
+  const cwords: [string, string][] = [
+    ...ABROAD_WORDS.map((w) => [w, ABROAD] as [string, string]),
+    ...UK_WORDS.map((w) => [w, UK] as [string, string]),
+    ...countries.filter((c) => c.length >= 3).map((c) => [plain(c), c] as [string, string]),
+  ].sort((a, b) => b[0].length - a[0].length);
+  for (const [word, country] of cwords) {
+    const re = new RegExp(`(?<=\\s)(?:in\\s+)?(?:the\\s+)?${escapeRe(word)}(?=\\s)`, "u");
+    if (re.test(text)) {
+      out.country = country;
       text = text.replace(re, " ");
       break;
     }
@@ -116,8 +149,19 @@ export function describe(p: Parsed, total: number, mode = "filters", present?: {
   if (p.people.length) parts.push("of " + p.people.join(" and "));
   if (p.rest) parts.push(ranked ? `that look most like “${p.rest}”` : `that look like “${p.rest}”`);
   if (p.place) parts.push("in " + p.place);
+  if (p.country) parts.push(countryWords(p.country));
   if (p.yearFrom) parts.push(p.yearFrom === p.yearTo ? `from ${p.yearFrom}` : `from the ${p.yearFrom}s`);
   return parts.join(" ") + (ranked ? ", closest first" : "");
+}
+
+// "in the UK", "abroad", "in India"
+export function countryWords(c: string): string {
+  return c === ABROAD ? "abroad" : c === UK ? "in the UK" : "in " + c;
+}
+
+// A country chosen, as the word the parser reads back
+export function countryWord(c: string | null): string | null {
+  return c === null ? null : c === ABROAD ? "abroad" : c === UK ? "UK" : c;
 }
 
 // A year chosen, as the words the parser reads back: "1998" or "1990s".
@@ -126,7 +170,7 @@ export function yearWord(p: Parsed): string | null {
   return p.yearFrom === p.yearTo ? String(p.yearFrom) : `${p.yearFrom}s`;
 }
 
-export type Change = { people?: string[]; place?: string | null; year?: string | null; rest?: string; media?: Media | null };
+export type Change = { people?: string[]; place?: string | null; country?: string | null; year?: string | null; rest?: string; media?: Media | null };
 
 // A search with one part changed, in the words the parser reads back. The
 // type is not in the words (a "photos" word means nothing): it rides as
@@ -134,9 +178,10 @@ export type Change = { people?: string[]; place?: string | null; year?: string |
 export function compose(p: Parsed, change: Change = {}): string {
   const people = change.people ?? p.people;
   const place = change.place !== undefined ? change.place : p.place;
+  const country = countryWord(change.country !== undefined ? change.country : p.country);
   const year = change.year !== undefined ? change.year : yearWord(p);
   const rest = change.rest !== undefined ? change.rest : p.rest;
-  return [...people, place, year, rest].filter(Boolean).join(" ").trim();
+  return [...people, place, country, year, rest].filter(Boolean).join(" ").trim();
 }
 
 // The link for a search with one part changed, and optionally a panel open.

@@ -1,4 +1,4 @@
-import Link from "next/link";
+import Go from "@/components/Go";
 import type { Media } from "@/lib/search";
 
 // All · Photos · Videos, on every Find screen (Krish, 2026-10-11: "filter by
@@ -19,11 +19,11 @@ export default function TypeSwitch({ active, counts, href }: {
   return (
     <nav className="types" aria-label="Photos or videos">
       {opts.map((o) => (
-        <Link key={o.word} className="btn small" href={href(o.m)} aria-current={active === o.m ? "page" : undefined}
+        <Go key={o.word} className="btn small" href={href(o.m)} aria-current={active === o.m ? "page" : undefined}
           aria-label={`${o.word}, ${n(o.n)}`}>
           {o.m === "video" && <span className="play-dot" aria-hidden="true" />}
           {o.word}<span className="n" aria-hidden="true">{short(o.n)}</span>
-        </Link>
+        </Go>
       ))}
     </nav>
   );

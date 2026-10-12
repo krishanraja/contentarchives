@@ -135,6 +135,13 @@ async function main() {
   await db`insert into video_checks (hash, status, reason) values (${hex(34)}, 'unplayable', 'a format phones cannot play')`;
   await db`insert into snapshots (kind, counts, head, watermark) values ('seed', ${JSON.stringify({ photos: photos.length })}::jsonb, 'fixtures', now() - interval '1 day')`;
   console.log(`fixtures: ${photos.length} photos, ${faces.length} faces, ${queue.length} groups to name -> ${OUT}`);
+  // the made-up places' countries, and Find's kept copy of who is in each
+  // photo (migration 0014)
+  await db`delete from place_country`;
+  await db`insert into place_country ${db([["goa", "India"], ["delhi", "India"], ["mumbai", "India"],
+    ["brighton", "United Kingdom"], ["lakedistrict", "United Kingdom"], ["sydney", "Australia"]]
+    .map(([place_key, country]) => ({ place_key, country })))}`;
+  await db`select refresh_photo_people()`;
   await db.end();
 }
 main().catch(async (e) => { console.error(e); await db.end(); process.exit(1); });

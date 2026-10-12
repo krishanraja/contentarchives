@@ -333,6 +333,7 @@ def facets():
                    (h, "d-" + h, m, y, pl, ppl))
     db.execute("insert into photos (hash, drive_id, media, year, place, people, hidden) "
                "values ('f7', 'd-f7', 'video', 1990, 'Goa', array['Asha'], true)")
+    db.execute("select refresh_photo_people()")     # Find reads the kept copy (0014); the worker and app refresh it
     db.commit()
 
     def hits(*a):
@@ -366,6 +367,36 @@ def facets():
     check("a year chosen still shows its neighbours, so a person can switch", f.get("year"),
           {"1990": 2, "1995": 1, "2001": 1})
     check("but the other facts follow the year", f.get("media"), {"photo": 1, "video": 1})
+
+    # migration 0014 (Krish, 2026-10-12): "UK versus abroad", and one place
+    # however it is spelt
+    db.execute("insert into photos (hash, drive_id, media, year, place, country, people) values "
+               "('f8', 'd-f8', 'photo', 1995, 'Brighton', 'United Kingdom', array['Asha']), "
+               "('f9', 'd-f9', 'photo', 1996, 'Blue Lagoon, Iceland', null, array['Asha']), "
+               "('f10', 'd-f10', 'photo', 1997, 'Blue Lagoon Iceland', null, array['Asha'])")
+    db.execute("insert into place_country (place_key, country) values ('goa', 'India'), ('delhi', 'India'), "
+               "('bluelagooniceland', 'Iceland')")
+    db.execute("select refresh_photo_people()")
+    db.commit()
+
+    def where(*a):
+        return sorted(r[0] for r in q(db, "select hash from search_photos(null, null, %s::text[], %s, null, null, 60, 0, null, %s)", *a))
+
+    check("in the UK: the GPS country", where(["Asha"], None, "United Kingdom"), ["f8"])
+    check("abroad: any known country but the UK, from GPS or the place's name", where(["Asha"], None, "abroad"),
+          ["f1", "f10", "f2", "f3", "f9"])
+    check("one country", where(["Asha"], None, "India"), ["f1", "f2", "f3"])
+    check("a place spelt with or without its comma is the same place", where(["Asha"], "Blue Lagoon, Iceland", None),
+          ["f10", "f9"])
+    f6 = {}
+    for d, label, n, _ in q(db, "select * from search_facets(%s::text[], null, null, null, null, 'abroad')", ["Asha"]):
+        f6.setdefault(d, {})[label] = n
+    check("the countries are counted whatever country is chosen, so a person can switch",
+          f6.get("country"), {"India": 3, "Iceland": 2, "United Kingdom": 1})
+    check("the places follow the country, and two spellings count as one",
+          sorted(f6.get("place", {}).items()), [("Blue Lagoon Iceland", 2), ("Delhi", 1), ("Goa", 2)])
+    check("the old nine-argument search still works (live before the code)",
+          len(q(db, "select hash from search_photos(null, null, null, null, null, null, 60, 0, 'photo')")), 6)
     db.close()
 
 
@@ -999,6 +1030,11 @@ def personal(out):
         go()
     finally:
         CE.Worker.frames = real
+    check("Find's kept copy of who is in each photo matches the live view after a run (migration 0014)",
+          q(db, "select (select count(*) from (select distinct hash, name from photo_people where name is not null "
+                "except select hash, name from photo_people_mv) a), (select count(*) from (select hash, name from "
+                "photo_people_mv except select distinct hash, name from photo_people where name is not null) b), "
+                "(select count(*) > 0 from photo_people_mv)"), [(0, 0, True)])
     check("a failure picking video frames still runs the private rules and writes the receipt",
           (q(db, "select count(*) from snapshots")[0][0] - before,
            q(db, "select counts ? 'private_hidden', (counts->>'errors')::int from snapshots order by at desc limit 1")),

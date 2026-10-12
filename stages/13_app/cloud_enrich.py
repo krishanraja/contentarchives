@@ -717,6 +717,7 @@ class Worker:
         self.private()
         self.videos()
         self.rebuild()
+        self.find_copies()
         receipt = dict(self.c, spent_usd=round(self.spent, 4), seconds=int(time.time() - t0),
                        errors=sum(self.errors.values()))
         self.db.execute("insert into snapshots (kind, counts) values ('drive-sync', %s::jsonb)",
@@ -1621,6 +1622,17 @@ class Worker:
         self.c["clusters"] = len(rows)
         self.c["groups"] = k
         self.c["regrouped"] = moved
+
+    def find_copies(self):
+        """What the Find screen reads ready-made (migration 0014), brought up
+        to date after this run's grouping and naming: who is in each photo
+        (photo_people_mv; the app also refreshes it after every answer about
+        who someone is), and the country of any place name a GPS photo has
+        now shown (learn_place_countries; it never overwrites one set by hand)."""
+        learned = self.db.execute("select learn_place_countries()").fetchone()[0]
+        self.db.execute("select refresh_photo_people()")
+        self.db.commit()
+        self.c["places_learned"] = int(learned or 0)
 
     def rebuild(self):
         """Queue, suggestions and people: derived, so rebuilt whole."""

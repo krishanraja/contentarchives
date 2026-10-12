@@ -563,3 +563,15 @@ summary.btn::-webkit-details-marker { display: none; }
   .fact .fact-do { display: none; }
   .photo-panel[data-fit="0"] .fact .fact-v::after { content: " ✎"; }
 }
+
+/* A choice touched on the Find screen shows it at once (components/Go.tsx):
+   the button greys over and breathes until its screen arrives. Usually the
+   next screen is already fetched and this never shows. */
+.pressed { display: none; }
+.pressed.on {
+  display: block; position: absolute; inset: 0; border-radius: inherit; pointer-events: none;
+  background: var(--ink); opacity: 0; animation: pressed 0.9s ease-in-out 0.08s infinite;
+}
+a:has(> .pressed) { position: relative; }
+@keyframes pressed { 0%, 100% { opacity: 0.08; } 50% { opacity: 0.22; } }
+@media (prefers-reduced-motion: reduce) { .pressed.on { animation: none; opacity: 0.15; } }
