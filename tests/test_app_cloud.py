@@ -47,6 +47,7 @@ import stagepath  # noqa: E402,F401
 
 import numpy as np                                               # noqa: E402
 import cloud_enrich as CE                                        # noqa: E402
+import independent_moderation as IM                              # noqa: E402
 
 FAILURES = []
 DSN = os.environ.get("TEST_PG_DSN", "postgresql://postgres:pw@127.0.0.1:54329/postgres")
@@ -253,6 +254,10 @@ def main():
     print()
     print("8d. a video plays only once the whole of it has been judged")
     videos(out)
+
+    print()
+    print("8g. an independent detector clears every visible still and playable frame")
+    independent(out)
 
     print()
     print("8e. the owner's Personal folder: in when someone he chose is clearly in it")
@@ -858,6 +863,104 @@ def videos(out):
         check("an upload is deleted even when the look fails", "no error", "deleted")
     except RuntimeError:
         check("an upload is deleted even when the look fails", gm.http.log[-1][0], "delete")
+    db.close()
+    shutil.rmtree(tmp, ignore_errors=True)
+
+
+def independent(out):
+    """The second provider is resumable, fail-closed and scoped to site exposure."""
+    db = fresh_db(NAME + "_independent")
+    tmp = tempfile.mkdtemp()
+    movie = os.path.join(tmp, "movie.mp4")
+    clip(movie, 2)
+    rows = [
+        ("i-clear", "id-clear", "photo"),
+        ("i-sexual", "id-sexual", "photo"),
+        ("i-error", "id-error", "photo"),
+        ("i-video", "id-video", "video"),
+        ("i-still", "id-still", "video"),
+    ]
+    for h, fid, media in rows:
+        db.execute("insert into photos (hash, drive_id, media, taken_at) values (%s,%s,%s,'2020-01-01')",
+                   (h, fid, media))
+    db.execute("insert into video_checks (hash, status, mime, seconds) values "
+               "('i-video','ok','video/mp4',2), ('i-still','error',null,2)")
+    db.commit()
+
+    class IndDrive:
+        def __init__(self):
+            self.downloads = 0
+
+        def image(self, fid, px):
+            return ("still:" + fid).encode()
+
+        def download(self, fid, dest, md5=None):
+            self.downloads += 1
+            shutil.copyfile(movie, dest)
+
+    class IndModerator:
+        def __init__(self):
+            self.calls, self.failed = 0, False
+
+        def moderate(self, jpeg):
+            self.calls += 1
+            if jpeg == b"still:id-error" and not self.failed:
+                self.failed = True
+                raise RuntimeError("HTTP 503: private response")
+            sexual = jpeg == b"still:id-sexual"
+            return {"sexual": sexual, "score": 0.99 if sexual else 0.001, "model": IM.MODEL}
+
+    drive, moderator = IndDrive(), IndModerator()
+    with contextlib.redirect_stdout(out):
+        first = IM.Auditor(db, drive, moderator, workers=2).run()
+    status = dict(q(db, "select hash, status from independent_moderation"))
+    check("a second-provider positive is held immediately",
+          q(db, "select hidden, hidden_by from photos where hash = 'i-sexual'")[0],
+          (True, "rule:independent-check"))
+    check("a provider error is open, never counted as clear",
+          (status["i-error"], first["open"] > 0), ("error", True))
+    check("a non-playable video audits its visible still but never downloads the video",
+          (q(db, "select expected_samples from independent_moderation where hash = 'i-still'")[0][0],
+           drive.downloads), (1, 1))
+    expected, checked = q(db, "select expected_samples, checked_samples from independent_moderation "
+                              "where hash = 'i-video'")[0]
+    kinds = [x[0].split(":", 1)[0] for x in q(
+        db, "select sample_key from independent_moderation_samples where hash = 'i-video'")]
+    check("a playable video checks its still and at least one frame per second",
+          (expected == checked and expected >= 3, "still" in kinds, kinds.count("fps") >= 2),
+          (True, True, True))
+
+    before = moderator.calls
+    with contextlib.redirect_stdout(out):
+        second = IM.Auditor(db, drive, moderator, workers=2).run()
+    check("the next run retries the error and sends no cleared sample twice",
+          (moderator.calls - before, second["open"], second["error_items"]), (1, 0, 0))
+
+    class Response:
+        status_code, headers = 200, {}
+
+        def json(self):
+            return {"model": IM.MODEL, "results": [{
+                "categories": {"sexual": True}, "category_scores": {"sexual": 0.8},
+                "category_applied_input_types": {"sexual": ["image"]},
+            }]}
+
+    class Http:
+        def __init__(self):
+            self.calls = 0
+
+        def post(self, *a, **kw):
+            self.calls += 1
+            if self.calls == 1:
+                r = Response()
+                r.status_code = 429
+                return r
+            return Response()
+
+    http = Http()
+    got = IM.OpenAIModerator("not-a-real-key", http=http, backoff=0).moderate(b"jpeg")
+    check("the independent provider retries throttling and reads the image sexual category",
+          (http.calls, got["sexual"], got["score"]), (2, True, 0.8))
     db.close()
     shutil.rmtree(tmp, ignore_errors=True)
 
