@@ -22,11 +22,15 @@ nudity in this".
   the nightly writer only; its id lives in the database (`sync_state`), never here
 - Gemini through the app's own capped key: describing and judging (the writer),
   one embedding per words search (the app)
+- OpenAI image moderation through its own key: an independent, free second
+  opinion over already-visible stills and playable-video frames only
 - the full access inventory, by name only: `web/README.md` "Everything it has access to"
 
 ## Outputs
 - the cloud index (Supabase): photos, faces, clusters, groups, queue, people -
   DERIVED, written by ONE writer, `cloud_enrich.py`, on GitHub Actions daily
+- `independent_moderation` and `independent_moderation_samples`: durable,
+  per-sample evidence for the independent visible-site audit
 - the app's `answers` table: what the family said, the system of record until pulled
 - answers.csv rows under each relative's name, via `ingest_game_answers.py`
 - `D:\_PhotoAudit\app-seed\` (the bundle, holds family names: never published)
@@ -91,6 +95,15 @@ nudity in this".
   it back. The `/video` route streams a video only while `video_checks` says `ok`,
   in pieces of at most 3.5 MB; a format no phone plays keeps its still and costs
   nothing. Migration 0009 holds the states
+- the independent audit never expands the exposure surface: it reads only rows
+  already `visible`, checks the exact 1600px still the site can serve, and checks
+  every playable video's picture at one frame per second plus scene changes. It
+  uses a pinned OpenAI moderation model, separately from the Gemini publication
+  gate. Every sample commits independently; missing frames, malformed answers,
+  provider errors and interrupted work never count as clear. One sexual positive
+  hides the whole item as `rule:independent-check`; only a person may release it.
+  Hidden or held media is never sent to this provider. Migration 0015 holds the
+  evidence, and `.github/workflows/archives-independent-moderation.yml` resumes it
 - a photograph from the owner's Personal folder comes in only when a person he
   ticked is clearly in it (Krish, 2026-10-06); he and his partner never count, so a
   photograph of just them stays out, and with the switch on everyone clearly in it
@@ -181,6 +194,7 @@ nudity in this".
 | file | role |
 |---|---|
 | `stages/13_app/cloud_enrich.py` | THE writer of the index, from Drive alone: classify, hold, embed, place, faces, clusters, groups, queue, people, receipt |
+| `stages/13_app/independent_moderation.py` | resumable independent audit of every visible still and every playable video's one-per-second and scene-change frames; positives hold immediately |
 | `stages/13_app/share_set.py` | the one rule for what may leave the library machine |
 | `stages/13_app/seed_index.py` | the optional BRIDGE for when D: is connected: library knowledge up, with a watermark |
 | `stages/13_app/export_library.py` | the ONE-TIME carry: everything the library learned, into Drive as SQLite, to `LIBRARY-EXPORT.md` |
