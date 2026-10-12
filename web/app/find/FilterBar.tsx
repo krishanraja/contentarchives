@@ -33,7 +33,7 @@ export default function FilterBar({ p, open }: { p: Parsed; open: Pick | null })
     ...p.people.map((n) => pill("who:" + n, "who", n,
       findHref(p, { people: p.people.filter((x) => x !== n) }), `Take ${n} off`)),
     ...(p.place ? [pill("where", "where", p.place, findHref(p, { place: null }), `Take ${p.place} off`)] : []),
-    ...(countryText ? [pill("country", "where", countryText, findHref(p, { country: null }), `Anywhere, not just ${countryText.toLowerCase()}`)] : []),
+    ...(countryText ? [pill("country", "where", countryText, findHref(p, { country: null }), `Anywhere, not just ${p.country === UK ? "in the UK" : p.country === ABROAD ? "abroad" : countryText}`)] : []),
     ...(year ? [pill("when", "when", year, findHref(p, { year: null }), `Any time, not just ${year}`)] : []),
     ...(p.rest ? [pill("say", "say", `“${p.rest}”`, findHref(p, { rest: "" }), `Take the words “${p.rest}” off`)] : []),
   ];

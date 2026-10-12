@@ -193,6 +193,39 @@ test("find photos by a first name, a place and a year", async ({ page }) => {
 // A facet chip carries its count; what it chooses is its label's first part.
 const chosen = async (chip: import("@playwright/test").Locator) => ((await chip.getAttribute("aria-label")) || "").split(",")[0].trim();
 
+test("a person, then UK or abroad: Where offers the country first (Krish, 2026-10-12)", async ({ page }) => {
+  await signIn(page);
+  await page.goto("/find?q=" + encodeURIComponent("Meera Shah"));
+  await expect(page.locator(".sentence")).toContainText("of Meera Shah");
+  await page.click(".dims a:has-text('Where')");
+  await expect(page.locator(".facet-h")).toContainText("Where were the");
+  const uk = page.locator(".facet a.chip", { hasText: "In the UK" });
+  const abroad = page.locator(".facet a.chip", { hasText: "Abroad" });
+  await expect(uk).toBeVisible();
+  await expect(abroad).toBeVisible();
+  await floor(page, "person then where");
+  await abroad.click();
+  await expect(page.locator(".sentence")).toContainText("of Meera Shah abroad");
+  await expect(page.locator(".pill .pill-go", { hasText: "Abroad" })).toBeVisible();
+  // what is shown is the database's own answer, never only the sentence
+  const away = await (await page.request.get("/api/search?q=" + encodeURIComponent("Meera Shah abroad"))).json();
+  const home = await (await page.request.get("/api/search?q=" + encodeURIComponent("Meera Shah UK"))).json();
+  const all = await (await page.request.get("/api/search?q=" + encodeURIComponent("Meera Shah"))).json();
+  expect(away.total).toBeGreaterThan(0);
+  expect(home.total).toBeGreaterThan(0);
+  expect(away.total + home.total).toBeLessThanOrEqual(all.total);
+  for (const c of away.cards) expect(["Goa", "Delhi", "Mumbai", "Sydney"]).toContain(c.place);
+  for (const c of home.cards) expect(["Brighton", "Lake District"]).toContain(c.place);
+  // abroad lists its countries; one of them narrows again
+  await page.click(".dims a:has-text('Where')");
+  await page.locator(".facet a.chip", { hasText: "India" }).click();
+  await expect(page.locator(".sentence")).toContainText("of Meera Shah in India");
+  // ✕ takes the country off, and the person stays
+  await page.click(".pill-off[aria-label*='India']");
+  await expect(page.locator(".sentence")).toContainText("of Meera Shah");
+  await expect(page.locator(".sentence")).not.toContainText(" in ");
+});
+
 test("a person, then a year: the When panel narrows a person's photos to a year", async ({ page }) => {
   await signIn(page);
   await page.goto("/find");
