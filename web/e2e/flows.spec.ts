@@ -98,6 +98,19 @@ test("a phone that said who it is is not asked again; \"Not you?\" changes it", 
   await expect(page.getByRole("heading", { name: "Hello, Grandpa!" })).toBeVisible();
 });
 
+test("a phone named before it was remembered is remembered on its next visit", async ({ page, context }) => {
+  await signIn(page, "Grandma");
+  await context.clearCookies({ name: "arch_me" });            // as if named before arch_me existed
+  await page.goto("/");
+  expect((await context.cookies()).some((c) => c.name === "arch_me")).toBe(true);
+  await context.clearCookies({ name: "arch" });
+  await page.goto("/gate");
+  await page.fill("#code", "sunflower");
+  await page.click("button:has-text('Open')");
+  await page.waitForURL((u) => u.pathname === "/");
+  await expect(page.getByRole("heading", { name: "Hello, Grandma!" })).toBeVisible();
+});
+
 test("a phone asking for the desktop page still gets the phone page", async ({ browser }) => {
   // Krish's phone: 412 px wide, Chrome laying pages out 1,040 px wide ("Desktop site")
   const ctx = await browser.newContext({ viewport: { width: 1040, height: 2253 }, screen: { width: 412, height: 892 },

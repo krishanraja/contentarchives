@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { COOKIE, ME, cookieOptions, sign, verify, verifyMe } from "@/lib/session";
+import { COOKIE, ME, cookieOptions, sign, signMe, verify, verifyMe } from "@/lib/session";
 
 // Every page, API and image is behind the family code. Only the gate itself,
 // robots.txt, the app's icons (a phone fetches them without the cookie) and
@@ -30,6 +30,13 @@ export async function middleware(req: NextRequest) {
       return res;
     }
     if (!api) return NextResponse.redirect(new URL("/who", req.url));
+  }
+  // a phone that named itself before arch_me existed: remember it now, so the
+  // next time the code is typed it is not asked its name again
+  if (s.who && !req.cookies.get(ME)) {
+    const res = NextResponse.next();
+    res.cookies.set(ME, await signMe(s.who), cookieOptions());
+    return res;
   }
   return NextResponse.next();
 }
