@@ -20,7 +20,11 @@ export default function GateForm({ said = "" }: { said?: string }) {
     setBusy(true); setMsg("");
     const r = await fetch("/api/gate", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ code }) }).catch(() => null);
     setBusy(false);
-    if (r?.ok) { window.location.href = "/who"; return; }
+    if (r?.ok) {
+      const { next } = await r.json().catch(() => ({ next: "" }));
+      window.location.href = next === "/" ? "/" : "/who";
+      return;
+    }
     if (r?.status === 429) setMsg("Too many tries. Please wait an hour, or ask Krish.");
     else if (!r) setMsg("No internet connection. Try again in a moment.");
     else setMsg("That's not it. Try again, or ask Krish.");

@@ -41,6 +41,9 @@ into the journal (`pull_answers.py`); the app never waits for it.
   spaces ignored). Wrong tries are counted per hashed IP in `gate_attempts` and
   lock out; a lockout can alert `ALERT_WEBHOOK_URL` if that is set. Then **Who
   are you?** (`/who`): a name kept only in a signed cookie, so answers carry it.
+  The phone also remembers that name in its own signed cookie (`arch_me`, 400
+  days), so typing the code again later goes straight home as the same person;
+  it opens nothing without the code, and "Not ...? Tap here" on Home changes it.
   Every other route is behind both (`middleware.ts`).
 - **Home**: how many photos and videos there are, and three tiles.
 - **Find photos & videos** (`/find`): one search box (typed, or said with the

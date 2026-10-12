@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { COOKIE, verify } from "@/lib/session";
+import { COOKIE, ME, cookieOptions, sign, verify, verifyMe } from "@/lib/session";
 
 // Every page, API and image is behind the family code. Only the gate itself,
 // robots.txt, the app's icons (a phone fetches them without the cookie) and
@@ -18,8 +18,18 @@ export async function middleware(req: NextRequest) {
     if (api) return new NextResponse("sign in first", { status: 401 });
     return NextResponse.redirect(new URL("/gate", req.url));
   }
-  if (!s.who && !api && pathname !== "/who") {
-    return NextResponse.redirect(new URL("/who", req.url));
+  if (!s.who && pathname !== "/who") {
+    // the code is proved but the session has no name: if this phone said who
+    // it is before, carry on as them rather than asking again
+    const who = await verifyMe(req.cookies.get(ME)?.value);
+    if (who) {
+      const token = await sign(who);
+      req.cookies.set(COOKIE, token);                 // this request already sees the name
+      const res = NextResponse.next({ request: { headers: req.headers } });
+      res.cookies.set(COOKIE, token, cookieOptions());
+      return res;
+    }
+    if (!api) return NextResponse.redirect(new URL("/who", req.url));
   }
   return NextResponse.next();
 }

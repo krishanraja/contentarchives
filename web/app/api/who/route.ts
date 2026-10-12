@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { COOKIE, cookieOptions, sign, verify } from "@/lib/session";
+import { COOKIE, ME, cookieOptions, sign, signMe, verify } from "@/lib/session";
 
 export async function POST(req: NextRequest) {
   const form = !(req.headers.get("content-type") || "").includes("application/json");
@@ -18,5 +18,7 @@ export async function POST(req: NextRequest) {
   }
   const res = form ? NextResponse.redirect(new URL("/", req.url), 303) : NextResponse.json({ ok: true });
   res.cookies.set(COOKIE, await sign(who.toLowerCase()), cookieOptions());
+  // and this phone remembers them, past the next time the code is typed
+  res.cookies.set(ME, await signMe(who.toLowerCase()), cookieOptions());
   return res;
 }

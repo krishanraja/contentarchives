@@ -75,6 +75,29 @@ test("with no names set up, it simply asks your name; and a shared phone can cha
   }
 });
 
+test("a phone that said who it is is not asked again; \"Not you?\" changes it", async ({ page, context }) => {
+  await signIn(page, "Grandma");
+  // the session goes (expired, or everyone signed out): the code is asked again, the name is not
+  await context.clearCookies({ name: "arch" });
+  await page.goto("/");
+  await page.waitForURL("**/gate");
+  await page.fill("#code", "sunflower");
+  await page.click("button:has-text('Open')");
+  await page.waitForURL((u) => u.pathname === "/");
+  await expect(page.getByRole("heading", { name: "Hello, Grandma!" })).toBeVisible();
+  // and a shared phone hands over in one tap, remembered from then on
+  await page.click("text=Not Grandma? Tap here");
+  await page.waitForURL("**/who");
+  await page.click("button:has-text('Grandpa')");
+  await page.waitForURL((u) => u.pathname === "/");
+  await context.clearCookies({ name: "arch" });
+  await page.goto("/gate");
+  await page.fill("#code", "sunflower");
+  await page.click("button:has-text('Open')");
+  await page.waitForURL((u) => u.pathname === "/");
+  await expect(page.getByRole("heading", { name: "Hello, Grandpa!" })).toBeVisible();
+});
+
 test("a phone asking for the desktop page still gets the phone page", async ({ browser }) => {
   // Krish's phone: 412 px wide, Chrome laying pages out 1,040 px wide ("Desktop site")
   const ctx = await browser.newContext({ viewport: { width: 1040, height: 2253 }, screen: { width: 412, height: 892 },

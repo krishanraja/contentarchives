@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { sql } from "@/lib/db";
 import { codeMatches, ipHash, lockState } from "@/lib/gate";
-import { COOKIE, cookieOptions, sign } from "@/lib/session";
+import { COOKIE, ME, cookieOptions, sign, verifyMe } from "@/lib/session";
 import { need } from "@/lib/env";
 
 // A tap on "Open" before the page's script has arrived is a plain form post: it
@@ -39,7 +39,11 @@ export async function POST(req: NextRequest) {
     if (form) return back(req, "/gate?e=wrong");
     return NextResponse.json({ ok: false }, { status: 401 });
   }
-  const res = form ? back(req, "/who") : NextResponse.json({ ok: true });
-  res.cookies.set(COOKIE, await sign(), cookieOptions());
+  // A phone that has said who it is before goes straight home, still them;
+  // only a new phone is asked. "Not you?" on the home screen changes it.
+  const who = await verifyMe(req.cookies.get(ME)?.value);
+  const next = who ? "/" : "/who";
+  const res = form ? back(req, next) : NextResponse.json({ ok: true, next });
+  res.cookies.set(COOKIE, await sign(who || undefined), cookieOptions());
   return res;
 }

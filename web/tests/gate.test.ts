@@ -1,6 +1,6 @@
 import { describe, expect, it, beforeAll } from "vitest";
 import { codeMatches, inAppBrowser, lockState, normalise, GLOBAL_FAILURES, PER_IP_FAILURES } from "../lib/gate";
-import { sign, verify } from "../lib/session";
+import { sign, signMe, verify, verifyMe } from "../lib/session";
 
 describe("the family code", () => {
   it("ignores case and spaces", () => {
@@ -49,6 +49,27 @@ describe("the session cookie", () => {
     const t = await sign("grandma");
     process.env.SESSION_VERSION = "2";
     expect(await verify(t)).toBeNull();
+    process.env.SESSION_VERSION = "1";
+  });
+});
+
+describe("the phone remembers who it belongs to", () => {
+  beforeAll(() => { process.env.SESSION_SECRET = "test-secret-0123456789abcdef"; process.env.SESSION_VERSION = "1"; });
+  it("round-trips the name", async () => {
+    expect(await verifyMe(await signMe("grandma"))).toBe("grandma");
+  });
+  it("refuses a forged one", async () => {
+    const t = await signMe("grandma");
+    expect(await verifyMe(t.slice(0, -3) + "abc")).toBeNull();
+  });
+  it("is not a key: the name alone never passes for a session, nor a session for a name", async () => {
+    expect(await verify(await signMe("grandma"))).toBeNull();
+    expect(await verifyMe(await sign("grandma"))).toBeNull();
+  });
+  it("outlives a SESSION_VERSION bump, so signing everyone out does not forget them", async () => {
+    const t = await signMe("grandma");
+    process.env.SESSION_VERSION = "2";
+    expect(await verifyMe(t)).toBe("grandma");
     process.env.SESSION_VERSION = "1";
   });
 });
