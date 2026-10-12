@@ -66,7 +66,7 @@ test("with no names set up, it simply asks your name; and a shared phone can cha
     await expect(page.getByRole("heading", { name: "Hello, Aunty Usha!" })).toBeVisible();
     await floor(page, "home-named");
     await page.click("text=Not Aunty Usha? Tap here");
-    await page.waitForURL("**/who");
+    await page.waitForURL((u) => u.pathname === "/who");
     await page.fill("#me", "Dadi");
     await page.click("button:has-text('That')");
     await expect(page.getByRole("heading", { name: "Hello, Dadi!" })).toBeVisible();
@@ -87,7 +87,7 @@ test("a phone that said who it is is not asked again; \"Not you?\" changes it", 
   await expect(page.getByRole("heading", { name: "Hello, Grandma!" })).toBeVisible();
   // and a shared phone hands over in one tap, remembered from then on
   await page.click("text=Not Grandma? Tap here");
-  await page.waitForURL("**/who");
+  await page.waitForURL((u) => u.pathname === "/who");
   await page.click("button:has-text('Grandpa')");
   await page.waitForURL((u) => u.pathname === "/");
   await context.clearCookies({ name: "arch" });
@@ -109,6 +109,15 @@ test("a phone named before it was remembered is remembered on its next visit", a
   await page.click("button:has-text('Open')");
   await page.waitForURL((u) => u.pathname === "/");
   await expect(page.getByRole("heading", { name: "Hello, Grandma!" })).toBeVisible();
+});
+
+test("reopened from Chrome's history, the code and name screens send a signed-in phone home", async ({ page }) => {
+  await signIn(page, "Grandma");
+  for (const path of ["/gate", "/who"]) {
+    await page.goto(path);
+    await page.waitForURL((u) => u.pathname === "/");
+    await expect(page.getByRole("heading", { name: "Hello, Grandma!" })).toBeVisible();
+  }
 });
 
 test("a phone asking for the desktop page still gets the phone page", async ({ browser }) => {

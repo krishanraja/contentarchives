@@ -35,7 +35,7 @@ export default async function Home() {
       </Link>
       </Squeeze>
       {/* a phone or tablet passed around the family: the next person says who they are */}
-      {who && <Link href="/who" className="btn block quiet" style={{ flex: "none" }}>Not {cap(who)}? Tap here</Link>}
+      {who && <Link href="/who?change" className="btn block quiet" style={{ flex: "none" }}>Not {cap(who)}? Tap here</Link>}
     </main>
   );
 }

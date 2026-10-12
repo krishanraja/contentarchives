@@ -13,7 +13,7 @@ export async function POST(req: NextRequest) {
     : await req.json().catch(() => ({ name: "" }));
   const who = String(name || "").normalize("NFKC").trim().replace(/\s+/g, " ").slice(0, 40);
   if (who.length < 2) {
-    if (form) return NextResponse.redirect(new URL("/who", req.url), 303);
+    if (form) return NextResponse.redirect(new URL("/who?change", req.url), 303);
     return NextResponse.json({ ok: false }, { status: 400 });
   }
   const res = form ? NextResponse.redirect(new URL("/", req.url), 303) : NextResponse.json({ ok: true });

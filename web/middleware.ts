@@ -10,6 +10,17 @@ const OPEN = [/^\/gate$/, /^\/api\/gate$/, /^\/robots\.txt$/, /^\/_next\//,
 
 export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
+  // Chrome offers /gate and /who back from history, since a first visit passes
+  // through both: reopened by a phone that is already in, either one would ask
+  // again for what it already knows. Home instead; only "Not you?" (/who?change)
+  // opens the name screen for someone who has one.
+  if (pathname === "/gate" || pathname === "/who") {
+    const s = await verify(req.cookies.get(COOKIE)?.value);
+    const named = s && (s.who || await verifyMe(req.cookies.get(ME)?.value));
+    if (s && (pathname === "/gate" || (named && !req.nextUrl.searchParams.has("change")))) {
+      return NextResponse.redirect(new URL("/", req.url));
+    }
+  }
   if (OPEN.some((re) => re.test(pathname))) return NextResponse.next();
   const s = await verify(req.cookies.get(COOKIE)?.value);
   const api = pathname.startsWith("/api/") || pathname.startsWith("/img/") || pathname.startsWith("/face/")
