@@ -1,0 +1,73 @@
+name: Archives move
+
+# A one-off copy of the family app's database to a new home (Krish,
+# 2026-10-12: "Yes everyone's in London. Yes let's move it to London"). The
+# app and its database were in Sydney; every tap from London crossed the
+# world twice.
+#
+# It copies everything in the app's own schemas (public, and the record of
+# applied migrations) from the database DATABASE_URL names to the one the
+# source database itself names in its private move_target table (written over
+# the Supabase Management API, so the target's password is never in this
+# public repository, a log, or an input). Then it counts every table on both
+# sides and fails if any count differs.
+#
+# The log carries table names and counts only: a restore error can quote a
+# row, so errors are counted, never printed.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# never at the same time as the nightly writer
+concurrency:
+  group: archives-enrich
+  cancel-in-progress: false
+
+jobs:
+  move:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - name: Postgres 17 tools
+        run: |
+          sudo install -d /usr/share/postgresql-common/pgdg
+          sudo curl -fsS -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc https://www.postgresql.org/media/keys/ACCC4CF8.asc
+          echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" | sudo tee /etc/apt/sources.list.d/pgdg.list >/dev/null
+          sudo apt-get update -qq && sudo apt-get install -y -qq postgresql-client-17 >/dev/null
+      - name: copy and compare
+        env:
+          SRC_URL: ${{ secrets.DATABASE_URL }}
+        run: |
+          set -euo pipefail
+          P=/usr/lib/postgresql/17/bin
+          SRC="${SRC_URL/:6543\//:5432/}"            # the session pooler: pg_dump needs a whole session
+          DST="$($P/psql "$SRC" -Atc "select url from move_target where id = 1")"
+          echo "::add-mask::$DST"
+          case "$DST" in
+            postgresql://postgres.*@aws-0-eu-west-2.pooler.supabase.com:5432/postgres*) ;;
+            *) echo "the move target is not a London session-pooler address"; exit 1 ;;
+          esac
+          if [ "$($P/psql "$DST" -Atc "select count(*) from pg_tables where schemaname = 'public'")" != "0" ]; then
+            echo "the target already has tables: refusing to copy over them"; exit 1
+          fi
+          $P/psql -q "$DST" -c "create extension if not exists vector with schema extensions"
+          $P/pg_dump -Fc --no-owner -n public -n supabase_migrations -T public.move_target "$SRC" -f db.dump
+          echo "dumped $(du -h db.dump | cut -f1)"
+          set +e
+          $P/pg_restore --no-owner -d "$DST" db.dump 2> restore.err
+          code=$?
+          set -e
+          echo "restore exit $code, errors $(grep -c '^pg_restore: error' restore.err || true)"
+          bad=0
+          for t in $($P/psql "$SRC" -Atc "select tablename from pg_tables where schemaname = 'public' and tablename <> 'move_target' order by 1"); do
+            a=$($P/psql "$SRC" -Atc "select count(*) from public.\"$t\"")
+            b=$($P/psql "$DST" -Atc "select count(*) from public.\"$t\"" 2>/dev/null || echo missing)
+            [ "$a" = "$b" ] && s=same || { s=DIFFERENT; bad=1; }
+            echo "$t $a $b $s"
+          done
+          for m in photo_people_mv; do
+            echo "$m $($P/psql "$SRC" -Atc "select count(*) from $m") $($P/psql "$DST" -Atc "select count(*) from $m")"
+          done
+          [ "$bad" = 0 ] && echo "every table matches" || { echo "some tables differ"; exit 1; }
