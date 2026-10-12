@@ -6,6 +6,10 @@
 -- result hides the item immediately. Errors and missing samples never count as
 -- clear, and a killed run resumes from the individual sample it last committed.
 
+alter table snapshots drop constraint if exists snapshots_kind_check;
+alter table snapshots add constraint snapshots_kind_check
+  check (kind in ('seed', 'drive-sync', 'independent-moderation'));
+
 create table if not exists independent_moderation (
   hash               text not null references photos (hash) on delete cascade,
   model              text not null,
