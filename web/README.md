@@ -72,10 +72,10 @@ never written in this public repository.
 | Google Drive | the Communal folder | service account, **Viewer**, that folder | the app (images, video, health check) and the nightly writer |
 | Google Drive | the owner's Personal folder | the same service account, **Viewer**; the folder id is kept in the database (`sync_state`), not in env | the nightly writer only: a Personal photo is shown only while someone the owner chose is clearly in it (migration 0010) |
 | Google Gemini | `gemini-3.1-flash-lite` (describe, judge videos), `gemini-embedding-001` (search by meaning) | the app's own capped key, `GOOGLE_API_KEY_ARCHIVES` | the nightly writer (spend capped per run) and the app (one embedding per words search) |
-| Supabase project "archives" (Sydney) | Postgres: the index and the family's answers | `DATABASE_URL` (transaction pooler) | the app reads and records answers; the writer writes the index |
+| Supabase project "archives-london" (London, eu-west-2; moved from Sydney 2026-10-12) | Postgres: the index and the family's answers | `DATABASE_URL` (transaction pooler) | the app reads and records answers; the writer writes the index |
 | Supabase Storage | private bucket `media`: cut face crops and frames | `SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY` | the app |
-| Vercel project "archives" | hosting, region `syd1`, root `web`, production branch `main` | deploys from GitHub on every push to `main` | the app |
-| GitHub Actions | `.github/workflows/archives-enrich.yml`, nightly 04:17 Brisbane | repository secrets below | the writer, `stages/13_app/cloud_enrich.py` |
+| Vercel project "archives" | hosting, region `lhr1` (London), root `web`, production branch `main` | deploys from GitHub on every push to `main` | the app |
+| GitHub Actions | `.github/workflows/archives-enrich.yml`, nightly 01:17 UTC (overnight in London) | repository secrets below | the writer, `stages/13_app/cloud_enrich.py` |
 
 **The app's environment (Vercel, all "sensitive" ones are write-only and cannot
 be read back, even by the owner):** `DATABASE_URL`, `SUPABASE_URL`,
@@ -121,7 +121,7 @@ TEST_PG_DSN=postgresql://... python tests/test_app_cloud.py   # from the repo ro
   Settings → Secrets and variables → Actions): `DATABASE_URL` (Supabase transaction
   pooler), `GOOGLE_SERVICE_ACCOUNT_JSON`, `GOOGLE_API_KEY_ARCHIVES`,
   `DRIVE_COMMUNAL_FOLDER_ID`. A manual run takes a file budget; the nightly run
-  (04:17 Brisbane) is on, and setting the repository variable `ARCHIVES_ENRICH` to
+  (01:17 UTC) is on, and setting the repository variable `ARCHIVES_ENRICH` to
   `off` pauses it without a commit. Each run stops at `SPEND_CAP_USD` ($60)
   or `MAX_MINUTES`, then still rebuilds the queue and writes a receipt to
   `snapshots` (`kind = 'drive-sync'`: counts, dollars, seconds).

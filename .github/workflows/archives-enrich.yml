@@ -29,13 +29,14 @@
 #   SPEND_CAP   dollars of Gemini per run, from the tokens Gemini reports
 #   MAX_MINUTES GitHub kills a job at 6 h; the worker stops starting work first
 #
-# Cron is UTC: 18:17 UTC is 04:17 Brisbane.
+# Cron is UTC: 01:17 UTC is 02:17 in London in summer, 01:17 in winter -
+# overnight for the family, who are all in London (Krish, 2026-10-12).
 
 name: Archives enrich
 
 on:
   schedule:
-    - cron: "17 18 * * *"
+    - cron: "17 1 * * *"
   workflow_dispatch:
     inputs:
       budget:
