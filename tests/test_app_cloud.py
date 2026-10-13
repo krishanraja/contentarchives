@@ -869,6 +869,9 @@ def videos(out):
 
 def independent(out):
     """The second provider is resumable, fail-closed and scoped to site exposure."""
+    import threading
+    import time
+
     db = fresh_db(NAME + "_independent")
     tmp = tempfile.mkdtemp()
     movie = os.path.join(tmp, "movie.mp4")
@@ -901,14 +904,28 @@ def independent(out):
     class IndModerator:
         def __init__(self):
             self.calls, self.failed = 0, False
+            self.photo_active, self.photo_peak = 0, 0
+            self.lock = threading.Lock()
 
         def moderate(self, jpeg):
-            self.calls += 1
-            if jpeg == b"still:id-error" and not self.failed:
-                self.failed = True
-                raise RuntimeError("HTTP 503: private response")
-            sexual = jpeg == b"still:id-sexual"
-            return {"sexual": sexual, "score": 0.99 if sexual else 0.001, "model": IM.MODEL}
+            is_photo = jpeg in (b"still:id-clear", b"still:id-sexual", b"still:id-error")
+            with self.lock:
+                self.calls += 1
+                if is_photo:
+                    self.photo_active += 1
+                    self.photo_peak = max(self.photo_peak, self.photo_active)
+            try:
+                if is_photo:
+                    time.sleep(0.02)
+                if jpeg == b"still:id-error" and not self.failed:
+                    self.failed = True
+                    raise RuntimeError("HTTP 503: private response")
+                sexual = jpeg == b"still:id-sexual"
+                return {"sexual": sexual, "score": 0.99 if sexual else 0.001, "model": IM.MODEL}
+            finally:
+                if is_photo:
+                    with self.lock:
+                        self.photo_active -= 1
 
     drive, moderator = IndDrive(), IndModerator()
     with contextlib.redirect_stdout(out):
@@ -917,6 +934,8 @@ def independent(out):
     check("a second-provider positive is held immediately",
           q(db, "select hidden, hidden_by from photos where hash = 'i-sexual'")[0],
           (True, "rule:independent-check"))
+    check("independent photographs use the bounded worker pool",
+          moderator.photo_peak >= 2, True)
     check("a provider error is open, never counted as clear",
           (status["i-error"], first["open"] > 0), ("error", True))
     check("a non-playable video audits its visible still but never downloads the video",

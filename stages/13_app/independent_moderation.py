@@ -340,6 +340,52 @@ class Auditor:
             self.moderate_samples(h, samples)
             self.finish(h, media, len(samples))
 
+    def audit_photos(self, rows) -> None:
+        """Fetch and moderate independent stills concurrently, write serially.
+
+        A photo is one sample, so sample-level concurrency inside audit_item()
+        cannot help it. Network work fans out here while every checkpoint and
+        hold is still committed by this thread through the single DB connection.
+        """
+        def look(row):
+            h, fid, _md5, media, _video_status = row
+            try:
+                still = self.drive.image(fid, VIEW_PX)
+                if not still:
+                    return h, media, None, None, True
+                return h, media, self.moderator.moderate(still), None, False
+            except Exception as exc:
+                return h, media, None, exc, False
+
+        with cf.ThreadPoolExecutor(max_workers=self.workers) as pool:
+            pending, it = set(), iter(rows)
+
+            def fill() -> None:
+                while len(pending) < self.workers and not self.time_up() and self.sample_room():
+                    row = next(it, None)
+                    if row is None:
+                        break
+                    pending.add(pool.submit(look, row))
+                    self.samples_started += 1
+
+            fill()
+            while pending:
+                fut = next(cf.as_completed(pending))
+                pending.remove(fut)
+                h, media, result, error, missing = fut.result()
+                if missing:
+                    self.finish(h, media, 1, "no still")
+                    self.counts["errors"] += 1
+                else:
+                    self.record_sample(h, "still", result, error)
+                    self.counts["samples"] += 1
+                    self.finish(h, media, 1)
+                self.counts["items"] += 1
+                if self.counts["items"] % 25 == 0:
+                    CE.say("independent progress", items=self.counts["items"], samples=self.counts["samples"],
+                           held=self.counts["held"], errors=self.counts["errors"])
+                fill()
+
     def coverage(self) -> dict:
         """Current site population, recomputed now rather than from the run's start."""
         row = self.db.execute(
@@ -363,7 +409,10 @@ class Auditor:
         if self.item_limit:
             outstanding = outstanding[:self.item_limit]
         CE.say("independent start", visible=visible, outstanding=len(outstanding))
-        for row in outstanding:
+        photos = [row for row in outstanding if row[3] == "photo"]
+        videos = [row for row in outstanding if row[3] != "photo"]
+        self.audit_photos(photos)
+        for row in videos:
             if self.time_up() or not self.sample_room():
                 break
             self.audit_item(row)
