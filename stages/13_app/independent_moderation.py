@@ -185,11 +185,19 @@ class Auditor:
         return not self.sample_limit or self.samples_started < self.sample_limit
 
     def targets(self):
-        """The site exposure surface, not the archive's hidden population."""
+        """Outstanding site exposure, selected in one database query.
+
+        A per-row status lookup here is invisible in a tiny test database but
+        costs one network round trip for every live item before the first image
+        is checked. Keep the resume filter in Postgres.
+        """
         return self.db.execute(
             "select p.hash, p.drive_id, p.md5, p.media, coalesce(v.status, '') "
             "from photos p left join video_checks v on v.hash = p.hash "
-            "where p.visible order by (p.media = 'photo') desc, p.taken_at desc nulls last, p.hash"
+            "left join independent_moderation i on i.hash = p.hash and i.model = %s "
+            "where p.visible and (i.status is null or i.status not in ('ok','held')) "
+            "order by (p.media = 'photo') desc, p.taken_at desc nulls last, p.hash",
+            (MODEL,),
         ).fetchall()
 
     def existing(self, h: str) -> dict[str, str]:
@@ -350,17 +358,11 @@ class Auditor:
                 "held_total": held, "error_items": errors}
 
     def run(self) -> dict:
-        rows = self.targets()
-        outstanding = []
-        for row in rows:
-            prior = self.db.execute(
-                "select status from independent_moderation where hash = %s and model = %s", (row[0], MODEL)
-            ).fetchone()
-            if not prior or prior[0] not in ("ok", "held"):
-                outstanding.append(row)
+        outstanding = self.targets()
+        visible = int(self.db.execute("select count(*) from photos where visible").fetchone()[0])
         if self.item_limit:
             outstanding = outstanding[:self.item_limit]
-        CE.say("independent start", visible=len(rows), outstanding=len(outstanding))
+        CE.say("independent start", visible=visible, outstanding=len(outstanding))
         for row in outstanding:
             if self.time_up() or not self.sample_room():
                 break

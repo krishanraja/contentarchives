@@ -931,10 +931,25 @@ def independent(out):
           (True, True, True))
 
     before = moderator.calls
+
+    class CountingDB:
+        def __init__(self, inner):
+            self.inner, self.queries = inner, []
+
+        def execute(self, sql, *args, **kwargs):
+            self.queries.append(sql)
+            return self.inner.execute(sql, *args, **kwargs)
+
+        def __getattr__(self, name):
+            return getattr(self.inner, name)
+
+    counted = CountingDB(db)
     with contextlib.redirect_stdout(out):
-        second = IM.Auditor(db, drive, moderator, workers=2).run()
+        second = IM.Auditor(counted, drive, moderator, workers=2).run()
     check("the next run retries the error and sends no cleared sample twice",
           (moderator.calls - before, second["open"], second["error_items"]), (1, 0, 0))
+    check("resume filtering is one set query, never one status lookup per visible item",
+          sum("select status from independent_moderation" in sql.lower() for sql in counted.queries), 0)
 
     class Response:
         status_code, headers = 200, {}
