@@ -9,6 +9,12 @@ duplicate: `docs/rescues/` holds one dated record per source, and
 `docs/LEARNINGS.md` holds the numbered rules in the order they were paid for.
 This log records what the steward did to the documentation and when.
 
+## 2026-10-13
+
+- reconciled at `2544991`: eleven non-steward commits since `5d2cb3b`, all the family app and its workflows. NOW.md gained four "What changed recently" bullets (the move to London, the slow Find screen and learning 81, the remembered name, the independent moderation pass), a "Where it is right now" bullet, and a learnings count of 81 (73 enforced, 8 prose-only, 160 of 160 code files owned), taken from a run of `tests/test_stage_contracts.py` that passed. Its "Read next" line said 77 rules and now says 81.
+- checked and dismissed: `docs/LEARNINGS.md`, `stages/13_app/STAGE.md` and `web/README.md` were updated by the commits that changed the code and agree with it, so none was edited. `docs/HANDOVER.md` and `state/PROGRESS.md` stamps are older than the newest code, unedited for the usual reason (they describe the library, not the app).
+- waiting on Krish: nothing new that the code can settle. Unverified from the tree: that the database copy (`archives-move.yml`) ran and its counts matched, and that the independent moderation audit has completed.
+
 ## 2026-10-11
 
 - reconciled at `5d2cb3b`: five non-steward commits since `2003686`, all the family app (`web/`, migration 0013, `stages/13_app/STAGE.md`, `web/README.md`). The last commit already carried the "What changed recently" bullet and the docs it names, so NOW.md only gained the real commit ids in place of "this commit", the icon commit `17d98fd`, a note that the Playwright suite was not re-run on `5d2cb3b`, and `head` and `as_of`.
