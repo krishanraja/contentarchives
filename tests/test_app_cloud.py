@@ -1001,6 +1001,22 @@ def independent(out):
            IM.error_kind(RuntimeError("HTTP 503: private response")),
            IM.error_kind(RuntimeError("private /path/to/file.mp4"))),
           ("scene_accounting", "md5_mismatch", "http_503", "RuntimeError"))
+
+    # A clip whose one picture arrives at 0.9 s, behind its sound, crosses no
+    # whole second, so the per-second pass decodes nothing from it.
+    import subprocess
+    one = os.path.join(tmp, "one.mp4")
+    late = os.path.join(tmp, "late.mp4")
+    sound = os.path.join(tmp, "sound.m4a")
+    for args in (["-f", "lavfi", "-i", "testsrc=size=160x120:rate=30", "-frames:v", "1",
+                  "-c:v", "libx264", "-pix_fmt", "yuv420p", one],
+                 ["-f", "lavfi", "-i", "sine=duration=1.2", "-c:a", "aac", sound],
+                 ["-itsoffset", "0.9", "-i", one, "-i", sound, "-map", "0:v", "-map", "1:a", "-c", "copy", late]):
+        subprocess.run(["ffmpeg", "-nostdin", "-loglevel", "error", "-y"] + args, check=True, capture_output=True)
+    frames_dir = os.path.join(tmp, "late-frames")
+    os.makedirs(frames_dir)
+    check("a picture between two whole seconds is still a sample",
+          [k for k, _ in IM.extract_video_samples(late, frames_dir)], ["scene:000000000900"])
     db.close()
 
     # Drive renders some playable videos no still. The site still plays them,

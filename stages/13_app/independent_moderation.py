@@ -166,12 +166,10 @@ def extract_video_samples(src: str, out_dir: str) -> list[tuple[str, str]]:
     if r.returncode != 0:
         raise RuntimeError("frame extraction")
     fixed_files = sorted(os.path.join(out_dir, n) for n in os.listdir(out_dir) if n.startswith("fps-"))
-    if not fixed_files:
-        raise RuntimeError("no frames")
 
     scene = os.path.join(out_dir, "scene-%08d.jpg")
     # Keep frame zero so ffmpeg can initialise its image encoder even when a
-    # clip has no scene change at all; it is removed below because fps:00000000
+    # clip has no scene change at all; it is removed below when fps:00000000
     # already covers it.
     svf = "select='eq(n,0)+gt(scene,{})',showinfo,scale='min({},iw)':-2".format(
         SCENE_THRESHOLD, VIEW_PX)
@@ -188,9 +186,13 @@ def extract_video_samples(src: str, out_dir: str) -> list[tuple[str, str]]:
     seen = set()
     for ms, path in zip(times, scene_files):
         # showinfo can repeat a timestamp in unusual streams; one stable key per instant.
-        if ms > 0 and ms not in seen:
+        # A clip whose only picture falls between two whole seconds decodes no
+        # per-second frame at all; its frame zero is then a sample in its own right.
+        if (ms > 0 or not fixed_files) and ms not in seen:
             samples.append(("scene:{:012d}".format(ms), path))
             seen.add(ms)
+    if not samples:
+        raise RuntimeError("no frames")
     return samples
 
 
