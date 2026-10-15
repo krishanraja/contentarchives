@@ -102,6 +102,10 @@ nudity in this".
   gate. Every sample commits independently; missing frames, malformed answers,
   provider errors and interrupted work never count as clear. One sexual positive
   hides the whole item as `rule:independent-check`; only a person may release it.
+  A playable video with no still from Drive or the site's own storage is cleared
+  on its frames alone ("frames only") and looked at again every run in case a
+  still appears; an unplayable one with no still on two runs is withheld as
+  `rule:independent-unverifiable` (Krish, 2026-10-15).
   Hidden or held media is never sent to this provider. Migration 0015 holds the
   evidence, and `.github/workflows/archives-independent-moderation.yml` resumes it
 - a photograph from the owner's Personal folder comes in only when a person he

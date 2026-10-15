@@ -12,6 +12,10 @@ unfinished work as clear. Any sexual positive hides the whole item immediately;
 an error remains an error and never contributes to the cleared count. Hidden or
 otherwise held material is never sent to this provider.
 
+A video with no still anywhere is judged on what the site can show: a playable
+one on every frame (and re-checked each run for a still), an unplayable one
+withheld, since nothing of it can be checked.
+
 The public Actions log contains counts only. Never add a path, Drive id, model
 note, API response body, or content description to it.
 """
