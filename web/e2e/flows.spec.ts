@@ -1,6 +1,7 @@
 import { expect, test } from "@playwright/test";
 import { execSync } from "node:child_process";
-import { db, floor, signIn } from "./helpers";
+import { SignJWT } from "jose";
+import { ADMIN, codeIn, db, floor, letIn, linkIn, mails, nextMail, signIn } from "./helpers";
 
 test.describe.configure({ mode: "serial" });
 
@@ -11,38 +12,97 @@ test.beforeAll(() => {
     DATABASE_URL: process.env.DATABASE_URL || "postgres://postgres:pw@127.0.0.1:54329/arch" } });
 });
 
-test("a wrong code is refused kindly, the right one lets you in", async ({ page }) => {
+test("a new person asks, Krish says yes from his email, and the code emailed to them lets them in", async ({ page, browser }) => {
+  const email = "cousin.tara@family.test";
+  await db`delete from access_sends where kind = 'ask'`;
   await page.goto("/gate");
   await floor(page, "gate");
-  await page.fill("#code", "not it");
+  await page.fill("#email", "Cousin.Tara@Family.test");
+  await page.click("button:has-text('Send me a code')");
+  await expect(page.locator("#name")).toBeVisible();
+  await floor(page, "gate, your name");
+  const asked = mails(ADMIN).length;
+  await page.fill("#name", "Cousin Tara");
+  await page.click("button:has-text('Ask Krish')");
+  await expect(page.getByText("Thank you, Cousin Tara! Krish has been asked.")).toBeVisible();
+  await floor(page, "gate, asked");
+  expect((await db`select status from access_people where email = ${email}`)[0].status).toBe("asked");
+  // Krish's email, opened on his own phone: one tap says yes
+  const ask = await nextMail(ADMIN, asked);
+  expect(ask.subject).toBe("Cousin Tara would like to see the Family Archives");
+  const krish = await browser.newContext();
+  const kp = await krish.newPage();
+  await kp.goto(linkIn(ask));
+  await expect(kp.getByRole("heading", { name: "Cousin Tara would like to come in" })).toBeVisible();
+  await floor(kp, "approve");
+  const before = mails(email).length;
+  await kp.click("button:has-text('Yes, let Cousin Tara in')");
+  await expect(kp.getByRole("heading", { name: "Cousin Tara can come in" })).toBeVisible();
+  await krish.close();
+  // back on Tara's phone later: it carries on at the code
+  const yes = await nextMail(email, before);
+  expect(yes.subject).toMatch(/^Krish said yes! Your Family Archives code is \d{6}$/);
+  await page.goto("/gate");
+  await expect(page.locator("#code")).toBeVisible();
+  await floor(page, "gate, the code");
+  await page.fill("#code", codeIn(yes) === "000000" ? "111111" : "000000");
   await page.click("button:has-text('Open')");
-  await expect(page.getByText("That's not it")).toBeVisible();
-  await page.fill("#code", "  Sunflower ");
+  await expect(page.getByText("That's not the code")).toBeVisible();
+  await page.fill("#code", codeIn(yes).replace(/^(\d{3})/, "$1 "));        // typed with a space in the middle
   await page.click("button:has-text('Open')");
-  await page.waitForURL("**/who");
-  await floor(page, "who");
-  await page.click("button:has-text('Grandma')");
   await page.waitForURL((u) => u.pathname === "/");
-  await expect(page.getByRole("heading", { name: "Hello, Grandma!" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Hello, Cousin Tara!" })).toBeVisible();
   await floor(page, "home");
+  // signed in for a year, and the email typed is no longer carried
+  const jar = await page.context().cookies();
+  expect(jar.find((c) => c.name === "arch")!.expires * 1000 - Date.now()).toBeGreaterThan(364 * 86400_000);
+  expect(jar.some((c) => c.name === "arch_ask")).toBe(false);
 });
 
-test("the code and a name work before the page's script has arrived", async ({ browser }) => {
+test("opening Krish's link decides nothing: only a tap on its page does", async ({ page, request }) => {
+  const email = "uncle.raj@family.test";
+  const theirs = mails(email).length;
+  await db`delete from access_sends where kind = 'ask'`;
+  await page.goto("/gate");
+  await page.fill("#email", email);
+  await page.click("button:has-text('Send me a code')");
+  const asked = mails(ADMIN).length;
+  await page.fill("#name", "Uncle Raj");
+  await page.click("button:has-text('Ask Krish')");
+  const link = linkIn(await nextMail(ADMIN, asked));
+  // a mail scanner opens every link in an email, more than once
+  for (let i = 0; i < 3; i++) expect((await request.get(link)).status()).toBe(200);
+  expect((await db`select status from access_people where email = ${email}`)[0].status).toBe("asked");
+  expect(mails(email)).toHaveLength(theirs);
+  // Krish says no: they are told kindly, and no code is ever sent
+  await page.goto(link);
+  await page.getByRole("button", { name: "No", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "You said no to Uncle Raj" })).toBeVisible();
+  await page.goto("/gate");
+  await expect(page.getByText("Please speak to Krish about getting in.")).toBeVisible();
+  expect(mails(email)).toHaveLength(theirs);
+  // a mangled link opens nothing
+  await page.goto(link.slice(0, -4) + "abcd");
+  await expect(page.getByText("This link has run out")).toBeVisible();
+});
+
+test("signing in works before the page's script has arrived", async ({ browser }) => {
   // a slow phone: the page is on screen, the script is not - every tap must still work
   const ctx = await browser.newContext({ javaScriptEnabled: false });
   const page = await ctx.newPage();
+  const email = await letIn("Aunty Usha");
+  const before = mails(email).length;
   await page.goto("/gate");
-  await page.fill("#code", "wrong");
+  await page.fill("#email", email);
+  await page.click("button:has-text('Send me a code')");
+  await expect(page.locator("#code")).toBeVisible();
+  await page.fill("#code", "000000");
   await page.click("button:has-text('Open')");
-  await expect(page.getByText("That's not it")).toBeVisible();
-  await page.fill("#code", "sunflower");
+  await expect(page.getByText("That's not the code")).toBeVisible();
+  await page.fill("#code", codeIn(await nextMail(email, before)));
   await page.click("button:has-text('Open')");
-  await page.waitForURL("**/who");
-  await page.click("summary:has-text('Someone else')");
-  await page.fill("#me", "Cousin Tara");
-  await page.click("button:has-text('That')");
   await page.waitForURL((u) => u.pathname === "/");
-  await expect(page.getByRole("heading", { name: "Hello, Cousin Tara!" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Hello, Aunty Usha!" })).toBeVisible();
   await page.goto("/find");
   await page.fill("#q", "Asha");
   await page.click("button:has-text('Search')");
@@ -50,23 +110,127 @@ test("the code and a name work before the page's script has arrived", async ({ b
   await ctx.close();
 });
 
-test("with no names set up, it simply asks your name; and a shared phone can change person", async ({ page }) => {
+test("a code tried wrong too many times stops working, and Send again brings a new one", async ({ page }) => {
+  const email = await letIn("Grandpa");
+  const before = mails(email).length;
+  await page.goto("/gate");
+  await page.fill("#email", email);
+  await page.click("button:has-text('Send me a code')");
+  const first = codeIn(await nextMail(email, before));
+  // a second code straight away is held back a minute, while the first is on its way
+  await page.click("button:has-text('Send again')");
+  await expect(page.getByText("We sent you a code a moment ago")).toBeVisible();
+  expect(mails(email)).toHaveLength(before + 1);
+  const wrong = first === "000000" ? "111111" : "000000";
+  for (let i = 1; i <= 5; i++) {
+    await page.fill("#code", wrong);
+    await page.click("button:has-text('Open')");
+    await expect(page.getByText(i < 5 ? "That's not the code" : "Too many wrong tries")).toBeVisible();
+  }
+  await page.fill("#code", first);                       // the right code, too late: it no longer works, and says so
+  await page.click("button:has-text('Open')");
+  await expect(page.getByText("Too many wrong tries")).toBeVisible();
+  // with no code left working there is no minute's wait: Send again brings one at once
+  const again = mails(email).length;
+  await page.click("button:has-text('Send again')");
+  await expect(page.getByText("We've emailed you a code")).toBeVisible();
+  await page.fill("#code", codeIn(await nextMail(email, again)));
+  await page.click("button:has-text('Open')");
+  await page.waitForURL((u) => u.pathname === "/");
+  await expect(page.getByRole("heading", { name: "Hello, Grandpa!" })).toBeVisible();
+  await db`delete from gate_attempts`;                   // leave the next tests their full allowance of wrong tries
+});
+
+test("a burst of requests sent at once meets every limit one at a time", async ({ playwright }) => {
+  const base = process.env.BASE_URL || "http://localhost:3000";
+  const as = async () => playwright.request.newContext({ baseURL: base });
+  const where = (r: { headers(): Record<string, string> }) => r.headers().location || "";
+  // guesses: a try is taken before a code is looked at, so twelve at once test five
+  const email = await letIn("Grandpa");
+  const g = await as();
+  await g.post("/api/access", { form: { op: "start", email }, maxRedirects: 0 });
+  const guesses = await Promise.all(Array.from({ length: 12 }, () =>
+    g.post("/api/access", { form: { op: "code", code: "999999" }, maxRedirects: 0 })));
+  expect(guesses.filter((r) => where(r).endsWith("/")).length).toBe(0);
+  expect(guesses.filter((r) => where(r).includes("e=wrong")).length).toBeLessThanOrEqual(4);
+  expect((await db`select tries from access_people where email = ${email}`)[0].tries).toBe(5);
+  await g.dispose();
+  await db`delete from gate_attempts`;
+  // codes: five asks at once for the same address send one email
+  const c = await as();
+  await letIn("Grandpa");
+  await db`update access_codes set used_at = now() where email = ${email}`;
+  const sent = mails(email).length;
+  await Promise.all(Array.from({ length: 5 }, () => c.post("/api/access", { form: { op: "start", email }, maxRedirects: 0 })));
+  await nextMail(email, sent);
+  await new Promise((r) => setTimeout(r, 500));
+  expect(mails(email)).toHaveLength(sent + 1);
+  await c.dispose();
+  // asks to Krish: eight new people at once from one network, five reach him
+  await db`delete from access_sends where kind = 'ask'`;
+  const asked = mails(ADMIN).length;
+  const people = await Promise.all(Array.from({ length: 8 }, async (_, i) => {
+    const ctx = await as();
+    await ctx.post("/api/access", { form: { op: "start", email: `burst.${i}@family.test` }, maxRedirects: 0 });
+    return ctx;
+  }));
+  const asks = await Promise.all(people.map((ctx, i) => ctx.post("/api/access", { form: { op: "ask", name: `Burst ${i}` }, maxRedirects: 0 })));
+  await new Promise((r) => setTimeout(r, 500));
+  expect(mails(ADMIN).length - asked).toBe(5);
+  expect(asks.filter((r) => where(r).includes("e=busy")).length).toBe(3);
+  for (const ctx of people) await ctx.dispose();
+  await db`delete from access_sends where kind = 'ask'`;
+});
+
+test("still waiting days later, Krish is asked again", async ({ page }) => {
+  const email = "cousin.dev@family.test";
+  await db`delete from access_sends where kind = 'ask'`;
+  await page.goto("/gate");
+  await page.fill("#email", email);
+  await page.click("button:has-text('Send me a code')");
+  let asked = mails(ADMIN).length;
+  await page.fill("#name", "Cousin Dev");
+  await page.click("button:has-text('Ask Krish')");
+  await nextMail(ADMIN, asked);
+  // the same day: still waiting, Krish is not asked twice
+  asked = mails(ADMIN).length;
+  await page.click("button:has-text('Use a different email')");
+  await page.fill("#email", email);
+  await page.click("button:has-text('Send me a code')");
+  await expect(page.getByText("Krish hasn't said yes yet.")).toBeVisible();
+  expect(mails(ADMIN)).toHaveLength(asked);
+  // four days on, his email may have gone astray: typing the address asks him again
+  await db`update access_sends set at = now() - interval '4 days' where kind = 'ask' and email = ${email}`;
+  await page.click("button:has-text('Use a different email')");
+  await page.fill("#email", email);
+  await page.click("button:has-text('Send me a code')");
+  expect((await nextMail(ADMIN, asked)).subject).toBe("Cousin Dev would like to see the Family Archives");
+  await expect(page.getByText("We've asked Krish again.")).toBeVisible();
+});
+
+test("the family code opens nothing any more", async ({ request }) => {
+  const old = await request.post("/api/gate", { form: { code: "sunflower" }, maxRedirects: 0 });
+  expect(old.status()).toBe(401);
+  for (const [form, said] of [[{ op: "code", code: "sunflower" }, null], [{ op: "start", email: "sunflower" }, "e=email"]] as const) {
+    const r = await request.post("/api/access", { form, maxRedirects: 0 });
+    expect(r.status()).toBe(303);
+    if (said) expect(r.headers().location).toContain(said);
+    expect(r.headers()["set-cookie"] || "").not.toMatch(/(^|[\s,])arch=/);
+  }
+  expect((await request.get("/", { maxRedirects: 0 })).status()).toBe(307);
+});
+
+test("with no names set up, \"Not you?\" simply asks your name", async ({ page }) => {
   const saved = await db`select name, sort from players`;
   await db`delete from players`;
   try {
-    await page.goto("/gate");
-    await page.fill("#code", "sunflower");
-    await page.click("button:has-text('Open')");
-    await page.waitForURL("**/who");
-    await expect(page.getByRole("heading", { name: "Hello! What's your name?" })).toBeVisible();
-    await expect(page.locator("summary")).toHaveCount(0);           // no extra tap to reach the box
-    await page.fill("#me", "Aunty Usha");
-    await page.click("button:has-text('That')");
-    await page.waitForURL((u) => u.pathname === "/");
+    await signIn(page, "Aunty Usha");
     await expect(page.getByRole("heading", { name: "Hello, Aunty Usha!" })).toBeVisible();
     await floor(page, "home-named");
     await page.click("text=Not Aunty Usha? Tap here");
     await page.waitForURL((u) => u.pathname === "/who");
+    await expect(page.getByRole("heading", { name: "Hello! What's your name?" })).toBeVisible();
+    await expect(page.locator("summary")).toHaveCount(0);           // no extra tap to reach the box
     await page.fill("#me", "Dadi");
     await page.click("button:has-text('That')");
     await expect(page.getByRole("heading", { name: "Hello, Dadi!" })).toBeVisible();
@@ -75,26 +239,20 @@ test("with no names set up, it simply asks your name; and a shared phone can cha
   }
 });
 
-test("a phone that said who it is is not asked again; \"Not you?\" changes it", async ({ page, context }) => {
+test("signing in again brings your name with your email; \"Not you?\" hands a shared phone over", async ({ page, context }) => {
   await signIn(page, "Grandma");
-  // the session goes (expired, or everyone signed out): the code is asked again, the name is not
+  // the session goes (a year unused, or everyone signed out): the email brings the name back
   await context.clearCookies({ name: "arch" });
   await page.goto("/");
   await page.waitForURL("**/gate");
-  await page.fill("#code", "sunflower");
-  await page.click("button:has-text('Open')");
-  await page.waitForURL((u) => u.pathname === "/");
+  await signIn(page, "Grandma");
   await expect(page.getByRole("heading", { name: "Hello, Grandma!" })).toBeVisible();
   // and a shared phone hands over in one tap, remembered from then on
   await page.click("text=Not Grandma? Tap here");
   await page.waitForURL((u) => u.pathname === "/who");
   await page.click("button:has-text('Grandpa')");
   await page.waitForURL((u) => u.pathname === "/");
-  await context.clearCookies({ name: "arch" });
-  await page.goto("/gate");
-  await page.fill("#code", "sunflower");
-  await page.click("button:has-text('Open')");
-  await page.waitForURL((u) => u.pathname === "/");
+  await page.goto("/");
   await expect(page.getByRole("heading", { name: "Hello, Grandpa!" })).toBeVisible();
 });
 
@@ -103,12 +261,33 @@ test("a phone named before it was remembered is remembered on its next visit", a
   await context.clearCookies({ name: "arch_me" });            // as if named before arch_me existed
   await page.goto("/");
   expect((await context.cookies()).some((c) => c.name === "arch_me")).toBe(true);
-  await context.clearCookies({ name: "arch" });
-  await page.goto("/gate");
-  await page.fill("#code", "sunflower");
-  await page.click("button:has-text('Open')");
-  await page.waitForURL((u) => u.pathname === "/");
+});
+
+test("a year counts from the last visit: an emailed-code session days old is signed again for a whole year", async ({ page, context }) => {
+  const secret = process.env.SESSION_SECRET;
+  expect(secret, "run the e2e suite with the app's .env.local loaded, so it can sign an old session").toBeTruthy();
+  const then = Math.floor(Date.now() / 1000) - 3 * 86400;
+  const old = await new SignJWT({ v: process.env.SESSION_VERSION || "1", who: "grandma", via: "email" })
+    .setProtectedHeader({ alg: "HS256" }).setIssuedAt(then).setExpirationTime(then + 365 * 86400)
+    .sign(new TextEncoder().encode(secret));
+  await context.addCookies([{ name: "arch", value: old, url: process.env.BASE_URL || "http://localhost:3000" }]);
+  await page.goto("/");
   await expect(page.getByRole("heading", { name: "Hello, Grandma!" })).toBeVisible();
+  const arch = (await context.cookies()).find((c) => c.name === "arch")!;
+  expect(arch.value).not.toBe(old);
+  const iat = JSON.parse(Buffer.from(arch.value.split(".")[1], "base64url").toString()).iat;
+  expect(Math.abs(iat - Date.now() / 1000)).toBeLessThan(120);
+  expect(arch.expires * 1000 - Date.now()).toBeGreaterThan(364 * 86400_000);
+  // a session from the retired family code is left with the end it was given
+  const fam = await new SignJWT({ v: process.env.SESSION_VERSION || "1", who: "grandma" })
+    .setProtectedHeader({ alg: "HS256" }).setIssuedAt(then).setExpirationTime(then + 400 * 86400)
+    .sign(new TextEncoder().encode(secret));
+  await context.clearCookies();
+  await context.addCookies([{ name: "arch", value: fam, url: process.env.BASE_URL || "http://localhost:3000" },
+    { name: "arch_me", value: "x", url: process.env.BASE_URL || "http://localhost:3000" }]);
+  await page.goto("/");
+  await expect(page.getByRole("heading", { name: "Hello, Grandma!" })).toBeVisible();
+  expect((await context.cookies()).find((c) => c.name === "arch")!.value).toBe(fam);
 });
 
 test("reopened from Chrome's history, the code and name screens send a signed-in phone home", async ({ page }) => {
@@ -146,15 +325,15 @@ test("a phone asking for the desktop page still gets the phone page", async ({ b
   }
 });
 
-test("nothing is reachable without the code", async ({ request }) => {
+test("nothing is reachable without signing in", async ({ request }) => {
   for (const u of ["/", "/find", "/api/search?q=a", `/img/t/${"0".repeat(63)}1`, "/api/face/next"]) {
     const r = await request.get(u, { maxRedirects: 0 });
     expect([307, 401], u).toContain(r.status());
   }
 });
 
-test("the app's icon shows everywhere, even before the code is typed", async ({ request, page }) => {
-  // a phone fetches its home-screen icon without the cookie: behind the gate it would be blank
+test("the app's icon shows everywhere, even before signing in", async ({ request, page }) => {
+  // a phone fetches its home-screen icon without the cookie: behind sign-in it would be blank
   for (const [u, type] of [["/favicon.ico", "image/"], ["/icon.svg", "image/svg+xml"], ["/apple-icon.png", "image/png"],
     ["/icon-192.png", "image/png"], ["/icon-maskable-512.png", "image/png"], ["/manifest.webmanifest", "manifest"]]) {
     const r = await request.get(u, { maxRedirects: 0 });

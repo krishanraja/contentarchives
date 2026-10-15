@@ -1,5 +1,5 @@
 // Every secret by symbolic name, read at request time. A missing one stops
-// loudly: a gate whose code is "" would let anyone in.
+// loudly: a secret quietly read as "" would sign sessions anyone could forge.
 export function need(name: string): string {
   const v = process.env[name];
   if (!v) throw new Error(`missing environment variable ${name}`);

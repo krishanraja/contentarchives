@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
-import { COOKIE, ME, cookieOptions, sign, signMe, verify, verifyMe } from "@/lib/session";
+import { COOKIE, ME, cookieOptions, sign, signMe, stale, verify, verifyMe } from "@/lib/session";
 
-// Every page, API and image is behind the family code. Only the gate itself,
-// robots.txt, the app's icons (a phone fetches them without the cookie) and
-// the build's own assets are not. The cron route checks its
-// own secret instead.
-const OPEN = [/^\/gate$/, /^\/api\/gate$/, /^\/robots\.txt$/, /^\/_next\//,
+// Every page, API and image is behind signing in. Only the sign-in screen and
+// its form, Krish's yes-or-no page, robots.txt, the app's icons (a phone
+// fetches them without the cookie) and the build's own assets are not. The
+// cron route checks its own secret instead.
+const OPEN = [/^\/gate$/, /^\/api\/access$/, /^\/approve$/, /^\/robots\.txt$/, /^\/_next\//,
   /^\/favicon/, /^\/icon/, /^\/apple-icon/, /^\/api\/cron\//, /^\/manifest/];
 
 export async function middleware(req: NextRequest) {
@@ -30,11 +30,11 @@ export async function middleware(req: NextRequest) {
     return NextResponse.redirect(new URL("/gate", req.url));
   }
   if (!s.who && pathname !== "/who") {
-    // the code is proved but the session has no name: if this phone said who
-    // it is before, carry on as them rather than asking again
+    // signed in but the session has no name: if this phone said who it is
+    // before, carry on as them rather than asking again
     const who = await verifyMe(req.cookies.get(ME)?.value);
     if (who) {
-      const token = await sign(who);
+      const token = await sign(who, s.via);
       req.cookies.set(COOKIE, token);                 // this request already sees the name
       const res = NextResponse.next({ request: { headers: req.headers } });
       res.cookies.set(COOKIE, token, cookieOptions());
@@ -42,14 +42,19 @@ export async function middleware(req: NextRequest) {
     }
     if (!api) return NextResponse.redirect(new URL("/who", req.url));
   }
-  // a phone that named itself before arch_me existed: remember it now, so the
-  // next time the code is typed it is not asked its name again
-  if (s.who && !req.cookies.get(ME)) {
-    const res = NextResponse.next();
-    res.cookies.set(ME, await signMe(s.who), cookieOptions());
-    return res;
+  const res = NextResponse.next();
+  // A year from the LAST visit (Krish, 2026-10-15): an emailed-code session
+  // over a day old is signed again, so only a phone left unused for a whole
+  // year signs out.
+  if (stale(s)) {
+    res.cookies.set(COOKIE, await sign(s.who, s.via), cookieOptions());
+    const me = await verifyMe(req.cookies.get(ME)?.value);
+    if (me) res.cookies.set(ME, await signMe(me), cookieOptions());
   }
-  return NextResponse.next();
+  // a phone that named itself before arch_me existed: remember it now, so the
+  // next time it signs in it is not asked its name again
+  if (s.who && !req.cookies.get(ME)) res.cookies.set(ME, await signMe(s.who), cookieOptions());
+  return res;
 }
 
 export const config = { matcher: "/:path*" };

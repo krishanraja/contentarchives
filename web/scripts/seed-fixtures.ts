@@ -51,7 +51,8 @@ const hex = (n: number) => n.toString(16).padStart(64, "0");
 async function main() {
   await fs.mkdir(OUT, { recursive: true });
   await db`truncate photos, held, clusters, cluster_hashes, faces, people, queue, players,
-           answers, skips, gate_attempts, snapshots, sync_state, video_checks cascade`;
+           answers, skips, gate_attempts, snapshots, sync_state, video_checks,
+           access_people, access_codes, access_sends cascade`;
   await db`insert into players ${db([{ name: "Grandma", sort: 1 }, { name: "Grandpa", sort: 2 }, { name: "Auntie Meera", sort: 3 }])}`;
 
   const W = 1200, H = 900;

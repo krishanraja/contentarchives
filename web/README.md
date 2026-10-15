@@ -37,14 +37,35 @@ into the journal (`pull_answers.py`); the app never waits for it.
 
 ## What it does, screen by screen
 
-- **Gate** (`/gate`): one family code for everyone (`ACCESS_CODE`, case and
-  spaces ignored). Wrong tries are counted per hashed IP in `gate_attempts` and
-  lock out; a lockout can alert `ALERT_WEBHOOK_URL` if that is set. Then **Who
-  are you?** (`/who`): a name kept only in a signed cookie, so answers carry it.
-  The phone also remembers that name in its own signed cookie (`arch_me`, 400
-  days), so typing the code again later goes straight home as the same person;
-  it opens nothing without the code, and "Not ...? Tap here" on Home changes it.
-  Every other route is behind both (`middleware.ts`).
+- **Signing in** (`/gate`, since 2026-10-15; the shared family code no longer
+  lets anyone new in): a person types their email. Someone Krish has said yes
+  to is emailed a six-digit code (good for 30 minutes) and types it. Someone
+  new is asked their first name, and Krish (`ACCESS_ADMIN_EMAIL`) is emailed a
+  link to **Krish's page** (`/approve`), which only shows the question: a mail
+  scanner opening the link decides nothing. His tap on Yes emails
+  them a code good for 3 days; No tells them, kindly, to speak to him. Krish's
+  own address is let straight in. Every step is a plain form posted to
+  `/api/access`, so it works before the page's script arrives, and the email
+  typed is kept in a signed cookie (`arch_ask`, 30 days), so a phone that comes
+  back after Krish says yes carries on at the code. Addresses and names live
+  only in the database (`access_people`, migration 0016); a code is kept only as
+  a hash keyed by `SESSION_SECRET` (`access_codes`). Every cap is checked and
+  recorded in one transaction that holds a lock, so a burst of requests sent
+  at once meets it one at a time: a code a minute (unless none still works)
+  and six an hour per address, thirty an hour per network and two hundred in
+  all; at most two codes working at once; five wrong tries, after which every
+  code for that address stops until a new one is sent; five asks to Krish an
+  hour per network and thirty a day in all (`access_sends`). Someone still
+  waiting three days on who types their email again asks Krish again. Wrong
+  codes still count per hashed IP in `gate_attempts` and lock out, and a
+  lockout can alert `ALERT_WEBHOOK_URL`. Signed in by email, a phone stays in
+  for **a year from its last visit**: `middleware.ts` signs the session again
+  once it is a day old (a session from the retired family code carries no
+  `via` and keeps the end it was given). The
+  name comes with the email; **Who are you?** (`/who`) is now reached by "Not
+  ...? Tap here" on Home, for a phone passed round the family, and the phone
+  remembers that name in its own signed cookie (`arch_me`). Every other route is
+  behind signing in (`middleware.ts`).
 - **Home**: how many photos and videos there are, and three tiles.
 - **Find photos & videos** (`/find`): one search box (typed, or said with the
   phone browser's own speech recognition where it has one), All / Photos /
@@ -64,8 +85,8 @@ into the journal (`pull_answers.py`); the app never waits for it.
 
 ## Everything it has access to
 
-Names only. Values, ids, the family code and the project's identifiers are
-never written in this public repository.
+Names only. Values, ids, the family's email addresses and the project's
+identifiers are never written in this public repository.
 
 | System | What | Access | Used by |
 |---|---|---|---|
@@ -74,15 +95,17 @@ never written in this public repository.
 | Google Gemini | `gemini-3.1-flash-lite` (describe, judge videos), `gemini-embedding-001` (search by meaning) | the app's own capped key, `GOOGLE_API_KEY_ARCHIVES` | the nightly writer (spend capped per run) and the app (one embedding per words search) |
 | Supabase project "archives-london" (London, eu-west-2; moved from Sydney 2026-10-12) | Postgres: the index and the family's answers | `DATABASE_URL` (transaction pooler) | the app reads and records answers; the writer writes the index |
 | Supabase Storage | private bucket `media`: cut face crops and frames | `SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY` | the app |
+| Resend | sends the sign-in codes and Krish's "someone would like to come in" emails, from a verified krishraja.com address | `RESEND_API_KEY` (sending only), `MAIL_FROM` | the app (`web/lib/mail.ts`) |
 | Vercel project "archives" | hosting, region `lhr1` (London), root `web`, production branch `main` | deploys from GitHub on every push to `main` | the app |
 | GitHub Actions | `.github/workflows/archives-enrich.yml`, nightly 01:17 UTC (overnight in London) | repository secrets below | the writer, `stages/13_app/cloud_enrich.py` |
 
 **The app's environment (Vercel, all "sensitive" ones are write-only and cannot
 be read back, even by the owner):** `DATABASE_URL`, `SUPABASE_URL`,
-`SUPABASE_SERVICE_ROLE_KEY`, `ACCESS_CODE`, `SESSION_SECRET`, `SESSION_VERSION`,
+`SUPABASE_SERVICE_ROLE_KEY`, `SESSION_SECRET`, `SESSION_VERSION`,
+`RESEND_API_KEY`, `MAIL_FROM`, `ACCESS_ADMIN_EMAIL`,
 `IMAGE_SOURCE=drive`, `GOOGLE_SERVICE_ACCOUNT_JSON`, `DRIVE_COMMUNAL_FOLDER_ID`,
 `DRIVE_REL_PREFIX`, `GOOGLE_API_KEY_ARCHIVES`, `CRON_SECRET`; optional
-`ALERT_WEBHOOK_URL`.
+`ALERT_WEBHOOK_URL`. (`ACCESS_CODE`, the retired family code, is no longer read.)
 
 **The writer's secrets (GitHub Actions):** `DATABASE_URL`,
 `GOOGLE_SERVICE_ACCOUNT_JSON`, `GOOGLE_API_KEY_ARCHIVES`,
@@ -105,10 +128,12 @@ npm install
 # a local Postgres 16 with pgvector, then the shim and EVERY migration in order:
 psql -f supabase/test/shim.sql
 for m in supabase/migrations/*.sql; do psql -v ON_ERROR_STOP=1 -f "$m"; done
-cp .env.example .env.local      # DATABASE_URL, ACCESS_CODE, SESSION_SECRET, IMAGE_SOURCE=fixture
+cp .env.example .env.local      # DATABASE_URL, SESSION_SECRET, IMAGE_SOURCE=fixture, and for sign-in:
+                                 # MAIL_SINK=/tmp/archives-mail.jsonl, ACCESS_ADMIN_EMAIL=admin@family.test
 npm run seed:fixtures            # cartoon photos of made-up people - never real ones
 npm run dev
-npm test                         # vitest: parser, facets' links, gate, cookie, nudity-rule parity, prompt drift
+npm test                         # vitest: parser, facets' links, sign-in, cookies, nudity-rule parity, prompt drift
+set -a; . ./.env.local; set +a   # the e2e suite reads the emailed codes from MAIL_SINK and signs an old session
 npm run e2e                      # Playwright at 360 / 390 / 430 px: floor, axe, every flow vs the stored row;
                                  # noscroll.spec.ts walks every screen at 19 sizes
 # the database side, against the same local Postgres:
@@ -129,7 +154,7 @@ TEST_PG_DSN=postgresql://... python tests/test_app_cloud.py   # from the repo ro
   name, description or folder id may reach it; `tests/test_app_cloud.py` fails if one does.
 - **The app**: Vercel project `archives`, root `web`, production branch `main`.
   Environment, by name only: `DATABASE_URL`, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`,
-  `ACCESS_CODE`, `SESSION_SECRET`, `SESSION_VERSION`, `IMAGE_SOURCE=drive`,
+  `SESSION_SECRET`, `SESSION_VERSION`, `RESEND_API_KEY`, `MAIL_FROM`, `ACCESS_ADMIN_EMAIL`, `IMAGE_SOURCE=drive`,
   `GOOGLE_SERVICE_ACCOUNT_JSON`, `DRIVE_COMMUNAL_FOLDER_ID`, `DRIVE_REL_PREFIX`,
   `GOOGLE_API_KEY_ARCHIVES`, `CRON_SECRET`.
 - **Health check** (read-only): `GET /api/cron/drive-sync` with
@@ -148,6 +173,12 @@ TEST_PG_DSN=postgresql://... python tests/test_app_cloud.py   # from the repo ro
   releases a genuine family moment, per file, with `share = yes`.
 - Anyone can tap **This photo shouldn't be here**: it is hidden for everyone at
   once. Bring one back in the database: `update photos set hidden = false where hash = '...'`.
-- Change the code: set `ACCESS_CODE` and bump `SESSION_VERSION` - everyone signs in again.
+- Who can get in: Krish says yes or no from the link in each "would like to see
+  the Family Archives" email. To let someone in without asking them, add their
+  row: `insert into access_people (email, name, status, decided_at) values
+  ('their address, lower case', 'First name', 'yes', now())`; they then type their
+  email and get a code. To stop someone signing in again: `update access_people
+  set status = 'no' where email = '...'`. A phone already signed in stays in
+  until it goes a year unused; to sign every phone out, bump `SESSION_VERSION`.
 - Answers live in `answers` (insert-only; Supabase backs it up daily); `status` says
   new / undone / ingested / refused (with the reason).

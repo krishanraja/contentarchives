@@ -361,10 +361,12 @@ label.big { font-family: var(--font-display), system-ui; font-weight: 600; font-
   .tiles { flex-direction: row; align-items: stretch; }
   .tiles .tile { flex: 1 1 0; min-width: 0; grid-template-columns: 1fr; align-content: center; padding: 10px 14px; }
   .tiles .tile .icon { display: none; }
-  /* the gate: who we are on the left, the code on the right */
+  /* signing in: what is happening on the left, what to do on the right */
   .page.gate { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); column-gap: 24px; align-content: center; max-width: 980px; }
-  .page.gate > .card { grid-column: 2; grid-row: 1 / span 2; align-self: center; }
-  .page.gate > :not(.card) { grid-column: 1; }
+  .page.gate > .card { grid-column: 2; grid-row: 1; align-self: center; }
+  .page.gate > :not(.card) { grid-column: 1; grid-row: 1; align-self: center; }
+  .page.gate .gate-choice { flex-direction: row; }
+  .page.gate .gate-choice > * { flex: 1 1 0; min-width: 0; }
   /* a photo's details: its two actions side by side, so the words keep room */
   .about .stack { flex-direction: row; }
   .about .stack .btn { flex: 1 1 0; min-width: 0; font-size: 16px; padding: 6px 8px; }
@@ -399,6 +401,33 @@ label.big { font-family: var(--font-display), system-ui; font-weight: 600; font-
 .notice {
   background: var(--sky); border: var(--line); border-radius: 20px; padding: 8px 14px;
   box-shadow: 3px 3px 0 var(--ink);
+}
+/* signing in: a sentence that is the point of its screen, and an address that
+   may be one long word and must still wrap rather than run off the side */
+.page.gate .card p.big { font-family: var(--font-display), system-ui; font-weight: 600; font-size: calc(var(--h2) - 2px); line-height: 1.25; }
+.gate-addr { overflow-wrap: anywhere; font-weight: 700; }
+.gate-side { flex: none; gap: var(--gap); }
+.gate-lead { text-align: center; }
+.gate-choice { display: flex; flex-direction: column; gap: var(--gap); }
+.gate-form { flex: none; }
+.gate .row { gap: 6px; }
+.gate .row > .gate-form { flex: 1 1 0; min-width: 0; }
+.gate .row .btn { padding-left: 6px; padding-right: 6px; font-size: 17px; }
+/* a short screen: a box shares its row with its button */
+@container screen (max-height: 560px) {
+  .card form.gate-pair { display: grid; grid-template-columns: minmax(0, 1fr) auto; column-gap: 8px; align-items: end; }
+  .card form.gate-pair label { grid-column: 1 / -1; margin-bottom: 0; }
+  .card form.gate-pair .btn { width: auto; }
+}
+/* a notice to show as well (WhatsApp's tip, or what just happened): the
+   picture goes first, and on the smallest phones the title is read out, not shown */
+@container screen (max-height: 820px) {
+  .page.gate:has(.notice) .art { display: none; }
+}
+@container screen (max-height: 460px) and (orientation: portrait) {
+  .page.gate:has(.notice) h1 { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+  /* as in the games: the box says what to type, and its label is read out */
+  .card form.gate-pair label.big { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 }
 .error { background: var(--tomato); }
 .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }

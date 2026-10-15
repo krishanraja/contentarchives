@@ -1,19 +1,18 @@
 import { describe, expect, it, beforeAll } from "vitest";
-import { codeMatches, inAppBrowser, lockState, normalise, GLOBAL_FAILURES, PER_IP_FAILURES } from "../lib/gate";
-import { sign, signMe, verify, verifyMe } from "../lib/session";
+import { clientIp, inAppBrowser, lockState, GLOBAL_FAILURES, PER_IP_FAILURES } from "../lib/gate";
+import * as gate from "../lib/gate";
+import { MAX_AGE, sign, signMe, stale, verify, verifyMe } from "../lib/session";
 
 describe("the family code", () => {
-  it("ignores case and spaces", () => {
-    // a made-up code: the real one lives only in Vercel's environment
-    expect(codeMatches(" sunflower ", "SUNFLOWER")).toBe(true);
-    expect(codeMatches("Sun flower", "SUNFLOWER")).toBe(true);
+  it("is retired: nothing compares a typed phrase with a shared code any more (Krish, 2026-10-15)", () => {
+    expect(Object.keys(gate)).not.toContain("codeMatches");
   });
-  it("refuses anything else, and an empty expected code", () => {
-    expect(codeMatches("SUNFLOWE", "SUNFLOWER")).toBe(false);
-    expect(codeMatches("", "")).toBe(false);
-  });
-  it("normalises full-width letters a phone keyboard may produce", () => {
-    expect(normalise("ＳＵＮＦＬＯＷＥＲ")).toBe("SUNFLOWER");
+});
+
+describe("the network a try came from", () => {
+  it("is the first address a proxy names, or 'local' when none does", () => {
+    expect(clientIp("203.0.113.9, 10.0.0.1")).toBe("203.0.113.9");
+    expect(clientIp(null)).toBe("local");
   });
 });
 
@@ -44,6 +43,20 @@ describe("the session cookie", () => {
   it("refuses a forged cookie", async () => {
     const t = await sign("grandma");
     expect(await verify(t.slice(0, -3) + "abc")).toBeNull();
+  });
+  it("lasts a year, and an emailed-code one is signed again once a day old, so a year counts from the last visit", async () => {
+    expect(MAX_AGE).toBe(365 * 24 * 3600);
+    const s = (await verify(await sign("grandma", "email")))!;
+    const now = Math.floor(Date.now() / 1000);
+    expect(s.via).toBe("email");
+    expect(Math.abs(s.iat - now)).toBeLessThan(5);
+    expect(stale({ ...s, iat: now - 3600 }, now)).toBe(false);
+    expect(stale({ ...s, iat: now - 25 * 3600 }, now)).toBe(true);
+  });
+  it("a session from the retired family code keeps the end it was given (the year rule is for new people)", async () => {
+    const old = (await verify(await sign("grandma")))!;
+    expect(old.via).toBeUndefined();
+    expect(stale({ ...old, iat: old.iat - 30 * 86400 })).toBe(false);
   });
   it("signs everyone out when SESSION_VERSION changes", async () => {
     const t = await sign("grandma");

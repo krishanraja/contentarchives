@@ -1,17 +1,57 @@
 import { expect, type Page } from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
 import postgres from "postgres";
+import { existsSync, readFileSync } from "node:fs";
 
 // One connection pool for every spec file in the worker: no file ends it (the
 // next file would find it closed); it closes itself when idle.
 export const db = postgres(process.env.DATABASE_URL || "postgres://postgres:pw@127.0.0.1:54329/arch", { prepare: false, max: 2, idle_timeout: 5 });
 
+// Every email the app sends goes to this file in local tests (MAIL_SINK in
+// .env.local); the address Krish's "someone would like to come in" emails go to.
+export const MAIL = process.env.MAIL_SINK || "/tmp/archives-mail.jsonl";
+export const ADMIN = process.env.ACCESS_ADMIN_EMAIL || "admin@family.test";
+export const emailOf = (name: string) => `${name.toLowerCase().replace(/[^a-z]+/g, ".")}@family.test`;
+
+export type Sent = { to: string; subject: string; text: string; html: string; at: string };
+export function mails(to?: string): Sent[] {
+  if (!existsSync(MAIL)) return [];
+  return readFileSync(MAIL, "utf8").split("\n").filter(Boolean).map((l) => JSON.parse(l) as Sent)
+    .filter((m) => !to || m.to === to);
+}
+// the next email to an address, once there are more than `before` of them
+export async function nextMail(to: string, before: number): Promise<Sent> {
+  for (let i = 0; i < 100; i++) {
+    const m = mails(to);
+    if (m.length > before) return m[m.length - 1];
+    await new Promise((r) => setTimeout(r, 100));
+  }
+  throw new Error(`no email arrived for ${to}`);
+}
+export const codeIn = (m: Sent) => /code is (\d{6})/.exec(m.text)![1];
+export const linkIn = (m: Sent) => /(https?:\/\/\S+\/approve\?t=\S+)/.exec(m.text)![1];
+
+// Someone Krish has already said yes to. A test signs the same person in many
+// times an hour, so the hourly cap on codes starts afresh for them.
+export async function letIn(name: string) {
+  const email = emailOf(name);
+  await db`insert into access_people (email, name, status, decided_at) values (${email}, ${name}, 'yes', now())
+    on conflict (email) do update set status = 'yes', name = excluded.name, tries = 0`;
+  await db`delete from access_sends where email = ${email}`;
+  return email;
+}
+
+// Signing in as a person does: their email, then the code emailed to them.
 export async function signIn(page: Page, name = "Grandma") {
+  const email = await letIn(name);
+  const before = mails(email).length;
   await page.goto("/gate");
-  await page.fill("#code", "sunflower");
+  const other = page.locator("button:has-text('Change email'), button:has-text('Use a different email')");
+  if (await other.count()) await other.first().click();
+  await page.fill("#email", email);
+  await page.click("button:has-text('Send me a code')");
+  await page.fill("#code", codeIn(await nextMail(email, before)));
   await page.click("button:has-text('Open')");
-  await page.waitForURL("**/who");
-  await page.click(`button:has-text('${name}')`);
   await page.waitForURL((u) => u.pathname === "/");
 }
 

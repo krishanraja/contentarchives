@@ -1,18 +1,8 @@
-import { createHash, timingSafeEqual } from "node:crypto";
+import { createHash } from "node:crypto";
 
-// Case and spaces never matter: "archives ", "Archives" and "ARCHIVES" are
-// the same code to someone typing with one thumb.
-export function normalise(code: string): string {
-  return (code || "").normalize("NFKC").replace(/\s+/g, "").toUpperCase();
-}
-
-export function codeMatches(given: string, expected: string): boolean {
-  if (!expected) return false;
-  const a = createHash("sha256").update(normalise(given)).digest();
-  const b = createHash("sha256").update(normalise(expected)).digest();
-  return timingSafeEqual(a, b);
-}
-
+// Wrong codes, counted per network and in all: someone guessing is stopped.
+// (Since 2026-10-15 the codes are the ones emailed to each person; the shared
+// family code no longer lets anyone new in.)
 export const PER_IP_FAILURES = 10;   // in an hour, from one network
 export const GLOBAL_FAILURES = 200;  // in an hour, from everywhere: someone is guessing
 
@@ -25,6 +15,10 @@ export function lockState(ipFailures: number, globalFailures: number): Lock {
 
 export function ipHash(ip: string, salt: string): string {
   return createHash("sha256").update(salt + "|" + ip).digest("hex").slice(0, 32);
+}
+
+export function clientIp(forwardedFor: string | null): string {
+  return (forwardedFor || "").split(",")[0].trim() || "local";
 }
 
 // Links opened from WhatsApp, Instagram or Facebook open in their own browser,

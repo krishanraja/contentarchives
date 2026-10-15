@@ -1,6 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 import { execSync } from "node:child_process";
-import { db, signIn } from "./helpers";
+import { ADMIN, db, linkIn, mails, nextMail, signIn } from "./helpers";
 
 // NOTHING SCROLLS, ON ANY DEVICE (Krish, 2026-10-05: "this needs to be
 // guaranteed no scroll on all devices"). Every screen, in every state a
@@ -103,23 +103,72 @@ test("every screen, in every state, fits every screen size without scrolling", a
   test.setTimeout(1_200_000);
   failures.length = 0;
 
-  // the gate, and the gate inside WhatsApp (an extra notice)
+  // signing in, every step and every message it can show, and the gate inside
+  // WhatsApp (an extra notice). The address is a long one: it must wrap.
   await page.goto("/gate");
-  await fits(page, "gate");
-  await page.fill("#code", "wrong");
-  await page.click("button:has-text('Open')");
-  await expect(page.getByText("That's not it")).toBeVisible();
-  await fits(page, "gate, wrong code");
+  await fits(page, "gate, your email");
+  await page.goto("/gate?e=email");
+  await fits(page, "gate, not an email");
   const wa = await browser.newContext({ userAgent: "Mozilla/5.0 (Linux; Android 14) WhatsApp/2.24" });
   const wap = await wa.newPage();
   await wap.goto("/gate");
   await fits(wap, "gate in WhatsApp");
+
+  const tara = "cousin.tara.from.the.other.side.of.the.family@family-archives.test";
+  await db`delete from access_sends where kind = 'ask'`;
+  await page.fill("#email", tara);
+  await page.click("button:has-text('Send me a code')");
+  await expect(page.locator("#name")).toBeVisible();
+  await fits(page, "gate, your name");
+  await page.goto("/gate?e=busy");
+  await fits(page, "gate, your name, lots asking");
+  const asked = mails(ADMIN).length;
+  await page.fill("#name", "Cousin Tara");
+  await page.click("button:has-text('Ask Krish')");
+  await expect(page.getByText("Krish has been asked")).toBeVisible();
+  await fits(page, "gate, asked");
+  await page.goto("/gate");
+  await fits(page, "gate, still waiting");
+  await page.goto("/gate?e=reminded");
+  await fits(page, "gate, still waiting, Krish asked again");
+
+  // Krish's page: the question, no, yes after all, and a link that is not right
+  const link = linkIn(await nextMail(ADMIN, asked));
+  const kp = await browser.newPage();
+  await kp.goto(link);
+  await fits(kp, "approve, the question");
+  await kp.getByRole("button", { name: "No", exact: true }).click();
+  await expect(kp.getByRole("heading", { name: "You said no to Cousin Tara" })).toBeVisible();
+  await fits(kp, "approve, said no");
+  await page.goto("/gate");
+  await fits(page, "gate, Krish said no");
+  await kp.click("button:has-text('after all')");
+  await expect(kp.getByRole("heading", { name: "Cousin Tara can come in" })).toBeVisible();
+  await fits(kp, "approve, said yes");
+  await kp.goto(`/approve?t=${encodeURIComponent(new URL(link).searchParams.get("t")!)}&e=mail`);
+  await fits(kp, "approve, said yes, the email didn't go");
+  await kp.goto("/approve?t=not-a-link");
+  await fits(kp, "approve, a link that is not right");
+  await kp.close();
+
+  // the code, with each thing it can say (the longest ones too)
+  await page.goto("/gate");
+  await expect(page.locator("#code")).toBeVisible();
+  await fits(page, "gate, the code");
+  for (const e of ["wrong", "old", "spent", "locked", "wait", "many", "mail", "sent"]) {
+    await page.goto(`/gate?e=${e}`);
+    await fits(page, `gate, the code, ${e}`);
+  }
+  // the most a sign-in screen ever holds: WhatsApp's notice, the code and a message
+  await wa.addCookies((await page.context().cookies()).filter((c) => c.name === "arch_ask"));
+  await wap.goto("/gate?e=mail");
+  await expect(wap.locator("#code")).toBeVisible();
+  await fits(wap, "gate in WhatsApp, the code, a message");
   await wa.close();
 
-  // who are you: the family's names, and someone else
-  await page.fill("#code", "sunflower");
-  await page.click("button:has-text('Open')");
-  await page.waitForURL("**/who");
+  // signed in: the email brings the name, so who are you is reached by "Not you?"
+  await signIn(page, "Grandma");
+  await page.goto("/who?change");
   await fits(page, "who");
   await page.click("summary:has-text('Someone else')");
   await fits(page, "who, someone else");
