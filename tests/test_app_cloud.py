@@ -1001,6 +1001,22 @@ def independent(out):
            IM.error_kind(RuntimeError("HTTP 503: private response")),
            IM.error_kind(RuntimeError("private /path/to/file.mp4"))),
           ("scene_accounting", "md5_mismatch", "http_503", "RuntimeError"))
+
+    # A clip whose one picture arrives at 0.9 s, behind its sound, crosses no
+    # whole second, so the per-second pass decodes nothing from it.
+    import subprocess
+    one = os.path.join(tmp, "one.mp4")
+    late = os.path.join(tmp, "late.mp4")
+    sound = os.path.join(tmp, "sound.m4a")
+    for args in (["-f", "lavfi", "-i", "testsrc=size=160x120:rate=30", "-frames:v", "1",
+                  "-c:v", "libx264", "-pix_fmt", "yuv420p", one],
+                 ["-f", "lavfi", "-i", "sine=duration=1.2", "-c:a", "aac", sound],
+                 ["-itsoffset", "0.9", "-i", one, "-i", sound, "-map", "0:v", "-map", "1:a", "-c", "copy", late]):
+        subprocess.run(["ffmpeg", "-nostdin", "-loglevel", "error", "-y"] + args, check=True, capture_output=True)
+    frames_dir = os.path.join(tmp, "late-frames")
+    os.makedirs(frames_dir)
+    check("a picture between two whole seconds is still a sample",
+          [k for k, _ in IM.extract_video_samples(late, frames_dir)], ["scene:000000000900"])
     db.close()
 
     # Drive renders some playable videos no still. The site still plays them,
@@ -1054,6 +1070,65 @@ def independent(out):
           ("held", (True, "rule:independent-check")))
     check("an unplayable video with no still is never downloaded and stays open",
           (rows["n-dead"][:2], "id-dead" in drive.downloads), (("error", "no still"), False))
+
+    # Ruling (Krish, 2026-10-15): when neither Drive nor the site has a still,
+    # a playable video's frames are all the site can show, so all of them clear
+    # clears it, and it is looked at again each run in case a still appears. An
+    # unplayable one seen with no still twice is withheld: nothing can be checked.
+    class Broken:
+        def transaction(self):
+            raise RuntimeError("no storage")
+    check("not knowing whether the site keeps a still counts as yes",
+          IM.Auditor(Broken(), None, None).cached_still("id-x"), True)
+    db.execute("create table storage.objects (bucket_id text, name text)")
+    for h, fid in (("n-cached", "id-cached"), ("n-play2", "id-play2")):
+        db.execute("insert into photos (hash, drive_id, media, taken_at) values (%s,%s,'video','2020-01-01')",
+                   (h, fid))
+        db.execute("insert into video_checks (hash, status, mime, seconds) values (%s,'ok','video/mp4',2)", (h,))
+    db.execute("insert into storage.objects values ('media', 'cache/v/id-cached.jpg'), "
+               "('media', 'cache/v/id-cached2.jpg')")
+    db.commit()
+    with contextlib.redirect_stdout(out):
+        got = IM.Auditor(db, drive, moderator, workers=2).run()
+    rows = {h: (s, r, e, c) for h, s, r, e, c in q(
+        db, "select hash, status, reason, expected_samples, checked_samples from independent_moderation")}
+    check("with no still anywhere, every frame clear clears a playable video",
+          (rows["n-play"][:2], rows["n-play"][2] == rows["n-play"][3]), (("ok", "frames only"), True))
+    check("a still only the site keeps holds a playable video open",
+          (rows["n-cached"][:2], rows["n-cached"][2] == rows["n-cached"][3] + 1), (("error", "no still"), True))
+    check("an unplayable video with no still on two runs is withheld",
+          (rows["n-dead"][:2], q(db, "select hidden, hidden_by from photos where hash = 'n-dead'")[0],
+           "id-dead" in drive.downloads),
+          (("held", "unverifiable"), (True, "rule:independent-unverifiable"), False))
+    check("the receipt counts what was cleared on frames and what was withheld",
+          (got["open"], got["error_items"], got["frames_only"], got["withheld_total"], got["withheld"]),
+          (1, 1, 2, 1, 1))
+
+    def jpeg(width):
+        from PIL import Image
+        buf = io.BytesIO()
+        Image.new("RGB", (width, 64)).save(buf, "JPEG")
+        return buf.getvalue()
+
+    class StillAppears(NoStillDrive):
+        def image(self, fid, px):
+            return {"id-play": jpeg(160), "id-play2": jpeg(96)}.get(fid)
+
+    db.execute("update photos set hidden = false, hidden_by = null, hidden_at = null where hash = 'n-dead'")
+    db.commit()
+    later = StillAppears()
+    with contextlib.redirect_stdout(out):
+        IM.Auditor(db, later, moderator, workers=2).run()
+    rows = {h: (s, r, e, c) for h, s, r, e, c in q(
+        db, "select hash, status, reason, expected_samples, checked_samples from independent_moderation")}
+    check("a still that appears later is checked without fetching the video again",
+          (rows["n-play"][:2], rows["n-play"][2] == rows["n-play"][3], "id-play" in later.downloads),
+          (("ok", None), True, False))
+    check("a positive still that appears later hides the video",
+          (rows["n-play2"][0], q(db, "select hidden, hidden_by from photos where hash = 'n-play2'")[0]),
+          ("held", (True, "rule:independent-check")))
+    check("a person's release of a withheld video is never undone",
+          q(db, "select visible from photos where hash = 'n-dead'")[0][0], True)
     db.close()
     shutil.rmtree(tmp, ignore_errors=True)
 

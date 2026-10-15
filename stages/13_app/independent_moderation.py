@@ -12,6 +12,10 @@ unfinished work as clear. Any sexual positive hides the whole item immediately;
 an error remains an error and never contributes to the cleared count. Hidden or
 otherwise held material is never sent to this provider.
 
+A video with no still anywhere is judged on what the site can show: a playable
+one on every frame (and re-checked each run for a still), an unplayable one
+withheld, since nothing of it can be checked.
+
 The public Actions log contains counts only. Never add a path, Drive id, model
 note, API response body, or content description to it.
 """
@@ -46,6 +50,8 @@ VIEW_PX = 1600                         # the largest photograph the site serves
 SCENE_THRESHOLD = 0.30
 MAX_IMAGE_BYTES = 20 * 1024 * 1024    # the provider's documented image limit
 RETRYABLE = {429, 500, 502, 503, 504}
+FRAMES_ONLY = "frames only"            # cleared on every frame: no still exists to check
+UNVERIFIABLE = "unverifiable"          # withheld: nothing of it can be checked
 
 
 # This pass's own failure words, and the Drive download's. Each is a literal in
@@ -160,12 +166,10 @@ def extract_video_samples(src: str, out_dir: str) -> list[tuple[str, str]]:
     if r.returncode != 0:
         raise RuntimeError("frame extraction")
     fixed_files = sorted(os.path.join(out_dir, n) for n in os.listdir(out_dir) if n.startswith("fps-"))
-    if not fixed_files:
-        raise RuntimeError("no frames")
 
     scene = os.path.join(out_dir, "scene-%08d.jpg")
     # Keep frame zero so ffmpeg can initialise its image encoder even when a
-    # clip has no scene change at all; it is removed below because fps:00000000
+    # clip has no scene change at all; it is removed below when fps:00000000
     # already covers it.
     svf = "select='eq(n,0)+gt(scene,{})',showinfo,scale='min({},iw)':-2".format(
         SCENE_THRESHOLD, VIEW_PX)
@@ -182,9 +186,13 @@ def extract_video_samples(src: str, out_dir: str) -> list[tuple[str, str]]:
     seen = set()
     for ms, path in zip(times, scene_files):
         # showinfo can repeat a timestamp in unusual streams; one stable key per instant.
-        if ms > 0 and ms not in seen:
+        # A clip whose only picture falls between two whole seconds decodes no
+        # per-second frame at all; its frame zero is then a sample in its own right.
+        if (ms > 0 or not fixed_files) and ms not in seen:
             samples.append(("scene:{:012d}".format(ms), path))
             seen.add(ms)
+    if not samples:
+        raise RuntimeError("no frames")
     return samples
 
 
@@ -196,7 +204,7 @@ class Auditor:
         self.workers = max(1, int(workers))
         self.deadline = None if max_minutes is None else time.time() + 60 * float(max_minutes)
         self.samples_started = 0
-        self.counts = {"items": 0, "samples": 0, "held": 0, "errors": 0}
+        self.counts = {"items": 0, "samples": 0, "held": 0, "errors": 0, "withheld": 0}
 
     def time_up(self) -> bool:
         return self.deadline is not None and time.time() >= self.deadline
@@ -210,15 +218,40 @@ class Auditor:
         A per-row status lookup here is invisible in a tiny test database but
         costs one network round trip for every live item before the first image
         is checked. Keep the resume filter in Postgres.
+
+        A video cleared on its frames alone is looked at again every run, so a
+        still that appears later is checked rather than trusted.
         """
         return self.db.execute(
-            "select p.hash, p.drive_id, p.md5, p.media, coalesce(v.status, '') "
+            "select p.hash, p.drive_id, p.md5, p.media, coalesce(v.status, ''), "
+            "coalesce(i.status, ''), coalesce(i.reason, ''), coalesce(i.expected_samples, 0) "
             "from photos p left join video_checks v on v.hash = p.hash "
             "left join independent_moderation i on i.hash = p.hash and i.model = %s "
-            "where p.visible and (i.status is null or i.status not in ('ok','held')) "
+            "where p.visible and (i.status is null or i.status not in ('ok','held') "
+            "or (i.status = 'ok' and i.reason = %s)) "
             "order by (p.media = 'photo') desc, p.taken_at desc nulls last, p.hash",
-            (MODEL,),
+            (MODEL, FRAMES_ONLY),
         ).fetchall()
+
+    def cached_still(self, fid: str) -> bool:
+        """Whether the site keeps its own copy of this file's still.
+
+        The site serves `cache/<size>/<drive id>.jpg` from its storage before it
+        asks Drive (web/lib/media.ts photoBytes), so such a still can be shown
+        while Drive renders none. This pass cannot read it, so its existence
+        keeps the item open. Unable to tell counts as yes.
+        """
+        try:
+            with self.db.transaction():
+                if not self.db.execute("select to_regclass('storage.objects') is not null").fetchone()[0]:
+                    return True
+                return bool(self.db.execute(
+                    "select exists (select 1 from storage.objects where bucket_id = 'media' "
+                    "and split_part(name, '/', 1) = 'cache' and split_part(name, '/', 3) = %s)",
+                    (fid + ".jpg",),
+                ).fetchone()[0])
+        except Exception:
+            return True
 
     def existing(self, h: str) -> dict[str, str]:
         return dict(self.db.execute(
@@ -292,7 +325,8 @@ class Auditor:
                         self.samples_started += 1
             self.db.commit()
 
-    def finish(self, h: str, media: str, expected: int, fatal: str | None = None) -> str:
+    def finish(self, h: str, media: str, expected: int, fatal: str | None = None,
+               cleared: str | None = None, withhold: bool = False) -> str:
         row = self.db.execute(
             "select count(*) filter (where status in ('ok','held')), "
             "count(*) filter (where status = 'held'), max(sexual_score), "
@@ -304,12 +338,14 @@ class Auditor:
         checked, held, score, actual, errors = int(row[0]), int(row[1]), row[2], row[3], int(row[4])
         if held:
             status, reason = "held", "sexual"
+        elif withhold:
+            status, reason = "held", UNVERIFIABLE
         elif fatal:
             status, reason = "error", fatal
         elif errors:
             status, reason = "error", "sample error"
         elif expected and checked == expected:
-            status, reason = "ok", None
+            status, reason = "ok", cleared
         else:
             status, reason = "pending", None
         self.db.execute(
@@ -328,26 +364,50 @@ class Auditor:
                 "update photos set hidden = true, hidden_by = 'rule:independent-check', hidden_at = now() "
                 "where hash = %s and not hidden", (h,),
             )
+        elif withhold:
+            self.db.execute(
+                "update photos set hidden = true, hidden_by = 'rule:independent-unverifiable', hidden_at = now() "
+                "where hash = %s and not hidden", (h,),
+            )
         self.db.commit()
         return status
 
     def audit_item(self, row) -> None:
-        h, fid, md5, media, video_status = row
+        h, fid, md5, media, video_status, prior, prior_reason, prior_expected = row
         samples = []
         playable = media == "video" and video_status == "ok"
         still = self.drive.image(fid, VIEW_PX)
+        if prior == "ok" and prior_reason == FRAMES_ONLY:
+            # Every frame is already clear; only a still that has since appeared
+            # is new. Checked here, or kept open when only the site has it.
+            if still:
+                counted = int(self.existing(h).get("still") in ("ok", "held"))
+                self.moderate_samples(h, [("still", still)])
+                self.finish(h, media, prior_expected + 1 - counted)
+            elif self.cached_still(fid):
+                self.finish(h, media, prior_expected + 1, "no still")
+                self.counts["errors"] += 1
+            return
         if still:
             samples.append(("still", still))
         elif not playable:
-            self.finish(h, media, 1, "no still")
-            self.counts["errors"] += 1
+            if media == "video" and prior == "error" and prior_reason == "no still":
+                # No still on an earlier run either, and the site cannot play it:
+                # nothing of it can be checked, so it is withheld until a person
+                # releases it (Krish, 2026-10-15). One missing still is never
+                # enough, because Drive's lookup also fails transiently.
+                self.finish(h, media, 1, withhold=True)
+                self.counts["withheld"] += 1
+            else:
+                self.finish(h, media, 1, "no still")
+                self.counts["errors"] += 1
             return
         if not playable:
             self.moderate_samples(h, samples)
             self.finish(h, media, len(samples))
             return
         # A playable video still plays when Drive renders it no still, so its
-        # frames are checked regardless. The unchecked still keeps it open.
+        # frames are checked regardless.
         missing = 0 if still else 1
 
         with tempfile.TemporaryDirectory(prefix="independent-video-") as tmp:
@@ -363,8 +423,17 @@ class Auditor:
                 self.counts["errors"] += 1
                 return
             self.moderate_samples(h, samples)
-            status = self.finish(h, media, len(samples) + missing, "no still" if missing else None)
-            self.counts["errors"] += int(bool(missing) and status == "error")
+            if missing and not self.cached_still(fid):
+                # Drive renders no still and the site keeps none, so its frames
+                # are everything the site can show: all of them clear clears it
+                # (Krish, 2026-10-15). A still checked on an earlier run counts.
+                old = int(self.existing(h).get("still") in ("ok", "held"))
+                self.finish(h, media, len(samples) + old, cleared=FRAMES_ONLY)
+            elif missing:
+                self.finish(h, media, len(samples) + missing, "no still")  # a still only the site has
+                self.counts["errors"] += 1
+            else:
+                self.finish(h, media, len(samples))
 
     def audit_photos(self, rows) -> None:
         """Fetch and moderate independent stills concurrently, write serially.
@@ -374,7 +443,7 @@ class Auditor:
         hold is still committed by this thread through the single DB connection.
         """
         def look(row):
-            h, fid, _md5, media, _video_status = row
+            h, fid, media = row[0], row[1], row[3]
             try:
                 still = self.drive.image(fid, VIEW_PX)
                 if not still:
@@ -422,12 +491,18 @@ class Auditor:
             "(select count(*) from independent_moderation i join photos p using (hash) "
             " where i.model = %s and i.status = 'held' and p.hidden_by = 'rule:independent-check'), "
             "(select count(*) from independent_moderation i join current c using (hash) "
-            " where i.model = %s and i.status = 'error')",
-            (MODEL, MODEL, MODEL),
+            " where i.model = %s and i.status = 'error'), "
+            "(select count(*) from independent_moderation i join current c using (hash) "
+            " where i.model = %s and i.status = 'ok' and i.reason = %s), "
+            "(select count(*) from independent_moderation i join photos p using (hash) "
+            " where i.model = %s and i.status = 'held' and i.reason = %s "
+            " and p.hidden_by = 'rule:independent-unverifiable')",
+            (MODEL, MODEL, MODEL, MODEL, FRAMES_ONLY, MODEL, UNVERIFIABLE),
         ).fetchone()
-        visible, cleared, held, errors = map(int, row)
+        visible, cleared, held, errors, frames_only, withheld = map(int, row)
         return {"visible": visible, "cleared": cleared, "open": visible - cleared,
-                "held_total": held, "error_items": errors}
+                "held_total": held, "error_items": errors,
+                "frames_only": frames_only, "withheld_total": withheld}
 
     def run(self) -> dict:
         outstanding = self.targets()
