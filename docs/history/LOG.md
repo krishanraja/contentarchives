@@ -9,6 +9,10 @@ duplicate: `docs/rescues/` holds one dated record per source, and
 `docs/LEARNINGS.md` holds the numbered rules in the order they were paid for.
 This log records what the steward did to the documentation and when.
 
+## 2026-10-15
+
+- reconciled: NOW.md head moved to 79bdc4b; added the independent-audit no-still change (stages/13_app); web/README.md, docs/HANDOVER.md and state/PROGRESS.md carry older stamps and were not re-checked against this change, so their stamps were left alone.
+
 ## 2026-10-13
 
 - reconciled at `2ee2092`: two non-steward commits since `2544991`, both the independent moderation pass (`stages/13_app/independent_moderation.py`, `tests/test_app_cloud.py`). NOW.md gained one "What changed recently" bullet and its head moved. `stages/13_app/STAGE.md` already carried the change as row 82 and agrees with the code, so it was not edited. The `docs/HANDOVER.md`, `state/PROGRESS.md` and `web/README.md` stamps are older than the code but describe the library or the app, not this script, so they were left alone.

@@ -1,8 +1,8 @@
 ---
 repo: krishanraja/contentarchives
 product: contentarchives
-as_of: 2026-10-13
-head: 2ee2092
+as_of: 2026-10-15
+head: 79bdc4b
 lifecycle: building
 production_url: none
 state_doc: RESUME.md
@@ -39,7 +39,7 @@ Stories a writer can carry without asking Krish:
 
 Objection it answers: "AI agents will quietly wreck our data." Here is the record of one doing exactly that, once, and the rules that made it unrepeatable, plus the newer record of one auditing its own honesty about how much it has actually learned, and finding the answer wanting.
 
-## Where it is right now (as of 2026-10-13)
+## Where it is right now (as of 2026-10-15)
 
 Lifecycle: building.
 
@@ -62,6 +62,7 @@ Lifecycle: building.
 
 ## What changed recently
 
+- 2026-10-15 **The independent audit sat on the same 23 error items for 12 runs because it gave up on any video Drive had no still for; it now checks those videos on their frames** (`d4ee5da`, `0808e42`, `f3dbdc7`, `1995648`, `stages/13_app/independent_moderation.py`, `stages/13_app/STAGE.md`). Why, from the commit: "Production showed the audit stuck at the same 23 error items on 12 consecutive runs (30 included) with zero samples sent: 18 playable videos with no still, 2 unplayable videos with no still, and 3 one-second clips whose frame extraction failed under a bare 'RuntimeError'." A playable video with no still now has every frame checked and any positive hides it; Krish ruled (2026-10-15) that such a video counts as cleared once every frame is clean and the site keeps no stored still, re-checked every run. An unplayable video with no still is withheld (hidden, reason unverifiable) only after two runs, because "Drive's still lookup also fails transiently". Run 31 then named the three short-clip failures as `no_frames`: a clip whose single picture arrives after its sound (reproduced at 0.9 s) crosses no whole second, so the per-second pass decoded nothing; the scene pass's frame is now kept as a sample. Failures are named by the pass's own fixed words instead of "RuntimeError". Reported verified in the commits: `tests/test_app_cloud.py` 159/159, with `test_app_share_set.py` and `test_stage_contracts.py` passing; not re-run by the steward, and the commits do not record a production run after the change.
 - 2026-10-13 **The independent moderation pass paid one network round trip per visible photo before it checked a single image, so it now filters in the database and checks photos in parallel** (`c33ab63`, `2ee2092`, learning 82 in `stages/13_app/STAGE.md`). Why: the code's own note says a per-row status lookup "is invisible in a tiny test database but costs one network round trip for every live item before the first image is checked". The resume filter (skip rows already `ok` or `held` for the pinned model) is now one query in Postgres, and photos, which are one sample each so the per-sample concurrency could not help them, are fetched and moderated through the bounded worker pool while every checkpoint and hold is still written serially through the single database connection. Videos still run one at a time. Tests in `tests/test_app_cloud.py` cover the set query and the photo pool; not re-run by the steward. Whether the first full audit has completed is still unverified. Note: row 82 exists in the stage table but `docs/LEARNINGS.md` ends at 81, so the contract test still counts 81.
 - 2026-10-12 **The family app moved to London because every tap from London crossed the world twice** (`94aa814`, `cb5124c`, `2544991`). Why: Krish, 2026-10-12: "Yes everyone's in London. Yes let's move it to London." The app and its database were in Sydney. `archives-move.yml` is a one-off job that copies the app's schemas to the address the source database holds in its private `move_target` table, written over the Management API so the target's password is in no file, input or log. It refuses a target that already has tables and fails unless every table's row count matches; restore errors are counted, never printed, because one "could quote a row, and the logs are public". The region change was committed with the note "a region change alone would put the server far from the database", and the London database's advisor then flagged `place_key`, which now runs with a fixed search path (migration `0015_place_key_path.sql`). Not verified by the steward: that the copy ran, or that its counts matched.
 - 2026-10-12 **Find was slow and glitchy because a tap showed nothing for 1.3 seconds, so people tapped twice** (`3c9c0a3`, learning 81). Why: Krish: "This multi-pull filter system does not work properly. It's so glitchy." Measured live before changing anything: every Find screen took 1.2-1.9 s on the server, and "the tap meant for '2010s' only finished opening When"; a place with a comma ("Blue Lagoon, Iceland") never matched again from its own link. Every choice now fetches its screen before it is touched and marks itself pressed at once (`web/components/Go.tsx`); a kept copy of who is in each photo (migration 0014) took one person's search from 306 ms to 47 ms and facets from 294 ms to 230 ms; Where opens with "In the UK" and "Abroad", known for 10,635 of 25,444 visible photos. Reported verified in the commit: vitest 86/86, Playwright 103 passed; not re-run by the steward.
