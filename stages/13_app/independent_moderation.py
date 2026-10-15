@@ -48,10 +48,30 @@ MAX_IMAGE_BYTES = 20 * 1024 * 1024    # the provider's documented image limit
 RETRYABLE = {429, 500, 502, 503, 504}
 
 
+# This pass's own failure words, and the Drive download's. Each is a literal in
+# this code, so none can carry a path, id, response body or content description;
+# naming them is what turns a repeated "RuntimeError" into something fixable.
+OWN_ERRORS = {
+    "image size": "image_size",
+    "malformed response": "malformed_response",
+    "retry exhausted": "retry_exhausted",
+    "ffmpeg failed": "ffmpeg_failed",
+    "frame extraction": "frame_extraction",
+    "no frames": "no_frames",
+    "scene extraction": "scene_extraction",
+    "scene accounting": "scene_accounting",
+    "download does not match Drive's md5": "md5_mismatch",
+}
+
+
 def error_kind(exc: Exception) -> str:
     """A fixed, non-sensitive error name safe for the public workflow log."""
     m = re.match(r"HTTP (\d{3})\b", str(exc))
-    return "http_" + m.group(1) if m else type(exc).__name__
+    if m:
+        return "http_" + m.group(1)
+    if isinstance(exc, RuntimeError) and str(exc) in OWN_ERRORS:
+        return OWN_ERRORS[str(exc)]
+    return type(exc).__name__
 
 
 class OpenAIModerator:
@@ -314,16 +334,21 @@ class Auditor:
     def audit_item(self, row) -> None:
         h, fid, md5, media, video_status = row
         samples = []
+        playable = media == "video" and video_status == "ok"
         still = self.drive.image(fid, VIEW_PX)
-        if not still:
+        if still:
+            samples.append(("still", still))
+        elif not playable:
             self.finish(h, media, 1, "no still")
             self.counts["errors"] += 1
             return
-        samples.append(("still", still))
-        if media != "video" or video_status != "ok":
+        if not playable:
             self.moderate_samples(h, samples)
             self.finish(h, media, len(samples))
             return
+        # A playable video still plays when Drive renders it no still, so its
+        # frames are checked regardless. The unchecked still keeps it open.
+        missing = 0 if still else 1
 
         with tempfile.TemporaryDirectory(prefix="independent-video-") as tmp:
             src = os.path.join(tmp, "source")
@@ -334,11 +359,12 @@ class Auditor:
                 samples.extend(extract_video_samples(src, frames))
             except Exception as exc:
                 self.moderate_samples(h, samples)  # the visible still is still accounted for
-                self.finish(h, media, max(1, len(samples)), error_kind(exc))
+                self.finish(h, media, max(1, len(samples) + missing), error_kind(exc))
                 self.counts["errors"] += 1
                 return
             self.moderate_samples(h, samples)
-            self.finish(h, media, len(samples))
+            status = self.finish(h, media, len(samples) + missing, "no still" if missing else None)
+            self.counts["errors"] += int(bool(missing) and status == "error")
 
     def audit_photos(self, rows) -> None:
         """Fetch and moderate independent stills concurrently, write serially.

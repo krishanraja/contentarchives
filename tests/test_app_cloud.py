@@ -995,6 +995,65 @@ def independent(out):
     got = IM.OpenAIModerator("not-a-real-key", http=http, backoff=0).moderate(b"jpeg")
     check("the independent provider retries throttling and reads the image sexual category",
           (http.calls, got["sexual"], got["score"]), (2, True, 0.8))
+    check("the pass names its own failures and nothing else",
+          (IM.error_kind(RuntimeError("scene accounting")),
+           IM.error_kind(RuntimeError("download does not match Drive's md5")),
+           IM.error_kind(RuntimeError("HTTP 503: private response")),
+           IM.error_kind(RuntimeError("private /path/to/file.mp4"))),
+          ("scene_accounting", "md5_mismatch", "http_503", "RuntimeError"))
+    db.close()
+
+    # Drive renders some playable videos no still. The site still plays them,
+    # so their frames are checked; the still nobody could check keeps them open.
+    db = fresh_db(NAME + "_independent_nostill")
+    flagged = os.path.join(tmp, "flagged.mp4")
+    import subprocess
+    subprocess.run(["ffmpeg", "-nostdin", "-loglevel", "error", "-y", "-f", "lavfi",
+                    "-i", "testsrc=duration=2:size=96x64:rate=5", "-c:v", "libx264",
+                    "-pix_fmt", "yuv420p", flagged], check=True, capture_output=True)
+    for h, fid in (("n-play", "id-play"), ("n-flag", "id-flag"), ("n-dead", "id-dead")):
+        db.execute("insert into photos (hash, drive_id, media, taken_at) values (%s,%s,'video','2020-01-01')",
+                   (h, fid))
+    db.execute("insert into video_checks (hash, status, mime, seconds) values "
+               "('n-play','ok','video/mp4',2), ('n-flag','ok','video/mp4',2), ('n-dead','error',null,2)")
+    db.commit()
+
+    class NoStillDrive:
+        def __init__(self):
+            self.downloads = []
+
+        def image(self, fid, px):
+            return None
+
+        def download(self, fid, dest, md5=None):
+            self.downloads.append(fid)
+            shutil.copyfile(flagged if fid == "id-flag" else movie, dest)
+
+    class FrameModerator:
+        def __init__(self):
+            self.calls = 0
+
+        def moderate(self, jpeg):
+            from PIL import Image
+            self.calls += 1
+            sexual = Image.open(io.BytesIO(jpeg)).size[0] == 96
+            return {"sexual": sexual, "score": 0.99 if sexual else 0.001, "model": IM.MODEL}
+
+    drive, moderator = NoStillDrive(), FrameModerator()
+    with contextlib.redirect_stdout(out):
+        got = IM.Auditor(db, drive, moderator, workers=2).run()
+    rows = {h: (s, r, e, c) for h, s, r, e, c in q(
+        db, "select hash, status, reason, expected_samples, checked_samples from independent_moderation")}
+    status, reason, expected, checked = rows["n-play"]
+    check("a playable video with no still has every frame checked",
+          (checked >= 2, sorted(drive.downloads)), (True, ["id-flag", "id-play"]))
+    check("the still nobody could check keeps that video open",
+          (status, reason, expected == checked + 1, got["cleared"]), ("error", "no still", True, 0))
+    check("a positive frame hides a video with no still",
+          (rows["n-flag"][0], q(db, "select hidden, hidden_by from photos where hash = 'n-flag'")[0]),
+          ("held", (True, "rule:independent-check")))
+    check("an unplayable video with no still is never downloaded and stays open",
+          (rows["n-dead"][:2], "id-dead" in drive.downloads), (("error", "no still"), False))
     db.close()
     shutil.rmtree(tmp, ignore_errors=True)
 
