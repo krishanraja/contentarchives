@@ -9,6 +9,12 @@ duplicate: `docs/rescues/` holds one dated record per source, and
 `docs/LEARNINGS.md` holds the numbered rules in the order they were paid for.
 This log records what the steward did to the documentation and when.
 
+
+## 2026-10-16
+
+- reconciled at `11bf662`: `main` gained 19 non-steward commits since `79bdc4b` (2026-10-15 to 2026-10-16): emailed-code sign-in for the family app, the cloud made the system of record with a nightly export to Drive, the PC sync stopped re-seeding the cloud index, and the app answers' bridge made unable to void an answer. The commits had already added their own dated bullets to `NOW.md`, so this run changed only `head`, `as_of`, and the stale figures: 82 learnings (74 enforced, 8 prose-only) and 162 of 162 code files owned by a stage, from `tests/test_stage_contracts.py` run on 2026-10-16.
+- reconciled at `11bf662`: no bullet in "What changed recently" is older than 30 days, so none rolled. No duplicate, unlabelled or stale-stamped document was moved.
+
 ## 2026-10-15
 
 - reconciled: NOW.md head moved to 79bdc4b; added the independent-audit no-still change (stages/13_app); web/README.md, docs/HANDOVER.md and state/PROGRESS.md carry older stamps and were not re-checked against this change, so their stamps were left alone.
