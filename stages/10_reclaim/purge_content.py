@@ -520,19 +520,20 @@ def main() -> int:
     # also excluded by share_set(), so the next seed's reconcile removes them
     # regardless - but "next seed" can be a day away, and this is the one
     # copy other people are looking at.
-    if os.environ.get("SUPABASE_URL") and os.environ.get("SUPABASE_SERVICE_ROLE_KEY"):
+    from cloud import credentials
+    url, key, names = credentials()
+    if url and key:
         try:
             from cloud import Cloud
             n = Cloud().delete_in("photos", "hash", sorted(sweep))
             print("family app: {:,} hash(es) removed from the cloud index".format(n))
         except Exception as e:                                   # noqa: BLE001
-            print("WARNING: family app NOT swept ({}). Run "
-                  "stages/13_app/seed_index.py --apply - its reconcile removes "
-                  "purged hashes.".format(e))
+            print("WARNING: family app NOT swept ({}). Re-run this sweep with "
+                  "the archive's credentials set; never a seed to clear it - a "
+                  "seed empties the cloud's own faces (chain_app_sync.ps1).".format(e))
     else:
-        print("WARNING: family app NOT swept - SUPABASE_URL / "
-              "SUPABASE_SERVICE_ROLE_KEY are not set. Run "
-              "stages/13_app/seed_index.py --apply with them set.")
+        print("WARNING: family app NOT swept - {} are not set. Re-run this "
+              "sweep with them set.".format(names))
 
     if os.path.exists(CACHE):
         os.remove(CACHE)

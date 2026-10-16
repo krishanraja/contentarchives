@@ -62,8 +62,13 @@ if (-not (Get-Command Invoke-Step -ErrorAction SilentlyContinue)) {
     Say 'STOPPED: steps.ps1 did not load.'
     exit 1
 }
-if (-not $env:SUPABASE_URL -or -not $env:SUPABASE_SERVICE_ROLE_KEY) {
-    Stop-Chain 'SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY are not set for this task'
+# The archive's own names first, never mixed with the generic pair (cloud.py
+# says why): the generic names can hold another project on this machine.
+$own = $env:ARCHIVES_SUPABASE_URL -or $env:ARCHIVES_SUPABASE_SERVICE_ROLE_KEY
+$creds = $env:SUPABASE_URL -and $env:SUPABASE_SERVICE_ROLE_KEY
+if ($own) { $creds = $env:ARCHIVES_SUPABASE_URL -and $env:ARCHIVES_SUPABASE_SERVICE_ROLE_KEY }
+if (-not $creds) {
+    Stop-Chain 'ARCHIVES_SUPABASE_URL / ARCHIVES_SUPABASE_SERVICE_ROLE_KEY are not both set for this task'
 }
 
 Say '[pull] app answers -> journal'

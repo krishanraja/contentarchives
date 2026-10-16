@@ -237,6 +237,26 @@ def main():
           PA.verdicts(ans[1:], {}, set()), {})
 
     print()
+    print("6. the archive's own credentials win, and the two pairs never mix")
+    # 2026-10-16: the library machine's shell held another venture's project
+    # under SUPABASE_URL, and the pull read `answers` there. The archive's key
+    # under the generic names would instead reach every other tool on the box.
+    import cloud as CLOUD
+    other = {"SUPABASE_URL": "https://other.example", "SUPABASE_SERVICE_ROLE_KEY": "other-key"}
+    mine = {"ARCHIVES_SUPABASE_URL": "https://archive.example",
+            "ARCHIVES_SUPABASE_SERVICE_ROLE_KEY": "archive-key"}
+    check("the archive's pair wins over another project's generic pair",
+          CLOUD.credentials({**other, **mine})[:2], ("https://archive.example", "archive-key"))
+    check("the generic pair still works when no ARCHIVES_ name is set",
+          CLOUD.credentials(other)[:2], ("https://other.example", "other-key"))
+    check("one ARCHIVES_ name never borrows the other from the generic pair",
+          CLOUD.credentials({**other, "ARCHIVES_SUPABASE_URL": "https://archive.example"})[:2],
+          ("https://archive.example", ""))
+    check("nor sends another project's address the archive's key",
+          CLOUD.credentials({**other, "ARCHIVES_SUPABASE_SERVICE_ROLE_KEY": "archive-key"})[:2],
+          ("", "archive-key"))
+
+    print()
     if FAILURES:
         print("{} FAILED: {}".format(len(FAILURES), ", ".join(FAILURES)))
         return 1

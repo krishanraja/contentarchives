@@ -3,9 +3,22 @@ r"""The family app's database and storage, from the library machine.
 Supabase's REST API with the service-role key, read from the environment at
 call time - never written anywhere (AGENTS.md: secrets by symbolic name only):
 
-    SUPABASE_URL                 https://<project>.supabase.co
-    SUPABASE_SERVICE_ROLE_KEY    the service key; bypasses RLS, so it lives in
-                                 the environment of THIS machine and Vercel only
+    ARCHIVES_SUPABASE_URL                 https://<project>.supabase.co
+    ARCHIVES_SUPABASE_SERVICE_ROLE_KEY    the service key; bypasses RLS, so it
+                                          lives in the environment of THIS
+                                          machine and Vercel only
+
+THE ARCHIVE'S OWN NAMES, NOT THE GENERIC ONES
+
+SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are what every Supabase tool reads,
+and the library machine serves more than one project. On 2026-10-16 its shell
+held another venture's project under those names, and the pull failed reading
+`answers` there. The other direction is worse: the archive's key under the
+generic names would reach every other tool on the machine, with every row
+open to it. So the ARCHIVES_ pair is read first. The generic pair is used only
+when neither ARCHIVES_ name is set, and the two pairs are never mixed: one
+ARCHIVES_ name without the other stops, rather than sending the archive's key
+to another project's address or another project's key to the archive.
 
 Every write is an upsert or a filtered delete, so re-running is harmless.
 """
@@ -17,13 +30,24 @@ import os
 import time
 
 
+def credentials(env=os.environ) -> tuple:
+    """(url, key, names): the ARCHIVES_ pair if either is set, else the generic pair."""
+    if env.get("ARCHIVES_SUPABASE_URL") or env.get("ARCHIVES_SUPABASE_SERVICE_ROLE_KEY"):
+        return (env.get("ARCHIVES_SUPABASE_URL", ""), env.get("ARCHIVES_SUPABASE_SERVICE_ROLE_KEY", ""),
+                "ARCHIVES_SUPABASE_URL and ARCHIVES_SUPABASE_SERVICE_ROLE_KEY")
+    return (env.get("SUPABASE_URL", ""), env.get("SUPABASE_SERVICE_ROLE_KEY", ""),
+            "SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY")
+
+
 class Cloud:
     def __init__(self, url: str = "", key: str = ""):
-        self.url = (url or os.environ.get("SUPABASE_URL", "")).rstrip("/")
-        self.key = key or os.environ.get("SUPABASE_SERVICE_ROLE_KEY", "")
+        u, k, names = credentials()
+        self.url = (url or u).rstrip("/")
+        self.key = key or k
         if not self.url or not self.key:
-            raise SystemExit("STOPPING: SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY "
-                             "must be set in this shell")
+            raise SystemExit("STOPPING: {} must both be set in this shell "
+                             "(ARCHIVES_SUPABASE_URL and ARCHIVES_SUPABASE_SERVICE_ROLE_KEY "
+                             "are the archive's own names)".format(names))
         import requests
         self.s = requests.Session()
         self.s.headers.update({"apikey": self.key,
