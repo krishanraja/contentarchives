@@ -196,9 +196,38 @@ def main():
           "app-u1-2": {"status": "ingested", "reason": ""},
           "app-u2": {"status": "ingested", "reason": ""}}
     v = PA.verdicts(ans, st)
-    check("one refused photo makes the cloud row refused, with the reason",
-          v["u1"], ("refused", "that photograph is not in the share set"))
+    # `refused` takes an answer out of every view in the app; only the app may
+    # do that. The library's no leaves it `new`, says why, and tries again.
+    check("a photo the library would not take leaves the cloud row new, with the reason",
+          v["u1"], ("new", "library: that photograph is not in the share set"))
+    check("the library never refuses an app answer",
+          any(s == "refused" for s, _ in v.values()), False)
     check("the face answer is ingested", v["u2"], ("ingested", None))
+    check("who is in the photo reaches the journal under its own field",
+          [r["field"] for r in PA.expand([{"id": "u3", "scope": "file", "target": "x",
+                                          "field": f, "value": "Asha Raja", "who": "grandma",
+                                          "hashes": ["x"]} for f in ("in_photo", "not_in_photo")])],
+          ["in_photo", "not_in_photo"])
+
+    print()
+    print("4b. a photograph the app shows counts as shared, and only those asked about")
+
+    class FakeCloud:
+        def __init__(self):
+            self.asked = []
+
+        def select(self, table, query):
+            self.asked.append((table, query))
+            return [{"hash": x} for x in ("drive:AbC", "y") if '"{}"'.format(x) in query]
+
+    fc = FakeCloud()
+    check("the app's visible photographs among the targets",
+          PA.shown(fc, ["drive:AbC", "y", "gone", "y"]), {"drive:AbC", "y"})
+    check("asks the photos table for visible ones only",
+          [(t, "visible=is.true" in q) for t, q in fc.asked], [("photos", True)])
+    fc = FakeCloud()
+    PA.shown(fc, ["h{}".format(n) for n in range(250)])
+    check("in batches the URL can carry", len(fc.asked), 3)
 
     print()
     print("5. a crash between recording and marking is finished next time")

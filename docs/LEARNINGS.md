@@ -2565,3 +2565,22 @@ the typed words lose their punctuation and the place list kept it.
 are touched, and mark the touched choice the moment it is pressed. Then make
 the server fast too, but never rely on it being fast. And read a value the
 same way on both sides of any round trip.
+
+## 83. A copy must never void the original
+
+The family app's database holds every answer until the PC bridge copies it into
+the journal (`stages/13_app/pull_answers.py`). On 2026-10-16, asked whether the
+app's answers reach the library, the bridge was read end to end before it had
+ever carried a photo answer: any row the journal would not take was marked
+`refused` in the cloud, and `refused` takes an answer out of every view in the
+app. Two kinds of answer the app accepts would have been refused: "who is in
+this photo" (the journal had no field for it) and anything about a photograph
+that reached the app straight from Drive (never on the PC, so never in its share
+set). Of the 28 photo answers waiting that day, at least 19 were one of those.
+The first run would have quietly undone what relatives had said in the app.
+
+**The system of record decides; a copy only reports.** A copy that cannot take
+a row leaves the row as it was, says why, and tries again next time; it never
+writes a verdict back into the source. And a rule that counts (votes on who is
+in a photograph) is applied the same way on both sides, or the two disagree
+about the same picture.

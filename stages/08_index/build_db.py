@@ -81,6 +81,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 
 
 from answers import Journal                        # noqa: E402
+from ingest_game_answers import fold               # noqa: E402  - resolve_people
 import master_sheet as MS                          # noqa: E402
 from sides import side_of                          # noqa: E402  - resolve_audience
 
@@ -102,6 +103,9 @@ RESOLVED = ["kind", "people", "subject", "keep", "sensitivity", "setting",
             # any text legible in the image, which is what makes a photograph
             # findable by a word nobody ever typed
             "description", "objects", "activity", "text", "occasion", "mood"]
+# The app's "is this person in this photo?" yes and no, one row per relative per
+# photograph. Counted in resolve_people(), never written into `resolved`.
+VOTES = ("in_photo", "not_in_photo")
 
 
 def connect(path: str) -> sqlite3.Connection:
@@ -312,7 +316,9 @@ def apply_answers(db: sqlite3.Connection) -> int:
     for when_, scope, target, field, value, conf in db.execute(
             "SELECT when_, scope, target, field, value, confidence "
             "FROM answers ORDER BY when_, rowid"):
-        if not field:
+        # a vote on who is in a photograph is counted, not last-one-wins: see
+        # resolve_people()
+        if not field or field in VOTES:
             continue
         hashes = scope_hashes(db, scope, target)
         if hashes is None:
@@ -410,6 +416,28 @@ def resolve_people(db: sqlite3.Connection) -> int:
             dropped[name] += 1
         else:
             rows.append((h, v, s))
+
+    # WHO IS IN THIS PHOTO, from the app: "is this person in it?" yes or no,
+    # per photograph. Counted exactly as the app counts them (its photo_people
+    # view, migration 0012), so the library and the app never disagree about
+    # who is in a picture: each relative's latest word on a name in a
+    # photograph, names folded as the journal folds them; more yes than no puts
+    # the name on, more no than yes takes it off whatever else named them there.
+    said = {}
+    for who, h, field, value in db.execute(
+            "SELECT who, target, field, value FROM answers WHERE scope = 'file' "
+            "AND field IN ('in_photo', 'not_in_photo') ORDER BY when_, rowid"):
+        name = (value or "").strip()
+        if fold(name):
+            said[(who, h, fold(name))] = (field, name)
+    tally = {}
+    for (_, h, k), (field, name) in said.items():
+        t = tally.setdefault((h, k), [name, 0, 0])
+        t[0] = min(t[0], name)
+        t[1 if field == "in_photo" else 2] += 1
+    off = {hk for hk, (_, yes, no) in tally.items() if no > yes}
+    on = [(h, name, "human") for (h, _), (name, yes, no) in tally.items() if yes > no]
+    rows = on + [r for r in rows if (r[0], fold(r[1])) not in off]
     db.executemany("INSERT OR IGNORE INTO photo_people VALUES (?,?,?)", rows)
 
     # PER NAME, because one count beside a list of names is read as all of them.

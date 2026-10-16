@@ -20,6 +20,9 @@ nothing can ever overwrite it.
 - "?" and "for <who>" are questions, "unsure, blurry" is unidentifiable: none
   is ever recorded as a person
 - a cluster id that does not exist is refused
+- the app's "who is in this photo" yes and no are recorded as `in_photo` and
+  `not_in_photo`, one row per photograph, each under its own field: votes that
+  build_db counts, never one overwriting the other here
 - every crop on a sheet is checked against the assignment files before a human
   sees it
 - every --apply refreshes the off-disk backup of the journal

@@ -23,6 +23,22 @@ ONE CLOUD ROW, MANY JOURNAL ROWS
 carrying 24 hashes. The journal records what was said about each photograph,
 so it becomes 24 file-scope rows - ids `app-<uuid>-<n>`, so the cursor knows
 each one - and the cloud row is `ingested` only if every one of them was.
+
+THE LIBRARY NEVER VOIDS AN APP ANSWER
+
+`refused` takes an answer out of every view in the app, so only the app may
+refuse one. When the journal will not take a row - a photograph this machine
+has never seen, a field it has no place for yet - the cloud row stays `new`
+and its reason says why, beginning "library:". It is offered again on every
+run, and lands the day the library can take it. Until 2026-10-16 this marked
+such rows `refused`: every answer about a photograph that reached the app
+straight from Drive (and so was never on this machine) would have vanished
+from the app the first time this ran.
+
+A photograph the app showed a relative counts as shared here even when the
+library's own share set does not hold it: the relative saw it, so what they
+said about it is recorded. Only photographs the app shows now (photos.visible)
+and that an answer names are added.
 """
 
 from __future__ import annotations
@@ -49,7 +65,8 @@ from share_set import share_set, open_ro                         # noqa: E402
 
 UNDO_MINUTES = 10
 FIELD = {"person": "person", "unidentifiable": "unidentifiable",
-         "place": "place", "approx_year": "approx_year"}
+         "place": "place", "approx_year": "approx_year",
+         "in_photo": "in_photo", "not_in_photo": "not_in_photo"}
 
 
 def expand(answers: list) -> list:
@@ -76,6 +93,9 @@ def verdicts(answers: list, status: dict, cursor: set = frozenset()) -> dict:
     that recorded answers and then died before marking the cloud would leave
     them `new` forever: the next ingest skips them as already done, reports
     nothing about them, and nothing would ever mark them.
+
+    A row the journal would not take leaves the cloud row `new`, never
+    `refused`, with the reason prefixed "library:" - see the docstring above.
     """
     out = {}
     for a in answers:
@@ -86,7 +106,18 @@ def verdicts(answers: list, status: dict, cursor: set = frozenset()) -> dict:
         if any(v is None for v in mine.values()):
             continue
         bad = [v["reason"] for v in mine.values() if v["status"] != "ingested"]
-        out[uid] = ("refused", "; ".join(sorted(set(bad)))[:300]) if bad else ("ingested", None)
+        out[uid] = (("new", ("library: " + "; ".join(sorted(set(bad))))[:300]) if bad
+                    else ("ingested", None))
+    return out
+
+
+def shown(c, hashes) -> set:
+    """The hashes among these that the app shows now (photos.visible)."""
+    out, hashes = set(), sorted(set(hashes))
+    for i in range(0, len(hashes), 100):
+        vals = ",".join('"{}"'.format(h.replace('"', "")) for h in hashes[i:i + 100])
+        out.update(r["hash"] for r in c.select(
+            "photos", "select=hash&visible=is.true&hash=in.({})".format(vals)))
     return out
 
 
@@ -120,6 +151,12 @@ def main() -> int:
         shared, _ = share_set(db, blocked_hashes())
     finally:
         db.close()
+    seen = shown(c, [r["target"] for r in rows if r["scope"] == "file"])
+    extra = seen - set(shared)
+    shared = set(shared) | seen
+    if extra:
+        print("photographs the app shows that the library's share set does not hold: {:,}"
+              .format(len(extra)))
 
     tmp = tempfile.mkdtemp(prefix="app-pull-")
     rp, al, st = (os.path.join(tmp, n) for n in ("rows.json", "allowed.txt", "status.json"))
@@ -146,7 +183,7 @@ def main() -> int:
     marked = collections.Counter()
     for uid, (s, why) in verdicts(answers, status, cursor).items():
         c.patch("answers", "id=eq." + uid, {"status": s, "reason": why})
-        marked[s] += 1
+        marked["ingested" if s == "ingested" else "left new for the library"] += 1
     print("cloud rows marked: {}".format(dict(marked)))
     return 0
 

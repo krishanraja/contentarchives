@@ -312,6 +312,36 @@ def main():
         db.close()
 
         print()
+        print("8b. who is in this photo: the app's yes and no, counted as the app counts them")
+        # Mirrors the app's photo_people view (migration 0012), so the library
+        # and the app agree on who is in a picture: each relative's latest word
+        # per name per photograph; more yes than no adds the name, more no than
+        # yes takes it off, even a name a cluster or a tag gave it.
+        Journal(store, who="gran").record("file", "h1", "in_photo", "Aunty")
+        Journal(store, who="grandpa").record("file", "h1", "in_photo", "aunty")
+        Journal(store, who="cousin").record("file", "h1", "not_in_photo", "Aunty")
+        Journal(store, who="gran").record("file", "h2", "in_photo", "Uncle")
+        Journal(store, who="gran").record("file", "h2", "not_in_photo", "Uncle")
+        Journal(store, who="gran").record("file", "h2", "not_in_photo", "Nanna")
+        Journal(store, who="gran").record("file", "h3", "in_photo", "Dad")
+        Journal(store, who="grandpa").record("file", "h3", "not_in_photo", "Dad")
+        db = build(d, inv, idx, store)
+        people = lambda hh: [r[0] for r in db.execute(
+            "SELECT person FROM photo_people WHERE hash=? ORDER BY person", (hh,))]
+        check("two yes against one no puts the name on", people("h1"), ["Aunty"])
+        check("as a human answer", db.execute(
+            "SELECT source FROM photo_people WHERE hash='h1'").fetchone()[0], "human")
+        check("a relative's later no replaces their own yes, and a no takes off a tag name",
+              people("h2"), [])
+        check("a tie changes nothing: the cluster's name stays", people("h3"), ["Dad", "Mother"])
+        check("a vote is never written as a field of its own",
+              db.execute("SELECT COUNT(*) FROM resolved WHERE field IN "
+                         "('in_photo', 'not_in_photo')").fetchone()[0], 0)
+        check("the joined field agrees", db.execute(
+            "SELECT person FROM v_files WHERE path=?", (f1,)).fetchone()[0], "Aunty")
+        db.close()
+
+        print()
         print("9. audience: who may SEE this, derived every build")
         # Krish, 2026-09-18: "If I classify a personal photo as someone who also
         # belongs in Communal, it automatically becomes available by others

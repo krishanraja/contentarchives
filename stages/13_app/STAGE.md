@@ -68,6 +68,10 @@ nudity in this".
   `fold` in `web/lib/spelling.ts`: the same key); a near miss ("Meera Sha") is
   offered as "Did you mean Meera Shah?", one tap either way, never merged silently
 - a place or year the library gave is never replaced by an app answer
+- only the app refuses an app answer: the PC bridge (`pull_answers.py`) copies
+  answers into the journal and, when the journal will not take one, leaves it
+  `new` with a reason beginning "library:" and offers it again next run, because
+  `refused` takes an answer out of every view in the app (learning 83)
 - no screen of the app scrolls, on any device (Krish, 2026-10-05): every screen is
   one window tall, a photo takes the room its question leaves it, a list longer
   than its room turns like pages (`web/components/Fit.tsx`), and a phone on its
@@ -256,3 +260,4 @@ widths, synthetic family only).
 | 80 | a save reads the known names from a one-minute copy and checks only the answers given since; it never scans the library per tap | `code:web/lib/data.ts:per-save query must not scan the library`, `test:web/tests/memo.test.ts:a known name, however typed, never asks the database`, `test:web/tests/memo.test.ts:a name another phone gave a minute ago, missing from the kept list, is still that name` |
 | 81 | every choice on the Find screen is fetched before it is tapped and marks itself pressed at once; a place name is read the same way in a link and in typed words | `code:web/components/Go.tsx:fetched before it is`, `test:web/tests/search.test.ts:every choice on the Find screen answers the tap at once`, `test:web/tests/search.test.ts:chosen from the list, it is found again in its own link` |
 | 82 | a resumable cloud pass filters completed rows in one set query and fans out one-sample items through its bounded worker pool; it never pays one network round trip or one serial provider call per visible item | `code:stages/13_app/independent_moderation.py:Keep the resume filter in Postgres`, `code:stages/13_app/independent_moderation.py:write serially`, `test:tests/test_app_cloud.py:resume filtering is one set query`, `test:tests/test_app_cloud.py:independent photographs use the bounded worker pool` |
+| 83 | the PC bridge never voids an app answer: a row the journal will not take stays `new` with a reason beginning "library:" and is offered again next run; a photograph the app shows counts as shared | `code:stages/13_app/pull_answers.py:THE LIBRARY NEVER VOIDS AN APP ANSWER`, `test:tests/test_app_sync.py:the library never refuses an app answer`, `test:tests/test_app_sync.py:the app's visible photographs among the targets` |

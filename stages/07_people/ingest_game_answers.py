@@ -100,6 +100,13 @@ ALLOWED = {
     # `year`: a relative's "about 1985" must not be mistaken for a camera's
     # EXIF date, and build_db keeps it beside the real one, not over it.
     ("file", "approx_year"): None,
+    # "Who is in this photo?" in the app: a relative's yes or no that a named
+    # person is in ONE photograph. Votes, not facts - build_db counts them the
+    # way the app does (latest word per relative; more yes than no puts the name
+    # on, more no than yes takes it off), so neither field ever overwrites the
+    # other here.
+    ("file", "in_photo"): None,
+    ("file", "not_in_photo"): None,
 }
 APPROX_YEAR = re.compile(r"^(18[5-9]\d|19\d\d|20\d\d)s?$")
 
@@ -273,7 +280,7 @@ def _structured(r, rid, who, known, names, allowed):
         return ("refused", (rid, target, raw,
                             "a year is 1987 or a decade is 1980s"), None)
     value, was = raw, None
-    if field == "person":
+    if field in ("person", "in_photo", "not_in_photo"):
         value, f = canonical(raw, names)
         was = (raw, value) if f else None
     elif field == "unidentifiable":

@@ -186,4 +186,6 @@ TEST_PG_DSN=postgresql://... python tests/test_app_cloud.py   # from the repo ro
   set status = 'no' where email = '...'`. A phone already signed in stays in
   until it goes a year unused; to sign every phone out, bump `SESSION_VERSION`.
 - Answers live in `answers` (insert-only; Supabase backs it up daily); `status` says
-  new / undone / ingested / refused (with the reason).
+  new / undone / ingested / refused (with the reason). Only the app refuses: an
+  answer the PC's journal could not take yet stays `new`, its reason beginning
+  "library:", and `pull_answers.py` offers it again next run.

@@ -272,6 +272,26 @@ def main():
     check("prose is refused", ("hok", "approx_year", "ages ago") in got, False)
 
     print()
+    print("7c. who is in this photo: a yes or a no, on one photograph")
+    status = os.path.join(d, "status-who.json")
+    rows = [{"id": "app-w1", "scope": "file", "target": "hok",
+             "field": "in_photo", "value": "lauren ", "who": "grandma"},
+            {"id": "app-w2", "scope": "file", "target": "hok",
+             "field": "not_in_photo", "value": "Nanna", "who": "grandpa"},
+            {"id": "app-w3", "scope": "file", "target": "hnot",
+             "field": "in_photo", "value": "Nanna", "who": "grandpa"}]
+    run(rows, store, cursor, extra=["--allowed", allowed, "--status-out", status])
+    got = [(r["target"], r["field"], r["value"], r["who"]) for r in Journal(store).all_rows()]
+    check("a yes is recorded, folded onto the name the journal knows",
+          ("hok", "in_photo", "Lauren", "grandma") in got, True)
+    check("a no is recorded under its own field, never as a yes",
+          ("hok", "not_in_photo", "Nanna", "grandpa") in got, True)
+    st = json.load(io.open(status, encoding="utf-8"))
+    check("still only for photographs in the allowed set",
+          (st["app-w1"]["status"], st["app-w2"]["status"], st["app-w3"]["status"]),
+          ("ingested", "ingested", "refused"))
+
+    print()
     print("8. folding works in every script, and never folds two names into ''")
     check("Devanagari names keep distinct keys",
           G.fold("आशा") != G.fold("सीता") and G.fold("आशा") != "", True)

@@ -15,6 +15,11 @@ every opinion kept and human answers always winning.
 - the build writes a temporary database and renames it into place
 - a field that can hold several true values (person) holds all of them
 - a name a later answer replaced never comes back through the derived tag layer
+- the app's yes and no on who is in a photograph (`in_photo`, `not_in_photo`) are
+  counted exactly as the app counts them (its `photo_people` view, migration
+  0012): each relative's latest word per name per photograph; more yes than no
+  adds the name, more no than yes takes it off. They are never written into
+  `resolved` as fields of their own
 - **`audience` is DERIVED on every build and never asserted.** `family` when a
   photograph holds someone who also appears in Communal, `private` otherwise,
   and always `private` inside `Media\Personal\Intimate`. Krish, 2026-09-18:
@@ -50,6 +55,7 @@ every opinion kept and human answers always winning.
 | 55 | the swap is retried, and a lock is never reported as lost work | `code:stages/08_index/build_db.py:def promote` |
 | 49 | a group photograph keeps every person in it | `test:tests/test_build_db.py:a group photograph keeps everybody in it` |
 | 54 | a name a later answer replaced never returns through the derived tag layer, and an uncontradicted tag name is never stripped | `code:stages/08_index/build_db.py:superseded`, `test:tests/test_build_db.py:the replaced name is gone from photo_people` |
+| 83 | who is in a photograph is counted the way the app counts it, so the library and the app never disagree about the same picture | `code:stages/08_index/build_db.py:Counted exactly as the app counts them`, `test:tests/test_build_db.py:two yes against one no puts the name on` |
 | 56 | `v_files` is one row per path, so a per-hash question groups instead of joining, and a count above the file count is a fan-out | `code:stages/08_index/build_db.py:GROUP BY f.path`, `test:tests/test_build_db.py:one row per hash, never one row per join` |
 | 68 | the index is rebuilt LAST, after the disk and every path record have settled - a rebuild started early captures the old state and looks authoritative | prose-only |
 | 69 | a job that recently worked and now dies is measured against the machine before the code is touched | prose-only |
