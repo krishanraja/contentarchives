@@ -77,8 +77,11 @@ python -u "$repo\stages\13_app\pull_answers.py" --apply *>> $log
 if ($LASTEXITCODE -ne 0) { Stop-Chain 'pull failed - the cloud rows stay new and will be retried' }
 
 Say '[merge] names reach sibling clusters'
+# 0.70, not chain_rounds' 0.68 (Krish, 2026-10-16): at 0.68 two groups put
+# Shilu with Bharti and with Jyoti, and all five labels were confirmed right,
+# so the faces only look alike. 0.70 is the lowest threshold with no such group.
 # gate:exempt a couple of minutes, no progress signal; a refusal to mix two named people is a WARNING here
-python -u "$repo\stages\06_faces\merge_clusters.py" --threshold 0.68 --apply *>> $log
+python -u "$repo\stages\06_faces\merge_clusters.py" --threshold 0.70 --apply *>> $log
 # A non-zero exit is EITHER a refusal to mix two named people OR a failure (on
 # 2026-10-16 a missing face-emb.npy, since removed as an input, and this line
 # called that traceback a refusal). Say which it might be, and point at the log.
