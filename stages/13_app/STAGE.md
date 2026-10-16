@@ -241,7 +241,7 @@ nudity in this".
 | `stages/13_app/export_library.py` | the ONE-TIME carry: everything the library learned, into Drive as SQLite, to `LIBRARY-EXPORT.md` |
 | `stages/13_app/pull_answers.py` | optional, with the bridge: app answers into the journal, older than the undo window |
 | `stages/13_app/cloud.py` | Supabase REST and storage, keys from the environment only |
-| `stages/13_app/chain_app_sync.ps1` | refreshes the BACKUP drive when it is plugged in, under any letter (found by its markers, mapped to D: for the run): pull, merge, rebuild, backup; seed only with `-Seed`, because a seed empties the cloud's faces and clusters and refills them from this library alone. No drive: a clean exit 0 |
+| `stages/13_app/chain_app_sync.ps1` | refreshes the BACKUP drive when it is plugged in, under any letter (found by its markers, mapped to D: for the run): pull, merge, rebuild, backup; seed only with `-Seed`, because a seed empties the cloud's faces and clusters and refills them from this library alone. No drive: a clean exit 0. The prompt to run it on demand: `stages/13_app/EXTERNAL-DRIVE-SYNC.md` |
 | `stages/13_app/export_record.py` | nightly, in the cloud workflow: every answer, the journal and a catalogue of every photograph (CATALOGUE.md) frozen as gzip'd CSV in `record_exports`, 14 nights kept, read back and checked, and the same three files replaced in the Drive folder "ContentArchives record" (md5-checked), so a copy outside the database exists with no computer on |
 | `stages/13_app/backup_to_drive.py` | the backup drive's refresh: the newest cloud export saved and sha256-checked, and every photograph H: has that the drive lacks copied and md5-checked against Drive's own; never overwrites, never deletes, --max-gb per run |
 
