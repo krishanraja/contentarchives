@@ -227,7 +227,7 @@ nudity in this".
 | `stages/13_app/export_library.py` | the ONE-TIME carry: everything the library learned, into Drive as SQLite, to `LIBRARY-EXPORT.md` |
 | `stages/13_app/pull_answers.py` | optional, with the bridge: app answers into the journal, older than the undo window |
 | `stages/13_app/cloud.py` | Supabase REST and storage, keys from the environment only |
-| `stages/13_app/chain_app_sync.ps1` | nightly: pull, merge, rebuild, seed |
+| `stages/13_app/chain_app_sync.ps1` | nightly: pull, merge, rebuild; seed only with `-Seed`, because a seed empties the cloud's faces and clusters and refills them from this library alone |
 
 The phone app itself lives in `web/` (Next.js on Vercel, project root `web`),
 outside `stages/` because `npm install` on Windows writes `.ps1` and `.py`

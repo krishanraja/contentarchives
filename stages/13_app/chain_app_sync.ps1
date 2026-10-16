@@ -11,8 +11,18 @@
 #                                      under each relative's name; G: backup refreshed
 #   merge    merge_clusters.py         a new name reaches the group's sibling clusters
 #   rebuild  build_db.py               the names and places land on the photographs
-#   seed     seed_index.py --apply     the cloud index re-seeded and reconciled;
-#                                      exits non-zero unless the cloud's own count matches
+#   seed     seed_index.py --apply     ONLY with -Seed: the cloud index re-seeded and
+#                                      reconciled from this machine
+#
+# WHY SEED IS OFF UNLESS ASKED FOR
+#
+# Since 2026-10-05 the cloud builds its own index from Drive (cloud_enrich.py,
+# the one writer), and it holds photographs this machine never had: everything
+# that reached Drive straight from a phone, and the Personal photographs it
+# shows. seed_index.py empties the cloud's faces, clusters, people and queue and
+# refills them from this library alone. Measured 2026-10-16, that would have
+# deleted 9,230 faces on 3,724 photographs that exist only in the cloud. Run it
+# by hand with -Seed only after making sure the cloud has nothing it lacks.
 #
 # WHY NO STEP IS SUPERVISED BY Invoke-Step
 #
@@ -25,7 +35,7 @@
 # is safe to re-run.
 
 [CmdletBinding()]
-param()
+param([switch] $Seed)
 
 $ErrorActionPreference = 'Stop'
 $repo = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
@@ -74,6 +84,11 @@ python -u "$repo\stages\08_index\build_db.py" *>> $log
 if ($LASTEXITCODE -ne 0) { Stop-Chain 'rebuild failed - nothing uploaded' }
 if ((Get-Item $live).LastWriteTimeUtc -le $was) { Stop-Chain 'build_db exited 0 but library.db was not replaced' }
 
+if (-not $Seed) {
+    Say '[seed] skipped: the cloud builds its own index; pass -Seed only on purpose'
+    Say 'APP SYNC COMPLETE'
+    exit 0
+}
 Say '[seed] cloud index'
 # gate:exempt exits non-zero unless the cloud's own count equals the share set
 python -u "$repo\stages\13_app\seed_index.py" --apply *>> $log
