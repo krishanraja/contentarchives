@@ -31,9 +31,12 @@ bound to a Drive file and not hidden. A face seen only in a video is shown on a
 frame of its own, pulled from Drive and judged before anyone sees it (`frames`).
 
 **Nothing depends on D: or any PC.** Ruling (Krish, 2026-10-04): the index is
-built from Drive in the cloud. When the library machine is connected it can
-optionally add what only it knows (`seed_index.py`, the bridge) and copy answers
-into the journal (`pull_answers.py`); the app never waits for it.
+built from Drive in the cloud. Ruling (Krish, 2026-10-16): the cloud is the
+record, H: (Google Drive) holds the photographs, and the external drive is only
+a backup. Every night the cloud freezes every answer and a catalogue of every
+photograph (`stages/13_app/export_record.py`, `CATALOGUE.md`); when the backup
+drive is plugged in, under any letter, `chain_app_sync.ps1` copies that and any
+new photographs from H: onto it. The app never waits for any of it.
 
 ## What it does, screen by screen
 

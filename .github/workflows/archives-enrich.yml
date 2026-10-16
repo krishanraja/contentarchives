@@ -156,3 +156,14 @@ jobs:
           SPEND_CAP_USD: "60"
           MAX_MINUTES: "320"
         run: python stages/13_app/cloud_enrich.py
+
+      # The family's record, frozen nightly: every answer, the library journal
+      # and a catalogue of every photograph for a future re-sort of both copies
+      # (stages/13_app/export_record.py, CATALOGUE.md). It runs even when the
+      # build above failed part-way, so a bad night still keeps a copy of what
+      # the family said. Read back and checked, or this step fails.
+      - name: freeze the family's record
+        if: ${{ !cancelled() }}
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: python stages/13_app/export_record.py

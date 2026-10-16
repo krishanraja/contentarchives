@@ -68,6 +68,14 @@ nudity in this".
   `fold` in `web/lib/spelling.ts`: the same key); a near miss ("Meera Sha") is
   offered as "Did you mean Meera Shah?", one tap either way, never merged silently
 - a place or year the library gave is never replaced by an app answer
+- the cloud is the record, H: (Google Drive, `My Drive\ContentLibrary`) holds the
+  photographs, and the external drive is only a backup (Krish, 2026-10-16: "nothing
+  should rely on this external drive, everything should be able to be done on H
+  drive"). Every night the cloud freezes the family's record and a catalogue of
+  every photograph (`export_record.py`, CATALOGUE.md) with no PC; the backup drive
+  is refreshed from that and from H: whenever it is plugged in, under any letter,
+  and its absence fails nothing. Files are not moved: the app organises, and the
+  catalogue carries what a later re-sort of both copies needs
 - only the app refuses an app answer: the PC bridge (`pull_answers.py`) copies
   answers into the journal and, when the journal will not take one, leaves it
   `new` with a reason beginning "library:" and offers it again next run, because
@@ -227,7 +235,9 @@ nudity in this".
 | `stages/13_app/export_library.py` | the ONE-TIME carry: everything the library learned, into Drive as SQLite, to `LIBRARY-EXPORT.md` |
 | `stages/13_app/pull_answers.py` | optional, with the bridge: app answers into the journal, older than the undo window |
 | `stages/13_app/cloud.py` | Supabase REST and storage, keys from the environment only |
-| `stages/13_app/chain_app_sync.ps1` | nightly: pull, merge, rebuild; seed only with `-Seed`, because a seed empties the cloud's faces and clusters and refills them from this library alone |
+| `stages/13_app/chain_app_sync.ps1` | refreshes the BACKUP drive when it is plugged in, under any letter (found by its markers, mapped to D: for the run): pull, merge, rebuild, backup; seed only with `-Seed`, because a seed empties the cloud's faces and clusters and refills them from this library alone. No drive: a clean exit 0 |
+| `stages/13_app/export_record.py` | nightly, in the cloud workflow: every answer, the journal and a catalogue of every photograph (CATALOGUE.md) frozen as gzip'd CSV in `record_exports`, 14 nights kept, read back and checked |
+| `stages/13_app/backup_to_drive.py` | the backup drive's refresh: the newest cloud export saved and sha256-checked, and every photograph H: has that the drive lacks copied and md5-checked against Drive's own; never overwrites, never deletes, --max-gb per run |
 
 The phone app itself lives in `web/` (Next.js on Vercel, project root `web`),
 outside `stages/` because `npm install` on Windows writes `.ps1` and `.py`
@@ -243,6 +253,8 @@ widths, synthetic family only).
 - `tests/test_app_share_set.py`
 - `tests/test_app_export.py`
 - `tests/test_app_sync.py`
+- `tests/test_backup_to_drive.py` - the backup drive is found by what is on it,
+  never required, never overwritten, and every copy is checked against Drive's md5
 - `tests/test_game_ingest.py`
 - also `web/tests/*.test.ts` (vitest) and `web/e2e/*.spec.ts` (Playwright), which run under Node
 

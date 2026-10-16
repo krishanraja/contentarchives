@@ -298,6 +298,10 @@ def main():
           ("http_429", "ValueError"))
 
     print()
+    print("10. the family's record is frozen every night, and reads back whole")
+    record(out)
+
+    print()
     print("9. the public log carries numbers only")
     text = out.getvalue()
     leaks = [s for s in ("secret", "Secretname", "beach", "umbrella", "Media/Communal", ".jpg")
@@ -316,6 +320,87 @@ def main():
         return 1
     print("all checks passed")
     return 0
+
+
+# ----------------------------------------------------------------- record --
+def record(out):
+    """export_record.py: what the family said, and a catalogue of every photo.
+
+    Krish, 2026-10-16: the backup drive "should just be a backup, nothing should
+    rely on" it, and the files are not moved, "but set this up so that in the
+    future, I can use the enriched information to resegment in both the external
+    drive and the H drive". So every night the cloud freezes the answers, the
+    journal and a catalogue that says where each photograph is on BOTH copies
+    and the date and place the app shows, with where each came from.
+    """
+    import csv as _csv
+    import datetime as dt
+    import gzip
+    import export_record as ER
+    db = fresh_db("arch_record_test")
+    db.execute("""insert into photos (hash, md5, drive_id, rel_path, media, taken_at, year, approx_year,
+                                      place, family_when, family_place, people, description) values
+        ('h1', 'm1', 'd1', 'Media/Communal/1985/a.jpg', 'photo', '1985-06-01T10:00:00Z', 1985, null,
+         'Leith', null, null, '{Asha}', 'Secretname at the beach'),
+        ('h2', 'm2', 'd2', 'Media/Personal/NoDate/b.jpg', 'photo', null, null, null,
+         null, '1980s', 'Goa', '{}', null),
+        ('h3', null, null, 'Media/Communal/NoDate/c.jpg', 'video', null, null, '1990s',
+         null, null, null, '{}', null)""")
+    db.execute("""insert into answers (id, who, scope, target, field, value, hashes) values
+        (%s, 'gran', 'file', 'h2', 'in_photo', 'Ravi', '{h2}'),
+        (%s, 'gran', 'file', 'h2', 'approx_year', '1980s', '{h2}')""", (str(uuid.uuid4()), str(uuid.uuid4())))
+    db.execute("""insert into journal (id, at, who, scope, target, field, value, confidence, note) values
+        (%s, now(), 'krish', 'cluster', 'c1', 'person', 'Asha', 1.0, '')""", (str(uuid.uuid4()),))
+    db.commit()
+
+    def body(day, name):
+        b = q(db, "select body from record_exports where day = %s and name = %s", day, name)[0][0]
+        return list(_csv.DictReader(io.StringIO(gzip.decompress(bytes(b)).decode("utf-8"))))
+
+    d1 = dt.date(2026, 10, 16)
+    with contextlib.redirect_stdout(out):
+        got = ER.export(db, d1, keep=2)
+    check("tonight's export holds every answer, journal row and photo",
+          got, {"answers": 2, "journal": 1, "catalogue": 3})
+    check("  and it reads back whole", ER.verify(db, d1), [])
+    cat = {r["hash"]: r for r in body(d1, "catalogue")}
+    check("the catalogue finds a photo on both copies (md5, Drive id, path)",
+          (cat["h1"]["md5"], cat["h1"]["drive_id"], cat["h1"]["rel_path"]),
+          ("m1", "d1", "Media/Communal/1985/a.jpg"))
+    check("the family's date wins, and says it is the family's",
+          (cat["h2"]["best_when"], cat["h2"]["when_source"]), ("1980s", "family"))
+    check("then the camera's clock",
+          (cat["h1"]["best_when"], cat["h1"]["when_source"]), ("1985-06-01", "camera"))
+    check("then the library's estimate", (cat["h3"]["best_when"], cat["h3"]["when_source"]),
+          ("1990s", "library"))
+    check("the family's place wins over the index's",
+          ((cat["h2"]["best_place"], cat["h2"]["place_source"]),
+           (cat["h1"]["best_place"], cat["h1"]["place_source"])),
+          (("Goa", "family"), ("Leith", "index")))
+    check("who is in it, as the app counts it (the family's yes included)",
+          (cat["h1"]["people"], cat["h2"]["people"]), ("Asha", "Ravi"))
+    check("the side comes from the path", (cat["h1"]["side"], cat["h2"]["side"]),
+          ("Communal", "Personal"))
+    check("every answer is kept, with its field",
+          sorted(r["field"] for r in body(d1, "answers")), ["approx_year", "in_photo"])
+
+    with contextlib.redirect_stdout(out):
+        ER.export(db, d1, keep=2)
+    check("a second run the same night replaces that night, never doubles it",
+          q(db, "select count(*) from record_exports where day = %s", d1)[0][0], 3)
+    for day in (dt.date(2026, 10, 17), dt.date(2026, 10, 18)):
+        with contextlib.redirect_stdout(out):
+            ER.export(db, day, keep=2)
+    check("only the newest --keep nights are kept",
+          [r[0] for r in q(db, "select distinct day from record_exports order by day")],
+          [dt.date(2026, 10, 17), dt.date(2026, 10, 18)])
+
+    db.execute("update record_exports set body = %s where day = %s and name = 'answers'",
+               (gzip.compress(b"id\n1\n", mtime=0), dt.date(2026, 10, 18)))
+    db.commit()
+    check("a copy that no longer matches its sha256 is caught",
+          ER.verify(db, dt.date(2026, 10, 18)), ["answers: sha256 does not match its body"])
+    db.close()
 
 
 # ----------------------------------------------------------------- facets --
