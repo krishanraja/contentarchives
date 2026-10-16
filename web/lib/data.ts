@@ -4,6 +4,7 @@ import { embed, hasGemini } from "./gemini";
 import { compose, describe, foldYears, parseQuery, type Media, type Parsed } from "./search";
 import { spellAs } from "./spelling";
 import { memo } from "./memo";
+import { whenText } from "./when";
 
 export type Card = {
   hash: string; media: string; year: number | null; approx_year: string | null;
@@ -240,12 +241,18 @@ export async function nextFace(who: string, after: string[] = []) {
     : [];
   const keys = [q.hero_face, ...(q.sample_faces as string[])];
   const faces = await db`select f.key, f.hash, f.bbox, f.frame, f.only_face, p.media,
-       p.width, p.height, p.place, p.year, p.approx_year
+       p.width, p.height, p.place, p.year, p.approx_year,
+       p.taken_at, p.family_when, p.family_place, p.day_key
      from faces f join photos p on p.hash = f.hash
      where f.key = any(${keys}::text[]) and p.visible`;
   const byKey = new Map(faces.map((f) => [f.key as string, f]));
   const hero = byKey.get(q.hero_face);
   if (!hero) return null;
+  // the rest of that moment: who is holding the baby is often in the next
+  // photo along (Krish, 2026-10-16). Only photos the app may show.
+  const day = hero.day_key ? (await db`select hash from photos
+      where day_key = ${hero.day_key} and visible and hash <> ${hero.hash}
+      order by taken_at nulls last, hash limit 8`).map((r) => r.hash as string) : [];
   // jsonb arrives parsed; a double-encoded string is tolerated, never trusted to be an array
   let raw: unknown = q.suggestions;
   if (typeof raw === "string") { try { raw = JSON.parse(raw); } catch { raw = []; } }
@@ -255,6 +262,10 @@ export async function nextFace(who: string, after: string[] = []) {
     cluster: (q.hero_cluster as string | null) || (q.group_id as string),
     photos: q.photo_count as number,
     hero,
+    // a clue to when and where, by the same rule as the photo page
+    clue: { when: whenText({ family_when: hero.family_when, year: hero.year, approx_year: hero.approx_year, taken_at: hero.taken_at }),
+      where: (hero.family_place || hero.place || null) as string | null },
+    day,
     samples: (q.sample_faces as string[]).map((k) => byKey.get(k)).filter(Boolean),
     suggestions,
     contest,

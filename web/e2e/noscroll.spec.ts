@@ -267,6 +267,21 @@ test("every screen, in every state, fits every screen size without scrolling", a
   await page.goto("/help");
   await expect(page.getByText("Is this Ravi Raja?")).toBeVisible();
   await fits(page, "who is this, yes/no");
+  // the whole photo full screen, and with the rest of that day
+  await page.click("button:has-text('See all of it')");
+  await fits(page, "who is this, the whole photo");
+  await page.click("button:has-text('Back to the question')");
+  const heroHash = (await (await page.request.get("/api/face/next")).json()).hero.hash as string;
+  const dayOf = (await db`select hash from photos where visible and media = 'photo' and hash <> ${heroHash} order by hash limit 6`).map((r) => r.hash as string);
+  const was = await db`select hash, day_key from photos where hash = any(${[heroHash, ...dayOf]}::text[])`;
+  await db`update photos set day_key = 'noscroll-day' where hash = any(${[heroHash, ...dayOf]}::text[])`;
+  await page.goto("/help");
+  await page.click("button:has-text('See that day')");
+  await fits(page, "who is this, the whole photo and that day");
+  await page.click("button:has-text('Back to the question')");
+  for (const r of was) await db`update photos set day_key = ${r.day_key} where hash = ${r.hash}`;
+  await page.goto("/help");
+  await expect(page.getByText("Is this Ravi Raja?")).toBeVisible();
   await page.click("button:has-text('No')");
   await fits(page, "who is this, choose");
   await page.click("button:has-text('Someone else')");

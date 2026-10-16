@@ -5,13 +5,15 @@ import Shot from "@/components/Shot";
 import Fit from "@/components/Fit";
 import Undo from "@/components/Undo";
 import Confetti from "@/components/Confetti";
+import Whole from "@/components/Whole";
 import { send, uuid } from "@/components/outbox";
 import { ahead } from "@/components/ahead";
 import { close, exact, fold } from "@/lib/spelling";
 
 type Face = { key: string; bbox: number[] };
 type Sugg = { name: string; face: string; score: number };
-type Q = { group: string; cluster: string; photos: number; hero: Face; samples: Face[]; suggestions: Sugg[]; ask: Sugg | null; contest: string[] } | null;
+type Q = { group: string; cluster: string; photos: number; hero: Face; samples: Face[]; suggestions: Sugg[]; ask: Sugg | null; contest: string[];
+  clue?: { when: string | null; where: string | null }; day?: string[] } | null;
 
 // "Nani" is a different person depending on who is speaking. Ask for a name.
 const RELATION = new Set(["nani", "nana", "dadi", "dada", "mama", "mami", "masi", "mausi", "chacha",
@@ -37,6 +39,8 @@ export default function NameGame() {
   const [seen, setSeen] = useState<string[]>([]);
   const [skipped, setSkipped] = useState(0);
   const [err, setErr] = useState("");
+  const [whole, setWhole] = useState(false);
+  const closeWhole = useCallback(() => setWhole(false), []);
   const next = useRef(ahead<Q>());
   // an answer still on its way: undo waits for it, or it would arrive after the undo
   const sending = useRef(new Map<string, Promise<unknown>>());
@@ -48,7 +52,7 @@ export default function NameGame() {
     let r = held ? await held.p : undefined;
     if (r === undefined) r = await getFace(after);
     if (r === undefined) { setErr("No internet connection. Your answers are safe on this phone."); setQ(null); return; }
-    setQ(r); setMode(r?.ask ? "ask" : "choose"); setTyped(""); setWarn("");
+    setQ(r); setMode(r?.ask ? "ask" : "choose"); setTyped(""); setWarn(""); setWhole(false);
     if (r) { const then = [...after, r.group]; next.current.start(then.join(","), () => getFace(then), pictures); }
   }, []);
 
@@ -149,8 +153,17 @@ export default function NameGame() {
   const others = q.suggestions.filter((s) => !q.contest.some((n) => fold(n) === fold(s.name)));
   const typedNow = typed.trim().replace(/\s+/g, " ");
   return (
+    <>
+    {/* beside the game, not in it: the game is put out of reach while it is open */}
+    {whole && <Whole src={faceUrl(q.hero.key, true)} day={q.day || []} onClose={closeWhole} />}
     <div className={`game ${mode}`}>
-      <Shot src={faceUrl(q.hero.key, true)} bbox={q.hero.bbox} alt="A photo with one face circled" />
+      <Shot src={faceUrl(q.hero.key, true)} bbox={q.hero.bbox} alt="A photo with one face circled" tag={<>
+        {/* a clue to when and where (Krish, 2026-10-16) */}
+        {(q.clue?.when || q.clue?.where) && <span className="badge">{[q.clue.when, q.clue.where].filter(Boolean).join(" · ")}</span>}
+        <button type="button" className="btn small seeall" onClick={() => setWhole(true)}>
+          {q.day?.length ? "See that day" : "See all of it"}
+        </button>
+      </>} />
       {q.samples.length > 0 && mode !== "type" && (
         <div className="samples">
           <p className="muted">The same person?</p>
@@ -241,5 +254,6 @@ export default function NameGame() {
         )}
       </div>
     </div>
+    </>
   );
 }

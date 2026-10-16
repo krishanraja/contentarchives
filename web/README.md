@@ -79,7 +79,12 @@ into the journal (`pull_answers.py`); the app never waits for it.
   been watched whole and judged clear (`video_checks`), otherwise its still.
   Anyone can hide a photo for everyone.
 - **Who is this?** (`/help`) and **Where and when?** (`/story`): the naming
-  games; every answer is one person's vote in `answers`.
+  games; every answer is one person's vote in `answers`. Who is this? shows
+  when and where the photo was taken as a badge on it (the photo page's own
+  rule: the family's answer, then the file's date, then the year folder), and
+  **See all of it** opens the whole photo full screen without the ring's
+  dimming, with the other photos from that day (`day_key`) a tap each: who is
+  holding the baby is often in the next photo along (Krish, 2026-10-16).
 - Sizes: every control at least 48px, body text 18px, no text under 14px
   (Ruling, Krish, 2026-10-11); nothing on any screen scrolls.
 

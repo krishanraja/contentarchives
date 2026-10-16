@@ -578,6 +578,51 @@ test("Who is this: a strong match is a yes/no, and the name lands in the databas
   await expect(page.locator(".sentence")).toContainText("of Kamala Raja");
 });
 
+test("Who is this: a clue to when and where, and the whole photo with the rest of that day", async ({ page }) => {
+  await signIn(page);
+  const q = await (await page.request.get("/api/face/next")).json();
+  const [hero] = await db`select hash, year, family_when, taken_at, coalesce(family_place, place) as place, day_key
+    from photos where hash = ${q.hero.hash}`;
+  // the year the badge must show: the family's answer, then the date taken, then the year folder
+  const year = hero.family_when ? String(hero.family_when).slice(0, 4)
+    : hero.taken_at ? String(new Date(hero.taken_at).getUTCFullYear()) : hero.year ? String(hero.year) : null;
+  const others = (await db`select hash from photos where visible and media = 'photo' and hash <> ${hero.hash} order by hash limit 2`).map((r) => r.hash as string);
+  const was = await db`select hash, day_key from photos where hash = any(${[hero.hash, ...others]}::text[])`;
+  await db`update photos set day_key = 'e2e-one-day' where hash = any(${[hero.hash, ...others]}::text[])`;
+  try {
+    await page.goto("/help");
+    await expect(page.locator(".game .frame img")).toBeVisible();          // whichever face comes next
+    // the clue: the year it was taken (the file's date, or the family's), and where
+    const badge = page.locator(".frame .badge");
+    if (year) await expect(badge).toContainText(year);
+    if (hero.place) await expect(badge).toContainText(hero.place);
+    // the whole photo, full size, no ring, with the other photos from that day
+    await page.click("button:has-text('See that day')");
+    const whole = page.getByRole("dialog", { name: "The whole photo" });
+    await expect(whole).toBeVisible();
+    await expect(whole.getByText("This photo and 2 more from that day")).toBeVisible();
+    await expect(whole.locator(".whole-pic img")).toHaveAttribute("src", /\/face\/.+whole=1/);
+    await floor(page, "who-is-this, the whole photo");
+    await whole.getByRole("button", { name: "Photo 2 from that day" }).click();
+    await expect(whole.locator(".whole-pic img")).toHaveAttribute("src", new RegExp(`/img/v/${others[0]}`));
+    await expect.poll(() => whole.locator(".whole-pic img").evaluate((i: HTMLImageElement) => i.naturalWidth)).toBeGreaterThan(0);
+    await whole.getByRole("button", { name: "Back to the question" }).click();
+    await expect(whole).toHaveCount(0);
+    await expect(page.getByText(/Is this |Who is this\?|People said different names/).first()).toBeVisible();   // the question is where it was
+    // Escape closes it too
+    await page.click("button:has-text('See that day')");
+    await page.keyboard.press("Escape");
+    await expect(page.getByRole("dialog")).toHaveCount(0);
+  } finally {
+    // each photo back in its own day, exactly as it was: later tests group by it
+    for (const r of was) await db`update photos set day_key = ${r.day_key} where hash = ${r.hash}`;
+  }
+  // with no other photos from that day, the button simply shows the whole photo
+  await page.goto("/help");
+  await page.click("button:has-text('See all of it')");
+  await expect(page.getByRole("dialog", { name: "The whole photo" }).getByText("The whole photo")).toBeVisible();
+});
+
 test("the next face is already there: no blank Finding screen between faces", async ({ page }) => {
   await cleanSlate();
   await signIn(page);
@@ -990,7 +1035,9 @@ test("places: a misspelling is caught, a second opinion is counted not written o
   await expect.poll(async () => (await db`select value from answers where field = 'place'`).map((r) => r.value)).toEqual(["Brighton"]);
 
   // one photo, three people: first answer shows; a different one is kept but does not replace it
-  const [p] = await db`select hash from photos where place is null and visible and media = 'photo' limit 1`;
+  // a photo no one has placed yet, the same one every run (not the one just called Brighton)
+  const [p] = await db`select hash from photos where place is null and family_place is null and visible and media = 'photo'
+    order by hash limit 1`;
   const grandpa = await person(browser, "Grandpa");
   const meera = await person(browser, "Auntie Meera");
   const say = async (pg: typeof page, value: string, hash = p.hash as string) => {
@@ -1012,7 +1059,7 @@ test("places: a misspelling is caught, a second opinion is counted not written o
 
   // a wrong library place is put right by the family (Krish, 2026-10-06), and the
   // library's own is kept underneath: take the answer back and it shows again
-  const [lib] = await db`select hash from photos where place = 'Sydney' and visible and media = 'photo' limit 1`;
+  const [lib] = await db`select hash from photos where place = 'Sydney' and visible and media = 'photo' order by hash limit 1`;
   const delhi = await say(grandpa, "Delhi", lib.hash);
   expect(await place(lib.hash)).toBe("Delhi");
   expect((await db`select place from photos where hash = ${lib.hash}`)[0].place).toBe("Sydney");
