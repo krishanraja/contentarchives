@@ -400,6 +400,67 @@ def record(out):
     db.commit()
     check("a copy that no longer matches its sha256 is caught",
           ER.verify(db, dt.date(2026, 10, 18)), ["answers: sha256 does not match its body"])
+
+    # A COPY IN DRIVE, WITH NO COMPUTER: the three files Krish owns in the one
+    # folder the service account may write are replaced, and checked by the md5
+    # Drive reports back. Found by name - and no id ever reaches the log.
+    import hashlib
+
+    class Resp:
+        def __init__(self, code, body=None):
+            self.status_code, self._b = code, body or {}
+
+        def json(self):
+            return self._b
+
+    class FakeDriveSession:
+        def __init__(self, names=("answers.csv.gz", "journal.csv.gz", "catalogue.csv.gz"),
+                     corrupt=False, refuse=False):
+            self.ids = {n: "FILEID-secret-" + n for n in names}
+            self.stored, self.corrupt, self.refuse = {}, corrupt, refuse
+
+        def get(self, url, params, timeout):
+            if "mimeType = 'application/vnd.google-apps.folder'" in params["q"]:
+                return Resp(200, {"files": [{"id": "FOLDERID-secret", "name": ER.DRIVE_FOLDER}]})
+            assert "'FOLDERID-secret' in parents" in params["q"]
+            return Resp(200, {"files": [{"id": i, "name": n} for n, i in self.ids.items()]})
+
+        def patch(self, url, params, data, headers, timeout):
+            if self.refuse:
+                return Resp(403)
+            fid = url.rsplit("/", 1)[1]
+            self.stored[fid] = data
+            return Resp(200, {"md5Checksum": "0" * 32 if self.corrupt else hashlib.md5(data).hexdigest()})
+
+    d4 = dt.date(2026, 10, 19)
+    fake = FakeDriveSession()
+    with contextlib.redirect_stdout(out):
+        ER.export(db, d4, keep=2, drive=ER.DriveCopy(fake))
+    dbody = {n: bytes(q(db, "select body from record_exports where day = %s and name = %s", d4, n)[0][0])
+             for n in ("answers", "journal", "catalogue")}
+    check("tonight's three files are replaced in the record folder, byte for byte",
+          {n: fake.stored.get("FILEID-secret-{}.csv.gz".format(n)) == b for n, b in dbody.items()},
+          {"answers": True, "journal": True, "catalogue": True})
+
+    lacking = FakeDriveSession(names=("answers.csv.gz", "journal.csv.gz"))
+    try:
+        with contextlib.redirect_stdout(out):
+            ER.export(db, dt.date(2026, 10, 20), keep=3, drive=ER.DriveCopy(lacking))
+        check("a file missing from the record folder fails the run", "passed", "failed")
+    except SystemExit:
+        check("a file missing from the record folder fails the run", "failed", "failed")
+    check("  but only after the database copy is safe",
+          ER.verify(db, dt.date(2026, 10, 20)), [])
+    for label, sess in (("Drive reporting different bytes fails the run", FakeDriveSession(corrupt=True)),
+                        ("an upload Drive refuses fails the run", FakeDriveSession(refuse=True))):
+        try:
+            with contextlib.redirect_stdout(out):
+                ER.export(db, dt.date(2026, 10, 21), keep=4, drive=ER.DriveCopy(sess))
+            check(label, "passed", "failed")
+        except SystemExit:
+            check(label, "failed", "failed")
+    check("no Drive id ever reaches the public log",
+          "FILEID" in out.getvalue() or "FOLDERID" in out.getvalue(), False)
     db.close()
 
 

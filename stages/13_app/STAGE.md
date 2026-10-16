@@ -76,6 +76,12 @@ nudity in this".
   is refreshed from that and from H: whenever it is plugged in, under any letter,
   and its absence fails nothing. Files are not moved: the app organises, and the
   catalogue carries what a later re-sort of both copies needs
+- the service account reads Drive everywhere it is shared and writes to exactly one
+  folder, "ContentArchives record" (Krish, 2026-10-16: "can we not do this in the
+  cloud? My computer is not on 24 hours"): it replaces the contents of the three
+  files Krish owns there each night, checked by the md5 Drive reports back, and can
+  create, move or delete nothing (a service account has no Drive storage). The
+  folder is found by name; no Drive id is ever committed or logged
 - only the app refuses an app answer: the PC bridge (`pull_answers.py`) copies
   answers into the journal and, when the journal will not take one, leaves it
   `new` with a reason beginning "library:" and offers it again next run, because
@@ -236,7 +242,7 @@ nudity in this".
 | `stages/13_app/pull_answers.py` | optional, with the bridge: app answers into the journal, older than the undo window |
 | `stages/13_app/cloud.py` | Supabase REST and storage, keys from the environment only |
 | `stages/13_app/chain_app_sync.ps1` | refreshes the BACKUP drive when it is plugged in, under any letter (found by its markers, mapped to D: for the run): pull, merge, rebuild, backup; seed only with `-Seed`, because a seed empties the cloud's faces and clusters and refills them from this library alone. No drive: a clean exit 0 |
-| `stages/13_app/export_record.py` | nightly, in the cloud workflow: every answer, the journal and a catalogue of every photograph (CATALOGUE.md) frozen as gzip'd CSV in `record_exports`, 14 nights kept, read back and checked |
+| `stages/13_app/export_record.py` | nightly, in the cloud workflow: every answer, the journal and a catalogue of every photograph (CATALOGUE.md) frozen as gzip'd CSV in `record_exports`, 14 nights kept, read back and checked, and the same three files replaced in the Drive folder "ContentArchives record" (md5-checked), so a copy outside the database exists with no computer on |
 | `stages/13_app/backup_to_drive.py` | the backup drive's refresh: the newest cloud export saved and sha256-checked, and every photograph H: has that the drive lacks copied and md5-checked against Drive's own; never overwrites, never deletes, --max-gb per run |
 
 The phone app itself lives in `web/` (Next.js on Vercel, project root `web`),

@@ -1,9 +1,11 @@
 # The catalogue: everything known about every photograph, on both copies
 
-`export_record.py` writes it every night into `record_exports` (migration 0017),
-and `backup_to_drive.py` copies the newest night to the backup drive as
-`<drive>\_cloud-record\<day>\catalogue.csv.gz`. One row per photograph or video
-the app's index holds, ordered by `hash`.
+`export_record.py` writes it every night into `record_exports` (migration 0017)
+and into the Drive folder "ContentArchives record" (`catalogue.csv.gz`, whose
+version history keeps the earlier nights), with no computer involved.
+`backup_to_drive.py` also copies the newest night to the backup drive as
+`<drive>\_cloud-record\<day>\catalogue.csv.gz` whenever that drive is plugged in.
+One row per photograph or video the app's index holds, ordered by `hash`.
 
 Why it exists. Krish, 2026-10-16, asked whether the cloud should move files into
 year folders when the family dates them: "No, the app organizes. But set this up

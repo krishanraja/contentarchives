@@ -33,6 +33,20 @@ against its sha256 and its row count, or the run fails. The library machine
 copies the newest onto the backup drive whenever that drive is connected
 (backup_to_drive.py); nothing here waits on it.
 
+A COPY IN DRIVE, WITH NO COMPUTER (Krish, 2026-10-16: "can we not do this in
+the cloud? My computer is not on 24 hours")
+
+The same three files also go into one Drive folder, "ContentArchives record",
+the only place the service account may write: it is an Editor there and a
+Viewer everywhere else, so it still cannot move or delete a photograph. A
+service account has no Drive storage of its own and cannot create a file in a
+person's Drive, so Krish owns three files there (answers.csv.gz, journal.csv.gz,
+catalogue.csv.gz) and this replaces their contents each night; Drive keeps the
+earlier versions as their history. Each upload is checked against the md5 Drive
+reports back. A missing file or a mismatch fails the run after the database
+copy is safe. The folder is found by its name, never by an id: this repository
+is public, and so is this log.
+
 THIS LOG IS PUBLIC (the workflow's log on a public repository): numbers only,
 through cloud_enrich.say().
 """
@@ -57,6 +71,9 @@ import stagepath  # noqa: E402,F401
 from cloud_enrich import say                                     # noqa: E402
 
 KEEP = 14
+DRIVE_FOLDER = "ContentArchives record"
+API = "https://www.googleapis.com/drive/v3/files"
+UPLOAD = "https://www.googleapis.com/upload/drive/v3/files"
 
 # name -> the query that makes it. Ordered, so the same database gives the same
 # bytes and a night with nothing new is visibly identical to the one before.
@@ -123,8 +140,83 @@ def rows_in(body: bytes) -> int:
     return sum(1 for _ in csv.reader(io.StringIO(text))) - 1
 
 
-def export(db, day: dt.date, keep: int = KEEP) -> dict:
-    """Write tonight's copies, commit, read them back. -> {name: rows}."""
+class DriveCopy:
+    """The one Drive folder the service account may write, by name."""
+
+    def __init__(self, session):
+        self.s = session
+
+    @classmethod
+    def from_json(cls, sa_json: str):
+        import json
+        from google.oauth2 import service_account
+        from google.auth.transport.requests import AuthorizedSession
+        creds = service_account.Credentials.from_service_account_info(
+            json.loads(sa_json), scopes=["https://www.googleapis.com/auth/drive"])
+        return cls(AuthorizedSession(creds))
+
+    def _list(self, q: str) -> list:
+        r = self.s.get(API, params={"q": q, "fields": "files(id, name)", "pageSize": 100,
+                                    "supportsAllDrives": "true", "includeItemsFromAllDrives": "true"},
+                       timeout=60)
+        if r.status_code != 200:
+            raise DriveError(r.status_code)
+        return r.json().get("files", [])
+
+    def files(self) -> dict:
+        """{file name: id} in the record folder; empty if the folder is not shared."""
+        folders = self._list("name = '{}' and mimeType = 'application/vnd.google-apps.folder' "
+                             "and trashed = false".format(DRIVE_FOLDER))
+        if len(folders) != 1:
+            return {}
+        return {f["name"]: f["id"] for f in
+                self._list("'{}' in parents and trashed = false".format(folders[0]["id"]))}
+
+    def replace(self, fid: str, body: bytes) -> str:
+        """New contents for a file Krish owns. -> the md5 Drive now holds."""
+        r = self.s.patch(UPLOAD + "/" + fid, params={"uploadType": "media", "fields": "md5Checksum",
+                                                    "supportsAllDrives": "true"},
+                         data=body, headers={"Content-Type": "application/gzip"}, timeout=600)
+        if r.status_code != 200:
+            raise DriveError(r.status_code)
+        return (r.json().get("md5Checksum") or "").lower()
+
+
+class DriveError(Exception):
+    """A Drive call that did not succeed, carrying only its HTTP status."""
+
+    def __init__(self, status: int):
+        super().__init__(status)
+        self.status = int(status)
+
+
+def copy_to_drive(drive, bodies: dict) -> tuple:
+    """Tonight's bodies into the record folder. -> (replaced, problems, last http status)."""
+    try:
+        have = drive.files()
+    except DriveError as e:
+        return 0, ["the record folder could not be listed"], e.status
+    replaced, problems, status = 0, [], 200
+    for name, body in bodies.items():
+        fid = have.get(name + ".csv.gz")
+        if not fid:
+            problems.append("{}: no file to replace in the record folder".format(name))
+            continue
+        try:
+            got = drive.replace(fid, body)
+        except DriveError as e:
+            problems.append("{}: upload refused".format(name))
+            status = e.status
+            continue
+        if got != hashlib.md5(body).hexdigest():
+            problems.append("{}: Drive holds different bytes".format(name))
+            continue
+        replaced += 1
+    return replaced, problems, status
+
+
+def export(db, day: dt.date, keep: int = KEEP, drive=None) -> dict:
+    """Write tonight's copies, commit, read them back, copy to Drive. -> {name: rows}."""
     made = {}
     with db.cursor() as cur:
         for name, sql in QUERIES.items():
@@ -151,6 +243,12 @@ def export(db, day: dt.date, keep: int = KEEP) -> dict:
     say("record export", answers=made["answers"][0], journal=made["journal"][0],
         catalogue=made["catalogue"][0],
         bytes=sum(len(v[1]) for v in made.values()), pruned=pruned)
+    if drive is not None:
+        replaced, problems, status = copy_to_drive(drive, {k: v[1] for k, v in made.items()})
+        say("record to drive", replaced=replaced, problems=len(problems), http=status)
+        if problems:
+            raise SystemExit("STOPPING: the Drive copy is incomplete: {} problem(s); the database "
+                             "copy is safe".format(len(problems)))
     return {k: v[0] for k, v in made.items()}
 
 
@@ -198,9 +296,14 @@ def main() -> int:
     if not os.environ.get("DATABASE_URL"):
         print("STOPPING: DATABASE_URL is not set")
         return 1
+    drive = None
+    if os.environ.get("GOOGLE_SERVICE_ACCOUNT_JSON"):
+        drive = DriveCopy.from_json(os.environ["GOOGLE_SERVICE_ACCOUNT_JSON"])
+    else:
+        say("record to drive", skipped=1)
     import psycopg
     with psycopg.connect(os.environ["DATABASE_URL"], prepare_threshold=None) as db:
-        export(db, dt.datetime.now(dt.timezone.utc).date(), a.keep)
+        export(db, dt.datetime.now(dt.timezone.utc).date(), a.keep, drive)
     return 0
 
 

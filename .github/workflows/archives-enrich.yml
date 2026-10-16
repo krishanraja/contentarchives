@@ -13,7 +13,10 @@
 #
 # Secrets (Settings > Secrets and variables > Actions):
 #   DATABASE_URL                  Supabase transaction pooler (IPv4; runners have no IPv6)
-#   GOOGLE_SERVICE_ACCOUNT_JSON   the archives-reader key (Viewer on Communal only)
+#   GOOGLE_SERVICE_ACCOUNT_JSON   the archives-reader key: Viewer on Communal, and Editor
+#                                 on one folder only, "ContentArchives record", where it
+#                                 replaces the nightly record files Krish owns
+#                                 (export_record.py; Krish, 2026-10-16)
 #   GOOGLE_API_KEY_ARCHIVES       the app's own capped Gemini key
 #   DRIVE_COMMUNAL_FOLDER_ID      the Communal folder
 #
@@ -161,9 +164,13 @@ jobs:
       # and a catalogue of every photograph for a future re-sort of both copies
       # (stages/13_app/export_record.py, CATALOGUE.md). It runs even when the
       # build above failed part-way, so a bad night still keeps a copy of what
-      # the family said. Read back and checked, or this step fails.
+      # the family said. Read back and checked, and the same three files are
+      # replaced in the one Drive folder the service account may write, so a
+      # copy outside the database exists with no computer on. Fails if either
+      # copy does not check out.
       - name: freeze the family's record
         if: ${{ !cancelled() }}
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
         run: python stages/13_app/export_record.py
