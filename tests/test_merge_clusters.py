@@ -152,6 +152,8 @@ def main():
             p2 = fixture(d2, {"c1": "Asha", "c2": "Meera"})
             code, out = run(*args(p2))
             check("a group holding two different names refuses", (code, "REFUSING TO MERGE" in out), (1, True))
+            check("  and its advice is to RAISE the threshold, which merges less",
+                  ("Raise --threshold" in out, "Lower --threshold" in out), (True, False))
         finally:
             shutil.rmtree(d2, ignore_errors=True)
     finally:

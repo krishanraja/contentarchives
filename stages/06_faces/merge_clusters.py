@@ -259,9 +259,13 @@ def main() -> int:
         for g, named, members in conflicts[:8]:
             print("   {} <- {}".format(" + ".join(named), ", ".join(members[:6])))
         print()
-        print("Lower --threshold until this is empty. A merge that survives this")
-        print("check is safe; one that does not would label somebody with another")
-        print("person's name and look deliberate afterwards.")
+        # RAISE, not lower: a cluster joins a group when it is AT LEAST this
+        # similar, so a higher threshold merges less. This line said "Lower"
+        # until 2026-10-16, which was advice to make the refusal worse.
+        print("Raise --threshold (stricter) until this is empty, or correct a")
+        print("name that is wrong. A merge that survives this check is safe; one")
+        print("that does not would label somebody with another person's name and")
+        print("look deliberate afterwards.")
         return 1
     print("no group mixes two differently-named people - the threshold holds")
 
