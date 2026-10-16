@@ -79,10 +79,10 @@ if ($LASTEXITCODE -ne 0) { Stop-Chain 'pull failed - the cloud rows stay new and
 Say '[merge] names reach sibling clusters'
 # gate:exempt a couple of minutes, no progress signal; a refusal to mix two named people is a WARNING here
 python -u "$repo\stages\06_faces\merge_clusters.py" --threshold 0.68 --apply *>> $log
-# A non-zero exit is EITHER a refusal to mix two named people OR a failure (a
-# missing input: on 2026-10-16 face-emb.npy was absent and this line called a
-# traceback a refusal). Say which it might be, and point at the log.
-if ($LASTEXITCODE -ne 0) { Say "[merge] exited $LASTEXITCODE - continuing; read app-sync.log: a refusal (two names in one group; name_clusters.py --like shows it) or a failure such as a missing face-emb.npy" }
+# A non-zero exit is EITHER a refusal to mix two named people OR a failure (on
+# 2026-10-16 a missing face-emb.npy, since removed as an input, and this line
+# called that traceback a refusal). Say which it might be, and point at the log.
+if ($LASTEXITCODE -ne 0) { Say "[merge] exited $LASTEXITCODE - continuing; read app-sync.log: a refusal (two names in one group; name_clusters.py --like shows it) or a failure (a STOPPING line or a traceback)" }
 
 $live = 'D:\_PhotoAudit\library.db'
 $was = (Get-Item $live).LastWriteTimeUtc

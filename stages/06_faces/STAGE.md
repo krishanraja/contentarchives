@@ -37,6 +37,10 @@ people, and keep the cluster ids Krish's answers point at stable for ever.
 
 ## Tests
 - `tests/test_video_faces.py`
+- `tests/test_merge_clusters.py` - merge_clusters needs no `face-emb.npy`, merges the
+  right clusters when `faces.0.csv` is in a different order from the assignment
+  (the case a positional pairing gets wrong), stops on a missing frozen face, and
+  still refuses to merge two named people
 - `tests/test_new_face_ids.py` - the frozen-id rule says "never renumber the old
   ids" and says nothing about "never hand out an id somebody else is using",
   which are different rules. `assign_new_faces.py` took its next free id from
@@ -56,6 +60,6 @@ people, and keep the cluster ids Krish's answers point at stable for ever.
 | 23 | frame names are unique even for a clip milliseconds long | `code:stages/06_faces/video_face_frames.py:def targets`, `test:tests/test_video_faces.py:distinct paths for a` |
 | 33 | every video in the library is in the frame set, missing ones counted | `code:stages/06_faces/video_face_frames.py:missing from disk`, `test:tests/test_video_faces.py:25 of 28 videos missing from disk STOPS the run` |
 | 41 | an unreadable frame is recorded as -2, not "no faces" | `code:stages/06_faces/faces_embed.py:face_index -2`, `test:tests/test_video_faces.py:counts 2 to look at, 1 done, 1 unreadable` |
-| 45 | the positional cache is GONE from both assigners - they join `faces.0.csv` on (hash, face_index), which is learning 45's own durable fix rather than a guard over the hazard, and a frozen face the photograph file cannot produce REFUSES the run because a centroid built from a partial cluster is a wrong centroid. The guard itself is still live for `merge_clusters.py`, which does still pair by position | `code:stages/06_faces/assign_video_faces.py:partial cluster`, `code:stages/06_faces/assign_new_faces.py:partial cluster`, `test:tests/test_video_faces.py:a frozen face missing from faces.0.csv is refused`, `test:tests/test_guards.py:a drifted cache is caught` |
+| 45 | the positional cache is GONE from both assigners and from `merge_clusters.py` - they join `faces.0.csv` on (hash, face_index), which is learning 45's own durable fix rather than a guard over the hazard, and a frozen face the photograph file cannot produce REFUSES the run because a centroid built from a partial cluster is a wrong centroid. merge_clusters was the last reader of `face-emb.npy`; the cache was missing on the library machine, so every merge since had died while the chains carried on (found 2026-10-16). The guard in `guards/alignment.py` stays for anything that ever pairs by position again | `code:stages/06_faces/assign_video_faces.py:partial cluster`, `code:stages/06_faces/assign_new_faces.py:partial cluster`, `code:stages/06_faces/merge_clusters.py:partial cluster`, `test:tests/test_video_faces.py:a frozen face missing from faces.0.csv is refused`, `test:tests/test_merge_clusters.py:the right clusters merge when the files disagree on order`, `test:tests/test_guards.py:a drifted cache is caught` |
 | 47 | completion is asked of the disk and the store, with --dry-run | `test:tests/test_video_faces.py:--dry-run exits 0 without loading a model`, `code:stages/06_faces/chain_video_faces.ps1:--outstanding` |
 | 51 | a frame that will not decode is marked and counted, so the pass doubles as a decode census of every video | `code:stages/06_faces/video_face_frames.py:def marker`, `test:tests/test_video_faces.py:--outstanding counts outstanding/present/failed` |

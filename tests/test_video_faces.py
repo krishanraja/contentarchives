@@ -298,9 +298,11 @@ def test_alignment(d):
     pair by position at all - put the payload in the row that describes it."
     A drifted cache cannot be refused by a tool that never opens it.
 
-    The guard itself is not dead and is not untested: `merge_clusters.py` still
-    pairs positionally and still calls it, and `tests/test_guards.py` exercises
-    it directly on an aligned cache, a drifted one and a count mismatch. What
+    The guard itself is not dead and is not untested: it stays in
+    guards/alignment.py for anything that ever pairs by position again, and
+    `tests/test_guards.py` exercises it directly on an aligned cache, a drifted
+    one and a count mismatch. (merge_clusters.py was its last caller, and
+    joins by key too since 2026-10-16.) What
     is asserted here now is the property that REPLACED it - a frozen face the
     photograph file cannot produce stops the run, because a centroid built from
     a partial cluster is a wrong centroid and would put wrong names on videos.

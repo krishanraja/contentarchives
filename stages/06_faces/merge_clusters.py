@@ -35,6 +35,21 @@ an inference from a measurement, it ranks below anything Krish says, and a later
 answer from him overrides it without argument. The answers journal is not
 touched: no machine writes to it, which is the one rule the whole design rests
 on.
+
+NO POSITIONAL CACHE (learning 45)
+
+This used to read `face-emb.npy`, a cache paired with FACE-CLUSTERS.csv BY ROW
+NUMBER and guarded by a re-derived sample. That cache does not exist on the
+library machine, so from the day it went missing every run of this script died
+on np.load - and both nightly chains carry on past a non-zero merge, so names
+silently stopped reaching sibling clusters (found 2026-10-16, on the first app
+sync since the cloud took over). The two assigners had already moved to the
+durable fix, and this does the same: every embedding is read from the
+`faces.0.csv` row that carries its (hash, face_index), joined to the
+assignment by that key. There is no file to drift out of step and nothing to
+re-derive. A frozen face the photograph file cannot produce stops the run,
+because a centroid built from a partial cluster is a wrong centroid, and a
+wrong centroid merges strangers while passing the name test.
 """
 
 from __future__ import annotations
@@ -55,9 +70,54 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 
 
 ASSIGN = r"D:\_PhotoAudit\FACE-CLUSTERS.csv"
-CACHE = r"D:\_PhotoAudit\face-emb.npy"
+FACES = r"D:\_enrichment\faces.0.csv"
 ANSWERS = r"D:\_enrichment\answers.csv"
 MERGES = r"D:\_PhotoAudit\CLUSTER-MERGES.csv"
+
+
+def decode(emb: str):
+    import numpy as np
+    return np.frombuffer(base64.b64decode(emb), dtype=np.float16).astype(np.float32)
+
+
+def photo_sums(assign: str, faces: str, dim: int):
+    """Every frozen photograph face summed into its cluster, joined by KEY.
+
+    -> (sums, count, byc, faces_found, problem). `problem` is None, or the
+    reason the run must stop: a frozen face the photograph file cannot produce,
+    or one key assigned to two clusters. Never paired by position.
+    """
+    import numpy as np
+    cluster_of, byc, clash = {}, collections.defaultdict(set), []
+    for r in csv.DictReader(io.open(assign, encoding="utf-8", errors="replace", newline="")):
+        key = (r["hash"], str(r.get("face_index") or ""))
+        if key in cluster_of and cluster_of[key] != r["cluster"]:
+            clash.append(key)
+        cluster_of[key] = r["cluster"]
+        byc[r["cluster"]].add(r["hash"])
+    if clash:
+        return None, None, byc, 0, ("{:,} face(s) assigned to two different clusters, "
+                                    "e.g. {}".format(len(clash), clash[0]))
+    sums = collections.defaultdict(lambda: np.zeros(dim, dtype=np.float32))
+    count, found = collections.Counter(), set()
+    for r in csv.DictReader(io.open(faces, encoding="utf-8", errors="replace", newline="")):
+        fi = r.get("face_index") or "-1"
+        if not r.get("emb") or not fi.lstrip("-").isdigit() or int(fi) < 0:
+            continue
+        key = (r["hash"], fi)
+        c = cluster_of.get(key)
+        if c is None or key in found:       # not frozen, or the same face twice
+            continue
+        found.add(key)
+        sums[c] += decode(r["emb"])
+        count[c] += 1
+    missing = len(cluster_of) - len(found)
+    if missing:
+        return sums, count, byc, len(found), (
+            "{:,} of {:,} frozen faces were not found in {} by (hash, face_index). "
+            "A centroid built from a partial cluster is a wrong centroid.".format(
+                missing, len(cluster_of), os.path.basename(faces)))
+    return sums, count, byc, len(found), None
 
 
 def find(parent, x):
@@ -72,9 +132,8 @@ def main() -> int:
         description=__doc__,
         formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--assign", default=ASSIGN)
-    ap.add_argument("--cache", default=CACHE)
-    ap.add_argument("--photo-faces", default=r"D:\_enrichment\faces.0.csv",
-                    help="the source face-emb.npy was decoded from, for the alignment check")
+    ap.add_argument("--photo-faces", default=FACES,
+                    help="photograph embeddings, joined on (hash, face_index)")
     ap.add_argument("--video-assign", default=r"D:\_PhotoAudit\FACE-CLUSTERS-VIDEO.csv",
                     help="video faces from assign_video_faces.py; skipped if absent")
     ap.add_argument("--video-faces", default=r"D:\_enrichment\faces.video.csv",
@@ -88,33 +147,17 @@ def main() -> int:
     a = ap.parse_args()
 
     import numpy as np
-    E = np.load(a.cache)
-    rows = list(csv.DictReader(io.open(a.assign, encoding="utf-8",
-                                       errors="replace", newline="")))
-    if len(rows) != E.shape[0]:
-        print("assignment file and embedding cache disagree: {} vs {}".format(
-            len(rows), E.shape[0]))
+    from cluster_faces import DIM
+    for path in (a.assign, a.photo_faces):
+        if not os.path.exists(path):
+            print("STOPPING: {} does not exist".format(path))
+            return 1
+    sums, count, byc, nphoto, problem = photo_sums(a.assign, a.photo_faces, DIM)
+    if problem:
+        print("STOPPING: " + problem)
         return 1
-    # A matching COUNT is not alignment: they are paired by position, and the
-    # 2026-09-13 corruption had the right count (learning 45). Centroids from a
-    # drifted cache would merge strangers and pass the name test while doing it.
-    from cluster_faces import check_alignment
-    problems = check_alignment(rows, E, a.photo_faces)
-    if problems:
-        print("STOPPING: face-emb.npy does not match its source:")
-        for p in problems[:10]:
-            print("   " + p)
-        return 1
-
-    DIM = E.shape[1]
-    sums = collections.defaultdict(lambda: np.zeros(DIM, dtype=np.float32))
-    count = collections.Counter()
-    byc = collections.defaultdict(set)          # cluster -> the files it appears in
-    for i, r in enumerate(rows):
-        sums[r["cluster"]] += E[i]
-        count[r["cluster"]] += 1
-        byc[r["cluster"]].add(r["hash"])
-    nphoto = len(rows)
+    print("every frozen photograph face found in {} by (hash, face_index): {:,}".format(
+        os.path.basename(a.photo_faces), nphoto))
 
     # VIDEO FACES, joined on (image, face_index) and NOT by position: each
     # embedding stays in the row that describes it, so there is no second file
