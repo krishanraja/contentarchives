@@ -4,7 +4,7 @@ Status: Current
 Owner: Krish Raja
 Last verified: 2026-10-18
 
-> By 18 December 2026, every photo and video Krish has ever taken lives in one verified, deduplicated library, with nothing lost and nothing scattered, and new ones land there on their own.
+> By 18 November 2026, every photo and video Krish has ever taken lives in one verified, deduplicated library, with nothing lost and nothing scattered, and new ones land there on their own.
 
 Set by Krish on 18 October 2026. It is not reached yet. It is what every session in this repository works toward.
 
