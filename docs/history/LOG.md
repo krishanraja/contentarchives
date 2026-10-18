@@ -10,6 +10,10 @@ duplicate: `docs/rescues/` holds one dated record per source, and
 This log records what the steward did to the documentation and when.
 
 
+## 2026-10-18
+
+- reconciled at `c582794`: `main` gained five non-steward commits since `11bf662`, all documentation or harness administration (North Star, canon sync, repository context workflow). NOW.md head and as_of moved, the North Star was added to "Read next" and "What changed recently". No bullet was older than 30 days, nothing moved to history. The stamps on `docs/HANDOVER.md`, `state/PROGRESS.md` and `web/README.md` were not bumped: no code they cover changed.
+
 ## 2026-10-16
 
 - reconciled at `11bf662`: `main` gained 19 non-steward commits since `79bdc4b` (2026-10-15 to 2026-10-16): emailed-code sign-in for the family app, the cloud made the system of record with a nightly export to Drive, the PC sync stopped re-seeding the cloud index, and the app answers' bridge made unable to void an answer. The commits had already added their own dated bullets to `NOW.md`, so this run changed only `head`, `as_of`, and the stale figures: 82 learnings (74 enforced, 8 prose-only) and 162 of 162 code files owned by a stage, from `tests/test_stage_contracts.py` run on 2026-10-16.

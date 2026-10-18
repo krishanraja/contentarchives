@@ -1,8 +1,8 @@
 ---
 repo: krishanraja/contentarchives
 product: contentarchives
-as_of: 2026-10-16
-head: 11bf662
+as_of: 2026-10-18
+head: c582794
 lifecycle: building
 production_url: none
 state_doc: RESUME.md
@@ -39,7 +39,7 @@ Stories a writer can carry without asking Krish:
 
 Objection it answers: "AI agents will quietly wreck our data." Here is the record of one doing exactly that, once, and the rules that made it unrepeatable, plus the newer record of one auditing its own honesty about how much it has actually learned, and finding the answer wanting.
 
-## Where it is right now (as of 2026-10-16)
+## Where it is right now (as of 2026-10-18)
 
 Lifecycle: building.
 
@@ -62,6 +62,7 @@ Lifecycle: building.
 
 ## What changed recently
 
+- 2026-10-18 **Krish set a North Star for the repository: by 18 November 2026, every photo and video he has ever taken lives in one verified, deduplicated library, with nothing lost and nothing scattered, and new ones land there on their own** (`e40ea10`, `6e7e816`; `docs/NORTH_STAR.md`). Why: every session now has to name which part of it the task moves, and say so first if it moves nothing. It is stated as not reached yet; only Krish changes it. The same day the fleet's canon block and a generated `docs/HARNESS_CONTEXT.md` landed (`dbf0584`, `c9f795c`); no pipeline code changed.
 - 2026-10-16 **The external drive sync has a stored prompt, to run whenever Krish wants the backup drive refreshed** (this commit; `stages/13_app/EXTERNAL-DRIVE-SYNC.md`). Why: Krish chose not to schedule it on the PC ("just store that prompt so that whenever i need to run the external drive sync in the future, I can"). The prompt pulls the latest code, checks the archive's own credentials, finds the drive under any letter, makes a sha256-checked safety copy, previews, runs `chain_app_sync.ps1` once without `-Seed`, and verifies with numbers. Nothing depends on it being run.
 - 2026-10-16 **The nightly copy of the family's record also lands in Google Drive, with no computer involved** (this commit; `stages/13_app/export_record.py` `DriveCopy`, `.github/workflows/archives-enrich.yml`). Why: Krish: "can we not do this in the cloud? My computer is not on 24 hours." Everything automatic already ran in the cloud; the only PC part is writing to the external drive, which needs that drive plugged into a running computer, and the daily task catches up whenever it is next on. For a second copy outside the database with no PC, Krish chose one Drive folder: "ContentArchives record" in My Drive (outside ContentLibrary, so the mirror checks never see it), holding three files he owns (answers.csv.gz, journal.csv.gz, catalogue.csv.gz). The service account was given Editor on that folder only (it stays Viewer on Communal) and replaces the three files' contents each night, checked by the md5 Drive reports; Drive keeps earlier versions as history. A service account has no Drive storage, so it can create nothing there. Found by name; no Drive id is committed or logged. Verified: test_app_cloud section 10 now 19 checks (byte-for-byte replace, a missing file / wrong md5 / refused upload each fail the run after the database copy is safe, no id in the log); and in the cloud the same day, Archives enrich run 30 (zero budget) succeeded, its md5 check passing, and the three Drive files now hold exactly the database copy's bytes (62,758, 47,760 and 6,754,801), still owned by Krish.
 - 2026-10-16 **The cloud is the record, H: holds the photographs, and the external drive is only a backup that refreshes itself when plugged in** (this commit; `web/supabase/migrations/0017_record_exports.sql`, `stages/13_app/export_record.py`, `stages/13_app/backup_to_drive.py`, `stages/13_app/CATALOGUE.md`, `stages/13_app/chain_app_sync.ps1`, `.github/workflows/archives-enrich.yml`). Why: Krish: "I expect all this to be done automatically in the future we just use the app. The external D (currently F) Drive should just be a backup, nothing should rely on this external drive, everything should be able to be done on H drive." The app and its index already ran with no PC; the manual runs had only been refreshing the PC's copy. Now: every night the cloud workflow freezes every answer, the journal and a catalogue of every photograph (where it is on both copies, and the date, place and people the app shows with where each came from) as gzip'd CSV in `record_exports`, 14 nights kept, read back and checked; Supabase's own nightly backups (7 kept) are unchanged. The PC sync finds the backup drive by what is on it, under any letter, maps it to D: for the run, adds the newest export and every photograph H: has that the drive lacks (md5-checked against Drive's own, never overwriting, never deleting, 50 GB per run), and exits 0 when no drive is plugged in. Files are not moved: Krish chose "the app organizes. But set this up so that in the future, I can use the enriched information to resegment in both the external drive and the H drive", which is what the catalogue is for. Verified: test_app_cloud section 10 (14 checks on a real Postgres), test_backup_to_drive (23 checks), the chain parsed by PowerShell 7.4 and run with no drive (clean exit 0) and simulated at another letter (mapped, steps in order, unmapped on success and on failure, halt file only on failure). Run in the cloud the same day (Archives enrich run 29, zero budget, success): 1,706 answers, 1,631 journal rows and 26,477 photographs, each copy matching its sha256 and the live row counts. Not yet run on the PC.
@@ -137,6 +138,7 @@ Lifecycle: building.
 
 ## Read next
 
+0. [`docs/NORTH_STAR.md`](docs/NORTH_STAR.md): the ambition Krish set on 2026-10-18, with a date; read it before any work and say which part the task moves.
 0. [`docs/ROADMAP.md`](docs/ROADMAP.md): Phases A-F from here to two mirrored libraries and an app - read it for the order, since three dependencies fix it and getting them wrong costs a re-upload.
 1. `docs/PRODUCT.md`: what would survive as a product - the reusable core, and what stays a one-off analysis rather than library code.
 2. `RESUME.md`: where the work is paused, what to do next, and which decisions are closed. Start here, but see "Do not trust" for what it predates.
