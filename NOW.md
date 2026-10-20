@@ -1,8 +1,8 @@
 ---
 repo: krishanraja/contentarchives
 product: contentarchives
-as_of: 2026-10-18
-head: c582794
+as_of: 2026-10-20
+head: b3c3291
 lifecycle: building
 production_url: none
 state_doc: RESUME.md
@@ -39,7 +39,7 @@ Stories a writer can carry without asking Krish:
 
 Objection it answers: "AI agents will quietly wreck our data." Here is the record of one doing exactly that, once, and the rules that made it unrepeatable, plus the newer record of one auditing its own honesty about how much it has actually learned, and finding the answer wanting.
 
-## Where it is right now (as of 2026-10-18)
+## Where it is right now (as of 2026-10-20)
 
 Lifecycle: building.
 
@@ -122,9 +122,6 @@ Lifecycle: building.
 - 2026-09-20 **A safeguard that only refuses at the last step is a race, not a safeguard, and it was closed** (`370c620`). The no-reingest list is now read before a byte is copied, not after.
 - 2026-09-20 **The library was deduped against itself, and Drive was found to have quietly drifted from it** (`47856b0`, `7fdc27a`, `eb7adb8`). 1,236 byte-identical internal copies removed; the mirror's own drift closed without re-hashing, since identity was already proven twice over.
 - 2026-09-20 **The purge is complete: 1,094.3 GB reclaimed, zero refused, zero skipped as cloud-unproven** (`232476c`, `e68a59c`). A third proof beyond the guard's own re-hash was added first, since deleting a source leaves D: as the only local copy.
-- 2026-09-19 **All four remaining sources were audited exactly against the library, then narrowed from 6,350 files to the 669 that actually matter** (`b006479`, `923ca9f`, `375442c`). 88 of those 669 were refused by the no-reingest list on ingest.
-- 2026-09-19 **The cloud copy was proven against Google's own checksum, after two confidently wrong readings on the way** (`87640f1`). 0 missing, 0 mismatched, across all 82,100 journalled files.
-- 2026-09-19 **A mirror throttle that looked like patience was arithmetic nobody had done** (`c70866c`). Fixed to a checkable rule, pinned by a test (learning 62).
 
 ## What is next and what is waiting on Krish
 

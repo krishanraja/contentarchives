@@ -10,6 +10,10 @@ duplicate: `docs/rescues/` holds one dated record per source, and
 This log records what the steward did to the documentation and when.
 
 
+## 2026-10-20
+
+- reconciled at `b3c3291`: one non-steward commit ("keep the old Sydney database as an unused fallback") whose only change was its own NOW.md bullet edit, recording Krish's ruling of 2026-10-20. NOW.md `head` and `as_of` moved; three 2026-09-19 bullets rolled to the 2026-09-19 section below.
+
 ## 2026-10-18
 
 - reconciled at `c582794`: `main` gained five non-steward commits since `11bf662`, all documentation or harness administration (North Star, canon sync, repository context workflow). NOW.md head and as_of moved, the North Star was added to "Read next" and "What changed recently". No bullet was older than 30 days, nothing moved to history. The stamps on `docs/HANDOVER.md`, `state/PROGRESS.md` and `web/README.md` were not bumped: no code they cover changed.
@@ -112,6 +116,12 @@ This log records what the steward did to the documentation and when.
 - checked and dismissed: `docs/ROADMAP.md`, `docs/LEARNINGS.md`, `guards/STAGE.md` and the two touched `stages/*/STAGE.md` files were all modified in this run's own commits, in the same commits as the code they describe. Read against the code and the contract-test output, all agree; none needed steward correction beyond the one "Do not trust" line named above, which points at a stale figure rather than a document needing rewriting.
 - left alone: `RESUME.md`'s "RIGHT NOW" section, rewritten repeatedly today by the session itself as the run progressed; it is Krish's own narrative document and the steward does not rewrite it from an outside read of the commit log, per the 2026-09-09 precedent. Its content was read to reconcile NOW.md and matches the commits.
 - waiting on Krish: `gcloud auth login --enable-gdrive-access` then emptying Drive's trash (about 31 GB of deleted-but-not-yet-purged bytes still counts against quota); a judgement call on 294 files / 1.29 GB of finished video-project render variants and a podcast recording that are personal but not camera originals; the Windows USN change journal (Phase A5); and the open items already standing in `RESUME.md`'s "Waiting on the user".
+
+## 2026-09-19
+
+- rolled from NOW.md: 2026-09-19 **All four remaining sources were audited exactly against the library, then narrowed from 6,350 files to the 669 that actually matter** (`b006479`, `923ca9f`, `375442c`). 88 of those 669 were refused by the no-reingest list on ingest.
+- rolled from NOW.md: 2026-09-19 **The cloud copy was proven against Google's own checksum, after two confidently wrong readings on the way** (`87640f1`). 0 missing, 0 mismatched, across all 82,100 journalled files.
+- rolled from NOW.md: 2026-09-19 **A mirror throttle that looked like patience was arithmetic nobody had done** (`c70866c`). Fixed to a checkable rule, pinned by a test (learning 62).
 
 ## 2026-09-18
 
