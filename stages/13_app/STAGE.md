@@ -67,6 +67,12 @@ nudity in this".
 - case, spacing, punctuation and Unicode form are not spelling (`name_key` in SQL,
   `fold` in `web/lib/spelling.ts`: the same key); a near miss ("Meera Sha") is
   offered as "Did you mean Meera Shah?", one tap either way, never merged silently
+- a name already saved two ways (one letter apart) is put right only by the
+  owner, one pair at a time (`/spelling`, `web/lib/respell.ts`, migration 0018),
+  and only as answers: his own vote on each face group, and "not in it / in it"
+  on each photograph the library listed under the wrong spelling. Nothing is
+  edited, a relative's vote is never rewritten for them, and a pair he called
+  two people is not asked again (Krish, 2026-10-21)
 - a place or year the library gave is never replaced by an app answer
 - the cloud is the record, H: (Google Drive, `My Drive\ContentLibrary`) holds the
   photographs, and the external drive is only a backup (Krish, 2026-10-16: "nothing

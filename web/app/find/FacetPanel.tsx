@@ -1,7 +1,7 @@
 import Go from "@/components/Go";
 import Fit from "@/components/Fit";
 import Mic from "@/components/Mic";
-import { ABROAD, findHref, noun, UK, yearWord, type Parsed, type Pick } from "@/lib/search";
+import { ABROAD, addPerson, findHref, noun, UK, yearWord, type Parsed, type Pick } from "@/lib/search";
 import type { Facets } from "@/lib/data";
 
 // One fact to choose, in place of the photos (the screen never scrolls), each
@@ -36,7 +36,9 @@ export default function FacetPanel({ p, pick, f }: { p: Parsed; pick: Pick; f: F
   }
   let title = "", chips: React.ReactNode[] = [];
   if (pick === "who") {
-    title = p.people.length ? `Who else is in these ${what}?` : `Who is in the ${what}?`;
+    // "Who else is in these?" read as a question about who they are; it is
+    // the offer the button beside the names makes (Krish, 2026-10-21)
+    title = p.people.length ? `${addPerson(p.people)} with ${p.people.join(" and ")}` : `Who is in the ${what}?`;
     chips = f.people.map((x) => (
       <Go key={x.name} className="chip" href={findHref(p, { people: [...p.people, x.name] })}
         aria-label={`${x.name}, ${x.n}`}>

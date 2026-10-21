@@ -42,8 +42,13 @@ export async function letIn(name: string) {
 }
 
 // Signing in as a person does: their email, then the code emailed to them.
-export async function signIn(page: Page, name = "Grandma") {
-  const email = await letIn(name);
+// `email` signs in under that address instead (the owner's, ADMIN).
+export async function signIn(page: Page, name = "Grandma", email?: string) {
+  if (email) {
+    await db`insert into access_people (email, name, status, decided_at) values (${email}, ${name}, 'yes', now())
+      on conflict (email) do update set status = 'yes', name = excluded.name, tries = 0`;
+    await db`delete from access_sends where email = ${email}`;
+  } else email = await letIn(name);
   const before = mails(email).length;
   await page.goto("/gate");
   const other = page.locator("button:has-text('Change email'), button:has-text('Use a different email')");

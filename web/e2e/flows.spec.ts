@@ -449,10 +449,37 @@ test("a year, then a person: the Who panel narrows a decade to one person", asyn
   const who = await chosen(people.first());
   await people.first().click();
   await expect(page.locator(".sentence")).toContainText(`of ${who} from the 2000s`);
-  // and the next Who is "who else", among that person's photos
+  // and the next Who offers a second person, among that person's photos
   await page.click(".dims a:has-text('Who')");
-  await expect(page.locator(".facet-h")).toContainText("Who else is in these");
+  await expect(page.locator(".facet-h")).toHaveText(`Add a second person with ${who}`);
   await expect(page.locator(`.facet a.chip[aria-label^='${who},']`)).toHaveCount(0);
+});
+
+test("one person chosen: a second is offered beside them, without going back to Who", async ({ page }) => {
+  await signIn(page);
+  await page.goto("/find?show=people");
+  const first = page.locator(".fit a.chip:visible").first();
+  const one = (await first.innerText()).trim();
+  await first.click();
+  await expect(page.locator(".sentence")).toContainText(`of ${one}`);
+  // the photos show, and the offer sits beside the name
+  const add = page.locator(".add-person");
+  await expect(add).toBeVisible();
+  await expect(add).toHaveText("+ Add a second person");
+  await expect(page.locator(".grid").first()).toBeVisible();
+  await add.click();
+  await expect(page.locator(".facet-h")).toHaveText(`Add a second person with ${one}`);
+  await expect(page.locator(".add-person")).toHaveCount(0);   // the panel it opens is already showing
+  const people = page.locator(".facet a.chip:not(.turn):visible");
+  const two = await chosen(people.first());
+  await people.first().click();
+  // back to the photos of both, and the offer moves on to a third
+  // (the search keeps its own order of names, not the order they were chosen)
+  await expect(page.locator(".sentence")).toContainText(one);
+  await expect(page.locator(".sentence")).toContainText(` and `);
+  await expect(page.locator(".sentence")).toContainText(two);
+  await expect(page.locator(".add-person")).toBeVisible();
+  await expect(page.locator(".add-person")).toHaveText("+ Add a third person");
 });
 
 test("from a place: add a person, then only the videos - every one marked as a video", async ({ page }) => {

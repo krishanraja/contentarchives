@@ -538,6 +538,14 @@ summary.btn::-webkit-details-marker { display: none; }
 .pill .pill-go { padding: 0 6px 0 14px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .pill .pill-off { justify-content: center; min-width: 44px; border-left: 2px solid var(--ink); font-size: 16px; }
 .pill.open .pill-go { background: var(--mint); }
+/* the offer under the names: "+ Add a second person", one tap to the Who panel */
+.add-person { flex: none; align-self: flex-start; max-width: 100%; background: var(--paper); box-shadow: 3px 3px 0 var(--ink); }
+.pill.add { display: none; background: var(--paper); }
+.pill.add .pill-go { padding: 0 14px; }
+@container screen (max-height: 520px) {
+  .page.find.results > .add-person { display: none; }
+  .pill.add { display: inline-flex; }
+}
 .dims { display: flex; gap: 8px; flex: none; }
 .dims .btn { flex: 1 1 0; min-width: 0; padding: 4px 4px; box-shadow: 3px 3px 0 var(--ink); }
 .dims .btn.set { background: var(--sun); }
@@ -621,3 +629,14 @@ a:has(> .pressed) { position: relative; }
 .whole .strip button { flex: 1 1 0; min-width: 0; padding: 0; border: 0; background: none; cursor: pointer; }
 .whole .strip img { width: 100%; display: block; }
 .whole .strip button[aria-pressed="true"] img { outline: 4px solid var(--sun); outline-offset: 2px; }
+
+/* Fix a spelling (owner only): the two names side by side, each with its face */
+.spell .card { width: 100%; max-width: 560px; }
+.spell-pair { display: grid; grid-template-columns: 1fr 1fr; gap: var(--gap); }
+.spell-side { display: flex; flex-direction: column; align-items: center; gap: 4px; text-align: center; min-width: 0; }
+.spell-side img, .spell-noface { width: 72px; height: 72px; border-radius: 50%; border: 2px solid var(--ink); object-fit: cover; background: var(--paper); }
+.spell-side b { font-size: var(--h2, 20px); overflow-wrap: anywhere; }
+.spell-note { font-size: 14px; margin: 0; }
+@container screen (max-height: 600px) {
+  .spell-side img, .spell-noface { width: 48px; height: 48px; }
+}

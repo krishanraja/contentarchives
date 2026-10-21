@@ -134,6 +134,15 @@ export function noun(media: Media | null, n: number | null = null): string {
   return one ? "photo or video" : "photos and videos";
 }
 
+// The offer once someone is chosen (Krish, 2026-10-21: it "should proactively
+// ask, 'Do you want to add a second person?'"): one wording for the button
+// beside the names and the panel it opens, so the two never drift apart.
+const NTH = ["", "second", "third", "fourth"];
+export function addPerson(people: string[]): string {
+  const nth = NTH[people.length];
+  return nth ? `Add a ${nth} person` : "Add another person";
+}
+
 // One plain sentence a person can read: "48 photos of Bharti in Goa, 1998".
 export function describe(p: Parsed, total: number, mode = "filters", present?: { photo: number; video: number }): string {
   // A meaning search ranks EVERY photo by how close it is, so its "total" is the
