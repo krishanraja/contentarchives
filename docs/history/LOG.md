@@ -10,6 +10,14 @@ duplicate: `docs/rescues/` holds one dated record per source, and
 This log records what the steward did to the documentation and when.
 
 
+## 2026-10-21
+
+- reconciled at `5c7a1de`: two non-steward commits (`c585ac9`, `5c7a1de`) touched `web/` and `stages/13_app/STAGE.md`; their NOW.md bullet (second person on Find, owner-corrected spelling table) was already written and live, so only `head`, `as_of`, the "as of" heading and the bullet's "this commit" pointer (now `c585ac9`) were updated. No other document was changed.
+- rolled from NOW.md: 2026-09-20 **A safeguard that only refuses at the last step is a race, not a safeguard, and it was closed** (`370c620`). The no-reingest list is now read before a byte is copied, not after.
+- rolled from NOW.md: 2026-09-20 **The library was deduped against itself, and Drive was found to have quietly drifted from it** (`47856b0`, `7fdc27a`, `eb7adb8`). 1,236 byte-identical internal copies removed; the mirror's own drift closed without re-hashing, since identity was already proven twice over.
+- rolled from NOW.md: 2026-09-20 **The purge is complete: 1,094.3 GB reclaimed, zero refused, zero skipped as cloud-unproven** (`232476c`, `e68a59c`). A third proof beyond the guard's own re-hash was added first, since deleting a source leaves D: as the only local copy.
+- left alone: `docs/HANDOVER.md`, `state/PROGRESS.md`, `web/README.md` and `docs/NORTH_STAR.md` carry stamps older than the web change; not re-verified this run, so stamps were not bumped. `docs/NORTH_STAR.md` is Krish's.
+
 ## 2026-10-20
 
 - reconciled at `b3c3291`: one non-steward commit ("keep the old Sydney database as an unused fallback") whose only change was its own NOW.md bullet edit, recording Krish's ruling of 2026-10-20. NOW.md `head` and `as_of` moved; three 2026-09-19 bullets rolled to the 2026-09-19 section below.
