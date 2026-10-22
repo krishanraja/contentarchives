@@ -10,6 +10,12 @@ duplicate: `docs/rescues/` holds one dated record per source, and
 This log records what the steward did to the documentation and when.
 
 
+## 2026-10-22
+
+- reconciled at `9a72c37`: the only non-steward commit (`9a72c37`, harness repository administration) touched `.claude/`, `.github/` and the generated context, with no documentation consequence; `head` and `as_of` re-stamped.
+- rolled from NOW.md: 2026-09-21 **The entry point described yesterday's library, caught by checking rather than asserting** (`ad96733`). `RESUME.md` and `docs/ROADMAP.md` both still quoted the pre-restructure figures in their current-state text; corrected and labelled by date.
+- rolled from NOW.md: 2026-09-21 **The chronology is one level deep, and both copies match file for file** (`c25e67a`). 7,678 files / 11.28 GB removed to match a mirror-side deletion, 66,047 files moved on each copy, zero failures; three learnings (67 to 69) came out of building the tools for it.
+
 ## 2026-10-21
 
 - reconciled at `5c7a1de`: two non-steward commits (`c585ac9`, `5c7a1de`) touched `web/` and `stages/13_app/STAGE.md`; their NOW.md bullet (second person on Find, owner-corrected spelling table) was already written and live, so only `head`, `as_of`, the "as of" heading and the bullet's "this commit" pointer (now `c585ac9`) were updated. No other document was changed.

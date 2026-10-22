@@ -1,8 +1,8 @@
 ---
 repo: krishanraja/contentarchives
 product: contentarchives
-as_of: 2026-10-21
-head: 5c7a1de
+as_of: 2026-10-22
+head: 9a72c37
 lifecycle: building
 production_url: none
 state_doc: RESUME.md
@@ -39,7 +39,7 @@ Stories a writer can carry without asking Krish:
 
 Objection it answers: "AI agents will quietly wreck our data." Here is the record of one doing exactly that, once, and the rules that made it unrepeatable, plus the newer record of one auditing its own honesty about how much it has actually learned, and finding the answer wanting.
 
-## Where it is right now (as of 2026-10-21)
+## Where it is right now (as of 2026-10-22)
 
 Lifecycle: building.
 
@@ -118,8 +118,6 @@ Lifecycle: building.
 - 2026-09-22 **`reconcile_disk.py --write` dated nothing and called every video a photograph** (`a5286ed`). Both are now derived from the path; a third apparent defect turned out to be correct by design and was changed back after being changed once.
 - 2026-09-22 **A proposal whose `Side` column was misspelled moved all 11,707 files correctly, then reported every one as a failure** (`f673aa1`). The spelling is now refused at load, before anything moves.
 - 2026-09-22 **The 2026-09-21 flatten left the mirror journal and four placement writers describing a layout that no longer existed** (`56800cc`, `47d04a9`). 66,113 journal rows repointed rather than re-sent; one owner now builds the dated path.
-- 2026-09-21 **The entry point described yesterday's library, caught by checking rather than asserting** (`ad96733`). `RESUME.md` and `docs/ROADMAP.md` both still quoted the pre-restructure figures in their current-state text; corrected and labelled by date.
-- 2026-09-21 **The chronology is one level deep, and both copies match file for file** (`c25e67a`). 7,678 files / 11.28 GB removed to match a mirror-side deletion, 66,047 files moved on each copy, zero failures; three learnings (67 to 69) came out of building the tools for it.
 
 ## What is next and what is waiting on Krish
 
