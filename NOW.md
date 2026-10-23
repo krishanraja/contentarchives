@@ -2,7 +2,7 @@
 repo: krishanraja/contentarchives
 product: contentarchives
 as_of: 2026-10-23
-head: 9a72c37
+head: a18d542
 lifecycle: building
 production_url: none
 state_doc: RESUME.md
