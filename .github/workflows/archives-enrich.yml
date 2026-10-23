@@ -75,7 +75,7 @@ jobs:
   # this exact commit, against a real Postgres with the app's migrations.
   test:
     if: ${{ github.event_name == 'workflow_dispatch' || vars.ARCHIVES_ENRICH != 'off' }}
-    runs-on: ubuntu-24.04            # pinned: ffmpeg 8 on ubuntu-26.04 fails the video frame checks
+    runs-on: ubuntu-26.04            # pinned: ffmpeg 8.0, proven by tests/test_app_cloud.py
     timeout-minutes: 15
     services:
       postgres:
@@ -105,7 +105,7 @@ jobs:
 
   enrich:
     needs: test
-    runs-on: ubuntu-24.04            # pinned: ffmpeg 8 on ubuntu-26.04 fails the video frame checks
+    runs-on: ubuntu-26.04            # pinned: ffmpeg 8.0, proven by tests/test_app_cloud.py
     timeout-minutes: 355
     env:
       GEONAMES_DIR: ${{ github.workspace }}/.geonames

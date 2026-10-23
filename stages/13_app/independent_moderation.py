@@ -48,6 +48,10 @@ import cloud_enrich as CE  # noqa: E402
 MODEL = "omni-moderation-2024-09-26"  # pinned: a moving score cannot be calibrated
 VIEW_PX = 1600                         # the largest photograph the site serves
 SCENE_THRESHOLD = 0.30
+# A JPEG is full-range: ffmpeg 6 converted a phone video's limited-range frames
+# on its own, ffmpeg 8 refuses them ("Non full-range YUV is non-standard"), so
+# the conversion is asked for. Identical output on ffmpeg 6.
+JPEG_RANGE = ":out_range=full,format=yuvj420p"
 MAX_IMAGE_BYTES = 20 * 1024 * 1024    # the provider's documented image limit
 RETRYABLE = {429, 500, 502, 503, 504}
 FRAMES_ONLY = "frames only"            # cleared on every frame: no still exists to check
@@ -160,7 +164,7 @@ def extract_video_samples(src: str, out_dir: str) -> list[tuple[str, str]]:
     yielding no frame is an error, never an empty pass.
     """
     fixed = os.path.join(out_dir, "fps-%08d.jpg")
-    vf = "fps=fps=1:round=up,scale='min({},iw)':-2".format(VIEW_PX)
+    vf = "fps=fps=1:round=up,scale='min({},iw)':-2{}".format(VIEW_PX, JPEG_RANGE)
     r = _run_ffmpeg(["ffmpeg", "-nostdin", "-loglevel", "error", "-y", "-i", src,
                      "-map", "0:v:0", "-an", "-vf", vf, "-q:v", "4", fixed])
     if r.returncode != 0:
@@ -171,8 +175,8 @@ def extract_video_samples(src: str, out_dir: str) -> list[tuple[str, str]]:
     # Keep frame zero so ffmpeg can initialise its image encoder even when a
     # clip has no scene change at all; it is removed below when fps:00000000
     # already covers it.
-    svf = "select='eq(n,0)+gt(scene,{})',showinfo,scale='min({},iw)':-2".format(
-        SCENE_THRESHOLD, VIEW_PX)
+    svf = "select='eq(n,0)+gt(scene,{})',showinfo,scale='min({},iw)':-2{}".format(
+        SCENE_THRESHOLD, VIEW_PX, JPEG_RANGE)
     r = _run_ffmpeg(["ffmpeg", "-nostdin", "-loglevel", "info", "-y", "-i", src,
                      "-map", "0:v:0", "-an", "-vf", svf, "-fps_mode", "vfr", "-q:v", "4", scene])
     if r.returncode != 0:

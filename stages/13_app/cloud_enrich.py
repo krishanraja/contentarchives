@@ -333,7 +333,8 @@ class Drive:
         cmd = ["ffmpeg", "-nostdin", "-loglevel", "error",
                "-headers", "Authorization: Bearer {}\r\n".format(token),
                "-ss", "{:.3f}".format(ms / 1000.0), "-i", url, "-frames:v", "1",
-               "-vf", "scale='min({},iw)':-2".format(px), "-q:v", "4", "-f", "image2", "-c:v", "mjpeg", "pipe:1"]
+               "-vf", "scale='min({},iw)':-2:out_range=full,format=yuvj420p".format(px),   # ffmpeg 8 refuses limited range
+               "-q:v", "4", "-f", "image2", "-c:v", "mjpeg", "pipe:1"]
         try:
             r = subprocess.run(cmd, capture_output=True, timeout=180)
         except (OSError, subprocess.SubprocessError):
