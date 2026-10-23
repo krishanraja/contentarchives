@@ -69,8 +69,8 @@ export default function PlacePicker({ ask, places, cancel, onCancel, onPick }: {
         </Fit>
       )}
       <div className="row">
-        <button type="button" className="btn sky" onClick={() => setTyping(true)}>{chips.length ? "Somewhere else" : "Type the place"}</button>
-        <button type="button" className="btn" onClick={onCancel}>{cancel}</button>
+        <button type="button" className="btn" onClick={() => setTyping(true)}>{chips.length ? "Somewhere else" : "Type the place"}</button>
+        <button type="button" className="btn quiet" onClick={onCancel}>{cancel}</button>
       </div>
     </>
   );

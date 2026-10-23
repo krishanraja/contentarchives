@@ -131,7 +131,7 @@ export default function NameGame() {
           <p>Thank you!</p>
         </div>
         <button className="btn block pink" onClick={() => { setDone(null); void load(seen); }}>Next face</button>
-        <Link className="btn block" href="/">I'm done for now</Link>
+        <Link className="btn block quiet" href="/">I'm done for now</Link>
         <Undo text={`Saved: ${done.name}`} onUndo={undo} onDone={() => undefined} />
       </div>
     );
@@ -187,7 +187,7 @@ export default function NameGame() {
               <button className="btn" onClick={() => setMode("choose")}>No</button>
               <button className="btn mint" onClick={() => answer("person", q.ask!.name)}>Yes!</button>
             </div>
-            <button className="btn block" onClick={dontKnow}>I don't know</button>
+            <button className="btn block quiet" onClick={dontKnow}>I don't know</button>
           </>
         )}
 
@@ -216,8 +216,8 @@ export default function NameGame() {
               </Fit>
             )}
             <div className="row">
-              <button className="btn sky" onClick={() => setMode("type")}>{q.suggestions.length || q.contest.length ? "Someone else" : "Type their name"}</button>
-              <button className="btn" onClick={dontKnow}>I don't know</button>
+              <button className="btn" onClick={() => setMode("type")}>{q.suggestions.length || q.contest.length ? "Someone else" : "Type their name"}</button>
+              <button className="btn quiet" onClick={dontKnow}>I don't know</button>
             </div>
           </>
         )}

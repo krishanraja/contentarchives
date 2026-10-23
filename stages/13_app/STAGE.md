@@ -187,9 +187,11 @@ nudity in this".
   as if its address bar were hidden, so a rule written that way did not fire on
   his phone and the home screen's words spilled over each other.
   `web/tests/style.test.ts` fails on any window-sized rule
-- the size floor is one step down from where it started (Krish, 2026-10-11:
-  "everything is overly 'accessibility-friendly' right now"): every control at
-  least 48px tall, body text 18px, no text under 14px, contrast AA.
+- the size floor is two steps down from where it started (Krish, 2026-10-11:
+  "everything is overly 'accessibility-friendly' right now"; 2026-10-23: "a
+  little bit less for old people"): every control at least 40px tall, body
+  text 16px, no text under 14px, contrast AA. Each screen raises exactly one
+  filled button with a shadow, its next best action; everything else is flat.
   `floor()` in `web/e2e/helpers.ts` holds every screen of the flows to it at
   360, 390 and 430px; nothing goes below it
 - a search narrows from wherever it starts (Krish, 2026-10-11: "if someone

@@ -196,7 +196,7 @@ test("with no names set up, \"Not you?\" simply asks your name", async ({ page }
     await signIn(page, "Aunty Usha");
     await expect(page.getByRole("heading", { name: "Hello, Aunty Usha!" })).toBeVisible();
     await floor(page, "home-named");
-    await page.click("text=Not Aunty Usha? Tap here");
+    await page.click("text=Not Aunty Usha?");
     await page.waitForURL((u) => u.pathname === "/who");
     await expect(page.getByRole("heading", { name: "Hello! What's your name?" })).toBeVisible();
     await expect(page.locator("summary")).toHaveCount(0);           // no extra tap to reach the box
@@ -217,7 +217,7 @@ test("signing in again brings your name with your email; \"Not you?\" hands a sh
   await signIn(page, "Grandma");
   await expect(page.getByRole("heading", { name: "Hello, Grandma!" })).toBeVisible();
   // and a shared phone hands over in one tap, remembered from then on
-  await page.click("text=Not Grandma? Tap here");
+  await page.click("text=Not Grandma?");
   await page.waitForURL((u) => u.pathname === "/who");
   await page.click("button:has-text('Grandpa')");
   await page.waitForURL((u) => u.pathname === "/");
@@ -316,10 +316,10 @@ test("the app's icon shows everywhere, even before signing in", async ({ request
 
 test("find photos by a first name, a place and a year", async ({ page }) => {
   await signIn(page);
-  await page.click("text=Find photos & videos");
-  await floor(page, "find");
+  await floor(page, "home");
+  // the search box is on the home screen itself
   await page.fill("#q", "Ravi in Goa");
-  await page.click("button:has-text('Search')");
+  await page.click("button[aria-label='Search']");
   await page.waitForURL("**/find?q=*");
   await expect(page.locator(".sentence")).toContainText("of Ravi Raja in Goa");
   await floor(page, "results");

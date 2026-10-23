@@ -8,7 +8,7 @@ export default function Bar({ title, back }: { title: string; back?: { href: str
   return (
     <header className="bar">
       <div className="bar-inner">
-        <Link href="/" className="btn small sun" aria-label="Go to the home screen"><Home /> Home</Link>
+        <Link href="/" className="btn small" aria-label="Go to the home screen"><Home /> Home</Link>
         {back
           ? <Link href={back.href} className="btn small"><Back /> {back.label}</Link>
           : <span className="title">{title}</span>}

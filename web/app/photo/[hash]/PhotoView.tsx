@@ -162,8 +162,7 @@ export default function PhotoView({ p, q, type = null }: { p: P; q: string; type
   const still = !p.video ? null : plays ? null
     : failed || p.play === "unplayable" ? "This video can't play on this phone; the picture is a still from it."
     : "This video isn't ready to play yet; the picture is a still from it.";
-  // Previous and Next keep their words while there is room; on a cramped
-  // screen they become arrows beside About and Send
+    // Previous and Next are round arrows either side of Send, read out by name
   const turn = (h: string | null, way: "prev" | "next") => {
     const name = way === "prev" ? "Previous photo" : "Next photo";
     const body = way === "prev"
@@ -176,8 +175,9 @@ export default function PhotoView({ p, q, type = null }: { p: P; q: string; type
   const turns = !!(q && nav);
   const fact = (k: string, v: string, go: Mode, label: string) => (
     <button type="button" className={`btn fact fact-${k.toLowerCase()}`} onClick={() => { setMode(go); setErr(""); }} aria-label={label}>
-      <span className="fact-k" aria-hidden="true">{k} <span className="fact-do">Change</span></span>
+      <span className="fact-k" aria-hidden="true">{k}</span>
       <span className="fact-v" aria-hidden="true">{v}</span>
+      <span className="fact-do" aria-hidden="true">Edit</span>
     </button>
   );
   const picking = mode === "when" || mode === "where" || mode === "who" || mode === "add";
@@ -251,7 +251,7 @@ export default function PhotoView({ p, q, type = null }: { p: P; q: string; type
 
         {mode === "who" && (
           <>
-            <h2>Who is in this {noun}? <span className="muted" style={{ fontSize: 17, fontWeight: 400 }}>
+            <h2>Who is in this {noun}? <span className="muted" style={{ fontSize: 16, fontWeight: 400 }}>
               {people.length ? "Tap a name that's wrong to take it off." : "Nobody is named yet."}</span></h2>
             {people.length > 0 && (
               <Fit label="People in it" more="More names">
@@ -307,10 +307,10 @@ export default function PhotoView({ p, q, type = null }: { p: P; q: string; type
           <div className={turns ? "turnrow turns" : "turnrow"}>
             {turns && turn(nav!.prev, "prev")}
             {turns && turn(nav!.next, "next")}
-            <button className="btn grape about-btn" onClick={() => { setMode(about ? "view" : "about"); setSure(false); }}>
-              <span>{about ? <>Show<span className="word"> the {noun}</span></> : <>About<span className="word"> this {noun}</span></>}</span>
+            <button className="btn quiet about-btn" onClick={() => { setMode(about ? "view" : "about"); setSure(false); }}>
+              {about ? `Show the ${noun}` : `About this ${noun}`}
             </button>
-            <button className="btn sky send" onClick={share}><Share /> Send</button>
+            <button className="btn sky send" onClick={share}><Share /> Send to family</button>
           </div>
         )}
         {last && mode === "view" && <Undo text={last.text} onUndo={undo} onDone={() => setLast(null)} />}

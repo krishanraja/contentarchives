@@ -1,8 +1,9 @@
 /* archives - fun to look at, impossible to get lost in.
-   The floor (tested by floor() in e2e/helpers.ts): body text >= 18px, any
-   text >= 14px, every control >= 48px tall, ink-on-colour contrast >= AA,
-   nothing that needs a swipe. One step down from 56px / 20px (Krish,
-   2026-10-11: "everything is overly 'accessibility-friendly' right now").
+   The floor (tested by floor() in e2e/helpers.ts): body text >= 16px, any
+   text >= 14px, every control >= 40px tall, ink-on-colour contrast >= AA,
+   nothing that needs a swipe. Lighter again on 2026-10-23 (Krish: "a little
+   bit less for old people"; the approved mock): thin lines, and the one raised
+   shadow on a screen is its next best action, so it is never hunted for.
 
    NOTHING SCROLLS, ON ANY DEVICE (Krish, 2026-10-05; e2e/noscroll.spec.ts).
    Every screen is exactly the height of the window: a photograph takes the
@@ -31,30 +32,31 @@
   --mint: #4fe0a5;
   --sky: #7cc4ff;
   --grape: #b9a3ff;
-  --line: 3px solid var(--ink);
-  --pop: 5px 5px 0 var(--ink);
-  --pop-press: 2px 2px 0 var(--ink);
-  --r: 22px;
-  --tap: 52px;
-  --body: 18px;
+  --faint: #e9dfd0;             /* hairlines between rows */
+  --line: 2px solid var(--ink);
+  --pop: 4px 4px 0 var(--ink);
+  --pop-press: 1px 1px 0 var(--ink);
+  --r: 18px;
+  --tap: 48px;
+  --body: 17px;
   --gutter: 18px;
   --col: 560px;
-  --gap: 18px;
-  --pad: 16px;
-  --field: 60px;
-  --h1: 34px;
-  --h2: 26px;
+  --gap: 14px;
+  --pad: 14px;
+  --field: 52px;
+  --h1: 30px;
+  --h2: 23px;
   color-scheme: light;
 }
 /* a shorter screen: the same screen, packed closer - never smaller than the floor */
 @container screen (max-height: 800px) {
-  .bar, .page { --tap: 50px; --gap: 12px; --pad: 12px; --field: 56px; --h1: 30px; --h2: 23px; }
+  .bar, .page { --tap: 46px; --gap: 12px; --pad: 12px; --field: 50px; --h1: 27px; --h2: 21px; }
 }
 @container screen (max-height: 680px) {
-  .bar, .page { --tap: 48px; --gap: 8px; --pad: 10px; --field: 52px; --h1: 26px; --h2: 21px; --gutter: 14px; }
+  .bar, .page { --tap: 44px; --gap: 8px; --pad: 10px; --field: 46px; --h1: 24px; --h2: 19px; --gutter: 14px; }
 }
 @container screen (max-height: 460px) {
-  .bar, .page { --gap: 6px; --pad: 8px; --field: 48px; --h1: 23px; --h2: 19px; }
+  .bar, .page { --gap: 6px; --pad: 8px; --field: 44px; --h1: 22px; --h2: 18px; }
   .sub { display: none; }
 }
 /* a phone on its side: the search and the list switch share the top row */
@@ -117,24 +119,26 @@ p { margin: 0; }
   flex: none; z-index: 20;
   background: var(--cream);
   padding: calc(min(10px, var(--pad)) + env(safe-area-inset-top)) var(--gutter) min(10px, var(--pad));
-  border-bottom: var(--line);
   display: flex; align-items: center; justify-content: space-between; gap: 12px;
 }
-.bar .title { font-family: var(--font-display), system-ui; font-weight: 600; font-size: 21px; text-align: right; line-height: 1.1; }
+.bar .title { font-family: var(--font-display), system-ui; font-weight: 600; font-size: 18px; text-align: right; line-height: 1.1; color: var(--ink-soft); }
 .bar-inner { width: 100%; max-width: var(--col); margin: 0 auto; display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 
 /* ---------- buttons ---------- */
 .btn {
   appearance: none; border: var(--line); border-radius: var(--r);
   min-height: var(--tap); padding: 6px 18px;
-  font: 700 19px/1.15 var(--font-body), system-ui, sans-serif;
+  font: 600 18px/1.15 var(--font-display), system-ui, sans-serif;
   color: var(--ink); background: var(--paper);
-  box-shadow: var(--pop);
+  box-shadow: none;
   display: inline-flex; align-items: center; justify-content: center; gap: 10px;
   text-decoration: none; cursor: pointer; text-align: center;
   transition: transform .08s ease, box-shadow .08s ease;
 }
-.btn:active { transform: translate(3px, 3px); box-shadow: var(--pop-press); }
+/* a filled button is the screen's next best action: it alone stands up */
+.btn:is(.sun, .tomato, .pink, .mint, .sky) { box-shadow: var(--pop); border-width: 2.5px; }
+.btn:is(.sun, .tomato, .pink, .mint, .sky):active { transform: translate(3px, 3px); box-shadow: var(--pop-press); }
+.btn:active { background-color: #f3ebdf; }
 .btn:focus-visible, a:focus-visible, input:focus-visible { outline: 4px solid var(--grape); outline-offset: 3px; }
 .btn.block { width: 100%; }
 .btn.sun { background: var(--sun); }
@@ -143,86 +147,77 @@ p { margin: 0; }
 .btn.mint { background: var(--mint); }
 .btn.sky { background: var(--sky); }
 .btn.grape { background: var(--grape); }
-.btn.quiet { box-shadow: none; background: transparent; border-color: transparent; text-decoration: underline; text-underline-offset: 5px; font-weight: 700; }
-.btn.small { min-height: 48px; font-size: 17px; padding: 6px 14px; }
+.btn.quiet { box-shadow: none; background: transparent; border-color: transparent; text-decoration: underline; text-underline-offset: 4px;
+  font: 700 16px/1.2 var(--font-body), system-ui, sans-serif; color: var(--ink-soft); }
+.btn.small { min-height: 42px; font-size: 16px; padding: 4px 14px; }
 .btn[disabled] { opacity: .55; }
 .btn svg { width: 24px; height: 24px; flex: none; }
 /* who, where and when under a photo (Krish, 2026-10-06): each card is a
    button that puts it right - what it is on top, what it says below */
-.facts { flex: none; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); grid-template-areas: "who who" "where when"; gap: 10px; }
-.btn.fact { flex-direction: column; align-items: stretch; justify-content: center; gap: 0; text-align: left; box-shadow: none; padding: 4px 12px 6px; }
-.fact-who { grid-area: who; } .fact-where { grid-area: where; } .fact-when { grid-area: when; }
-.fact .fact-k { display: flex; justify-content: space-between; align-items: center; gap: 8px; font-size: 15px; color: var(--ink-soft); letter-spacing: .03em; }
-.fact .fact-do { background: var(--sun); color: var(--ink); border: 2px solid var(--ink); border-radius: 999px; padding: 0 10px; font-size: 15px; letter-spacing: 0; }
-.fact .fact-v { font-size: 18px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.facts { flex: none; display: flex; flex-direction: column; border-top: 1.5px solid var(--faint); }
+.btn.fact { flex-direction: row; justify-content: flex-start; gap: 10px; min-height: 44px; padding: 4px 2px; text-align: left;
+  border: 0; border-bottom: 1.5px solid var(--faint); border-radius: 0; background: transparent; font: 400 17px/1.2 var(--font-body), system-ui, sans-serif; }
+.fact .fact-k { flex: none; width: 64px; font-size: 15px; font-weight: 700; color: var(--ink-soft); }
+.fact .fact-v { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fact .fact-do { flex: none; font-weight: 700; font-size: 15px; text-decoration: underline; text-underline-offset: 3px; }
 /* decades and years: a tight grid, so all ten years of a decade fit at once */
 .chips.when-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(76px, 1fr)); }
 .chips.when-grid .chip { justify-content: center; padding-left: 6px; padding-right: 6px; }
 /* choosing a year: the photo gives the years more of the room */
 .game.picking > .slot { flex-grow: .5; }
-/* under a photo: Previous / Next above About / Send while there is room;
-   squeezed (components/Squeeze measures the page on the phone itself) the
-   place line goes first, then the turning buttons become arrows beside About
-   and Send, then the caption - never a word laid over a word */
-.turnrow { flex: none; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 12px; }
-.turnrow.turns { grid-template-areas: "prev next" "about send"; }
+/* under a photo: ‹ Send › - sending is the one thing worth a big button -
+   and "About this photo" as a quiet line under it. Squeezed (components/Squeeze
+   measures the page on the phone itself) a video's caption goes first, then
+   Who (it is in About too), then the facts while "Saved · Undo" says what changed. */
+.turnrow { flex: none; display: grid; grid-template-columns: minmax(0, 1fr); grid-template-areas: "send" "about"; gap: 4px 10px; align-items: center; }
+.turnrow.turns { grid-template-columns: auto minmax(0, 1fr) auto; grid-template-areas: "prev send next" "about about about"; }
 .turnrow .prev { grid-area: prev; } .turnrow .next { grid-area: next; }
-.turnrow.turns .about-btn { grid-area: about; } .turnrow.turns .send { grid-area: send; }
-.turnrow .prev .word { margin-left: 8px; } .turnrow .next .word { margin-right: 8px; }
-.photo-panel:is([data-fit="2"], [data-fit="3"], [data-fit="4"]) .turnrow.turns {
-  grid-template-columns: auto minmax(0, 1fr) minmax(0, 1fr) auto; grid-template-areas: "prev about send next"; gap: 8px; }
-.photo-panel:is([data-fit="2"], [data-fit="3"], [data-fit="4"]) .turnrow .word { display: none; }
-.photo-panel:is([data-fit="2"], [data-fit="3"], [data-fit="4"]) .turnrow .btn { padding-left: 12px; padding-right: 12px; }
-.photo-panel:is([data-fit="2"], [data-fit="3"], [data-fit="4"]) .turnrow .send svg { display: none; }
-.photo-panel:is([data-fit="2"], [data-fit="3"], [data-fit="4"]) .turnrow :is(.prev, .next) { font-size: 28px; }
-/* squeezed: the cards drop their labels (a pencil says they still change
-   things), a video's caption goes, then Who (it is in About too); while
-   "Saved · Undo" shows, it already says what changed, so the cards step aside */
-.photo-panel:not([data-fit="0"]) .fact .fact-k { display: none; }
-.photo-panel:not([data-fit="0"]) .fact .fact-v::after { content: " ✎"; }
+.turnrow .send { grid-area: send; } .turnrow .about-btn { grid-area: about; min-height: 40px; }
+.turnrow :is(.prev, .next) { width: var(--tap); padding: 0; border-radius: 50%; font-size: 26px; }
+.turnrow .word { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 .photo-panel:not([data-fit="0"]) .caption { display: none; }
-.photo-panel:is([data-fit="3"], [data-fit="4"]) .facts { grid-template-areas: "where when"; }
-.photo-panel:is([data-fit="3"], [data-fit="4"]) .fact-who { display: none; }
+.photo-panel:is([data-fit="2"], [data-fit="3"], [data-fit="4"]) .fact-who { display: none; }
+.photo-panel:is([data-fit="3"], [data-fit="4"]) .turnrow { grid-template-areas: "prev send next" "about about about"; }
+.photo-panel:is([data-fit="3"], [data-fit="4"]) .turnrow .about-btn { min-height: 40px; padding-top: 0; padding-bottom: 0; }
 .photo-panel[data-fit="4"]:has(.undo) .facts { display: none; }
 
-/* ---------- big home tiles ---------- */
-.tile {
-  display: grid; grid-template-columns: auto 1fr; align-items: center; gap: 16px;
-  padding: 12px 20px; border: var(--line); border-radius: 28px; box-shadow: var(--pop);
-  color: var(--ink); text-decoration: none; flex: none;
-  transition: transform .08s ease, box-shadow .08s ease;
-}
-.tile:active { transform: translate(3px, 3px); box-shadow: var(--pop-press); }
-.tile .icon {
-  width: 60px; height: 60px; border-radius: 50%; border: var(--line);
-  background: var(--paper); display: grid; place-items: center;
-}
-.tile .icon svg { width: 34px; height: 34px; }
-.tile h2 { font-size: calc(var(--h2) + 2px); }
-.tile p { font-size: 17px; margin-top: 4px; color: var(--ink); }
-/* A tile is never smaller than its words. The tiles give up detail, a step at
-   a time, until the screen fits (components/Squeeze.tsx measures it): 1 the
-   sentence, 2 a smaller round icon, 3 no icon. */
-.tiles { flex: 1 1 auto; display: flex; flex-direction: column; gap: var(--gap); justify-content: center; }
-.tiles[data-fit]:not([data-fit="0"]) .tile p { display: none; }
-.tiles[data-fit="2"] .tile, .tiles[data-fit="3"] .tile { padding: 8px 16px; gap: 12px; }
-.tiles[data-fit="2"] .tile .icon { width: 52px; height: 52px; }
-.tiles[data-fit="2"] .tile .icon svg { width: 28px; height: 28px; }
-.tiles[data-fit="3"] .tile { grid-template-columns: 1fr; }
-.tiles[data-fit="3"] .tile .icon { display: none; }
-/* before the script has measured, a short screen starts without the sentences */
-@container screen (max-height: 860px) { .tiles:not([data-fit]) .tile p { display: none; } }
-.count {
-  display: inline-block; margin-top: 6px; padding: 3px 12px; border-radius: 14px; line-height: 1.25;
-  background: var(--ink); color: var(--paper); font-weight: 700; font-size: 15px;
-}
+/* ---------- home: say hello, search, then the one next thing to do ---------- */
+.hello { flex: none; }
+.hello p { margin-top: 2px; font-size: 16px; }
+.pillsearch { flex: none; display: flex; align-items: center; gap: 6px; padding: 0 5px 0 18px; min-height: 50px;
+  border: var(--line); border-radius: 999px; background: var(--paper); }
+.pillsearch input { flex: 1 1 auto; min-width: 0; border: 0; background: transparent; font: 400 17px var(--font-body), system-ui; color: var(--ink); padding: 8px 0; }
+.pillsearch input::placeholder { color: #6f6580; }
+.pillsearch input:focus-visible { outline: none; }
+.pillsearch:focus-within { outline: 4px solid var(--grape); outline-offset: 2px; }
+.pillsearch .btn { flex: none; width: 40px; min-height: 40px; padding: 0; border-radius: 50%; box-shadow: none; border-width: 2px; }
+.pillsearch .btn svg { width: 20px; height: 20px; }
+.nextup { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; gap: 10px; padding: 12px;
+  background: var(--paper); border: var(--line); border-radius: 24px; color: var(--ink); text-decoration: none; }
+.nextup .kicker { flex: none; font: 700 14px/1.2 var(--font-body), system-ui; letter-spacing: .06em; text-transform: uppercase; color: var(--ink-soft); }
+.nextup .slot { min-height: 60px; }
+.nextup .frame { border-radius: 14px; }
+.nextup h2 { flex: none; font-size: var(--h2); }
+.nextup .btn { flex: none; }
+.tasks { flex: none; display: flex; flex-direction: column; }
+.task { display: flex; align-items: center; gap: 12px; min-height: 52px; padding: 6px 2px; color: var(--ink); text-decoration: none;
+  border-bottom: 1.5px solid var(--faint); }
+.task:last-child { border-bottom: 0; }
+.task .ic { flex: none; width: 40px; height: 40px; border-radius: 12px; border: var(--line); display: grid; place-items: center; }
+.task .ic svg { width: 22px; height: 22px; }
+.task b { display: block; font: 600 18px/1.15 var(--font-display), system-ui; }
+.task small { display: block; font-size: 15px; color: var(--ink-soft); }
+.task .n { margin-left: auto; flex: none; font-weight: 700; font-size: 15px; color: var(--ink-soft); }
+.notme { flex: none; align-self: center; }
+@container screen (max-height: 700px) { .task small { display: none; } .task { min-height: 44px; } }
+@container screen (max-height: 600px) { .nextup .kicker { display: none; } }
+@container screen (max-height: 520px) { .hello p { display: none; } }
 
 /* ---------- inputs ---------- */
 .field {
-  width: 100%; min-height: var(--field); padding: 8px 16px;
+  width: 100%; min-height: var(--field); padding: 8px 18px;
   border: var(--line); border-radius: var(--r); background: var(--paper);
-  font: 400 21px/1.2 var(--font-body), system-ui, sans-serif; color: var(--ink);
-  box-shadow: inset 0 3px 0 rgba(30, 20, 51, 0.08);
+  font: 400 18px/1.2 var(--font-body), system-ui, sans-serif; color: var(--ink);
 }
 .field::placeholder { color: #6f6580; }
 label.big { font-family: var(--font-display), system-ui; font-weight: 600; font-size: calc(var(--h2) - 2px); display: block; margin-bottom: 6px; }
@@ -230,28 +225,28 @@ label.big { font-family: var(--font-display), system-ui; font-weight: 600; font-
 /* ---------- chips ---------- */
 .chips { display: flex; flex-wrap: wrap; gap: 8px; align-content: flex-start; }
 .chip {
-  min-height: 48px; padding: 6px 14px; border: var(--line); border-radius: 999px;
-  background: var(--paper); box-shadow: 3px 3px 0 var(--ink);
-  font: 700 17px/1.1 var(--font-body), system-ui; color: var(--ink);
+  min-height: 44px; padding: 4px 14px; border: var(--line); border-radius: 999px;
+  background: var(--paper);
+  font: 700 16px/1.1 var(--font-body), system-ui; color: var(--ink);
   display: inline-flex; align-items: center; gap: 8px; cursor: pointer; text-decoration: none;
   max-width: 100%; text-align: left;
 }
-.chip:active { transform: translate(2px, 2px); box-shadow: 1px 1px 0 var(--ink); }
-.chip img { width: 38px; height: 38px; border-radius: 50%; border: 2px solid var(--ink); object-fit: cover; margin-left: -8px; }
+.chip:active { background: var(--sun); }
+.chip img { width: 34px; height: 34px; border-radius: 50%; border: 1.5px solid var(--ink); object-fit: cover; margin-left: -10px; }
 
 /* ---------- photo grid ---------- */
-.grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; align-content: start; }
-@container screen (min-width: 480px) { .grid { grid-template-columns: repeat(3, 1fr); } }
+.grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; align-content: start; }
+@container screen (min-width: 640px) { .grid { grid-template-columns: repeat(4, 1fr); } }
 .grid a, .shot {
-  display: block; position: relative; aspect-ratio: 1; border-radius: 18px; overflow: hidden;
-  border: var(--line); background: var(--grape); box-shadow: 3px 3px 0 var(--ink);
+  display: block; position: relative; aspect-ratio: 1; border-radius: 10px; overflow: hidden;
+  background: var(--grape);
 }
 .grid img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .grid a { color: var(--ink); }
 .badge {
   font-family: var(--font-body), system-ui, sans-serif; color: var(--ink);
-  position: absolute; left: 8px; bottom: 8px; padding: 2px 10px; border-radius: 999px;
-  background: var(--sun); border: 2px solid var(--ink); font-weight: 700; font-size: 14px;
+  position: absolute; left: 6px; bottom: 6px; padding: 1px 8px; border-radius: 999px;
+  background: rgba(30, 20, 51, 0.78); color: var(--paper); font-weight: 700; font-size: 14px;
 }
 
 /* what a search found, said in words - plain text, never mistaken for a button */
@@ -261,8 +256,8 @@ label.big { font-family: var(--font-display), system-ui; font-weight: 600; font-
 }
 
 .card {
-  background: var(--paper); border: var(--line); border-radius: 26px;
-  box-shadow: var(--pop); padding: var(--pad); display: flex; flex-direction: column; gap: var(--gap);
+  background: var(--paper); border: var(--line); border-radius: 22px;
+  padding: var(--pad); display: flex; flex-direction: column; gap: var(--gap);
 }
 .muted { color: var(--ink-soft); }
 .center { text-align: center; }
@@ -280,7 +275,7 @@ label.big { font-family: var(--font-display), system-ui; font-weight: 600; font-
   /* a browser without container units (iOS before 16) fills the slot instead */
   width: 100%; height: 100%;
   width: min(100cqw, calc(100cqh * var(--ar, 1.333))); height: min(100cqh, calc(100cqw / var(--ar, 1.333)));
-  border: var(--line); border-radius: 22px; box-shadow: var(--pop);
+  border: var(--line); border-radius: 18px;
 }
 .frame img { display: block; width: 100%; height: 100%; object-fit: cover; }
 .frame video { display: block; width: 100%; height: 100%; object-fit: contain; background: var(--ink); }
@@ -357,10 +352,11 @@ label.big { font-family: var(--font-display), system-ui; font-weight: 600; font-
   .game label.big { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
   .yay { padding: 8px 14px; }
   .undo { padding: 4px 4px 4px 14px; }
-  /* home: the three tiles side by side */
-  .tiles { flex-direction: row; align-items: stretch; }
-  .tiles .tile { flex: 1 1 0; min-width: 0; grid-template-columns: 1fr; align-content: center; padding: 10px 14px; }
-  .tiles .tile .icon { display: none; }
+  /* home: the next thing to do on the left, the rest on the right */
+  .page.home { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); grid-template-rows: auto auto minmax(0, 1fr) auto; column-gap: 20px; max-width: 980px; }
+  .page.home > .nextup { grid-column: 1; grid-row: 1 / -1; }
+  .page.home > :not(.nextup) { grid-column: 2; }
+  .page.home > .tasks { align-self: start; }
   /* signing in: what is happening on the left, what to do on the right */
   .page.gate { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); column-gap: 24px; align-content: center; max-width: 980px; }
   .page.gate > .card { grid-column: 2; grid-row: 1; align-self: center; }
@@ -382,12 +378,12 @@ label.big { font-family: var(--font-display), system-ui; font-weight: 600; font-
   flex: none;
   background: var(--ink); color: var(--paper); border-radius: 22px; padding: 6px 6px 6px 18px;
   display: flex; align-items: center; justify-content: space-between; gap: 12px;
-  font-weight: 700; box-shadow: 5px 5px 0 var(--tomato);
+  font-weight: 700;
 }
-.undo .btn { min-height: 48px; background: var(--sun); box-shadow: none; }
+.undo .btn { min-height: 42px; background: var(--sun); box-shadow: none; }
 .yay {
-  background: var(--mint); border: var(--line); border-radius: 26px; padding: var(--pad) 20px;
-  text-align: center; box-shadow: var(--pop); flex: none;
+  background: var(--mint); border: var(--line); border-radius: 22px; padding: var(--pad) 20px;
+  text-align: center; flex: none;
 }
 .yay .big { font-family: var(--font-display), system-ui; font-weight: 600; font-size: calc(var(--h1) + 12px); line-height: 1.2; }
 .confetti { position: fixed; inset: 0; pointer-events: none; z-index: 60; overflow: hidden; }
@@ -399,8 +395,7 @@ label.big { font-family: var(--font-display), system-ui; font-weight: 600; font-
 @media (prefers-reduced-motion: reduce) { .confetti { display: none; } }
 
 .notice {
-  background: var(--sky); border: var(--line); border-radius: 20px; padding: 8px 14px;
-  box-shadow: 3px 3px 0 var(--ink);
+  background: var(--sky); border: var(--line); border-radius: 18px; padding: 8px 14px;
 }
 /* signing in: a sentence that is the point of its screen, and an address that
    may be one long word and must still wrap rather than run off the side */
@@ -456,10 +451,12 @@ summary.btn::-webkit-details-marker { display: none; }
 /* ---------- find: one search row, then one list at a time ---------- */
 .searchrow { display: flex; gap: 10px; flex: none; }
 .searchrow .field { flex: 1 1 auto; min-width: 0; }
-.searchrow .btn { flex: none; padding: 8px 16px; }
+.searchrow .btn { flex: none; padding: 8px 14px; }
+.searchrow .field { border-radius: 999px; }
+.searchrow .btn:is(.sun, .sky) { box-shadow: none; border-width: 2px; }
 .tabs { display: flex; gap: 8px; flex: none; }
-.tabs .btn { flex: 1 1 0; min-width: 0; padding: 6px 4px; font-size: 17px; }
-.tabs .btn[aria-current="page"] { background: var(--sun); }
+.tabs .btn { flex: 0 1 auto; min-width: 0; padding: 4px 16px; font-size: 16px; border-radius: 999px; }
+.tabs .btn[aria-current="page"] { background: var(--ink); color: var(--paper); }
 @container screen (max-height: 680px) { .hint { display: none; } }
 
 /* ---------- a photo: the picture, a line about it, and what you can do ---------- */
@@ -513,18 +510,15 @@ summary.btn::-webkit-details-marker { display: none; }
    show - so it never reads as three more of the Who / Where / When / Say
    buttons under it (Krish, 2026-10-11). One outline round all three, no
    gaps or shadows between them, the one chosen filled with ink. */
-.types { display: flex; flex: none; padding: 3px; gap: 3px; border: var(--line); border-radius: 999px;
-  background: var(--paper); box-shadow: var(--pop); }
-.types .btn { flex: 1 1 auto; min-width: 0; padding: 4px 6px; gap: 6px; border: 0; border-radius: 999px;
-  box-shadow: none; background: transparent; }
-.types .btn:active { transform: none; }
-.types .btn[aria-current="page"] { background: var(--ink); color: var(--paper); }
-.types .btn[aria-current="page"] .n { background: var(--sun); color: var(--ink); }
-.types .btn[aria-current="page"] .play-dot { border-left-color: var(--paper); }
+.types { display: flex; flex: none; gap: 20px; border-bottom: 2px solid var(--faint); }
+.types .btn { flex: none; min-width: 0; min-height: 40px; padding: 4px 0; gap: 6px; border: 0; border-radius: 0;
+  box-shadow: none; background: transparent; color: var(--ink-soft); font-size: 17px; }
+.types .btn:active { transform: none; background: transparent; }
+.types .btn[aria-current="page"] { color: var(--ink); box-shadow: inset 0 -3px 0 var(--ink); }
 @container screen (max-width: 420px) { .types .play-dot { display: none; } }
-/* the narrowing buttons below it: their own row, a little apart */
 .types + .dims { margin-top: 2px; }
-.types .n, .chip .n {
+.types .n { font-size: 15px; font-weight: 700; color: inherit; }
+.chip .n {
   font-size: 14px; font-weight: 700; padding: 1px 7px; border-radius: 999px;
   background: var(--ink); color: var(--paper); line-height: 1.3;
 }
@@ -532,14 +526,14 @@ summary.btn::-webkit-details-marker { display: none; }
   border-color: transparent transparent transparent var(--ink); }
 /* the row of what a search is narrowed by: a pill to change it, ✕ to take it off */
 .pill { display: inline-flex; align-items: stretch; flex: none; max-width: 100%; overflow: hidden;
-  border: 2px solid var(--ink); border-radius: 999px; background: var(--sun); box-shadow: 3px 3px 0 var(--ink); }
-.pill a { display: inline-flex; align-items: center; min-height: 48px; color: var(--ink); text-decoration: none;
+  border: 2px solid var(--ink); border-radius: 999px; background: var(--sun); }
+.pill a { display: inline-flex; align-items: center; min-height: 42px; color: var(--ink); text-decoration: none;
   font: 700 17px/1.1 var(--font-body), system-ui; }
 .pill .pill-go { padding: 0 6px 0 14px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.pill .pill-off { justify-content: center; min-width: 44px; border-left: 2px solid var(--ink); font-size: 16px; }
+.pill .pill-off { justify-content: center; min-width: 40px; font-size: 16px; }
 .pill.open .pill-go { background: var(--mint); }
 /* the offer under the names: "+ Add a second person", one tap to the Who panel */
-.add-person { flex: none; align-self: flex-start; max-width: 100%; background: var(--paper); box-shadow: 3px 3px 0 var(--ink); }
+.add-person { flex: none; align-self: flex-start; max-width: 100%; background: var(--paper); }
 .pill.add { display: none; background: var(--paper); }
 .pill.add .pill-go { padding: 0 14px; }
 @container screen (max-height: 520px) {
@@ -547,7 +541,7 @@ summary.btn::-webkit-details-marker { display: none; }
   .pill.add { display: inline-flex; }
 }
 .dims { display: flex; gap: 8px; flex: none; }
-.dims .btn { flex: 1 1 0; min-width: 0; padding: 4px 4px; box-shadow: 3px 3px 0 var(--ink); }
+.dims .btn { flex: 1 1 0; min-width: 0; padding: 4px 4px; border-radius: 999px; }
 .dims .btn.set { background: var(--sun); }
 .dims .btn[aria-current="page"] { background: var(--mint); }
 /* one fact to choose, in the photos' place */
@@ -558,7 +552,7 @@ summary.btn::-webkit-details-marker { display: none; }
 .facet-top .done { flex: none; }
 .facet .searchrow .btn { padding: 6px 12px; }
 /* "Say": the microphone beside the box; it says "Listening" while it does */
-.btn.mic { flex: none; padding: 6px 12px; gap: 6px; background: var(--sky); }
+.btn.mic { flex: none; padding: 6px 12px; gap: 6px; background: var(--paper); }
 .btn.mic.listening { background: var(--tomato); }
 @media (prefers-reduced-motion: no-preference) {
   .btn.mic.listening svg { animation: pulse 1.2s ease-in-out infinite; }
@@ -616,7 +610,7 @@ a:has(> .pressed) { position: relative; }
 /* "Who is this?": a clue to when and where on the photo, and the whole photo
    full screen without the ring's dimming, with the rest of that day */
 .frame .badge { max-width: calc(100% - 16px); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.frame .seeall { position: absolute; top: 8px; right: 8px; box-shadow: 3px 3px 0 var(--ink); }
+.frame .seeall { position: absolute; top: 8px; right: 8px; min-height: 40px; }
 .whole {
   position: fixed; inset: 0; z-index: 70; background: var(--ink); color: var(--paper);
   display: flex; flex-direction: column; gap: 10px;

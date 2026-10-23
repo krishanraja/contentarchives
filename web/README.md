@@ -68,7 +68,9 @@ new photographs from H: onto it. The app never waits for any of it.
   ...? Tap here" on Home, for a phone passed round the family, and the phone
   remembers that name in its own signed cookie (`arch_me`). Every other route is
   behind signing in (`middleware.ts`).
-- **Home**: how many photos and videos there are, and three tiles.
+- **Home**: hello, a search box, then the one next thing this person can help
+  with (a face to name, else a photo to place), shown with its picture and one
+  button; "Who is this?" and "Where and when?" sit under it with what is left.
 - **Find photos & videos** (`/find`): one search box (typed, or said with the
   phone browser's own speech recognition where it has one), All / Photos /
   Videos as one joined switch, and Who / Where / When / Say as four buttons
@@ -87,8 +89,9 @@ new photographs from H: onto it. The app never waits for any of it.
   **See all of it** opens the whole photo full screen without the ring's
   dimming, with the other photos from that day (`day_key`) a tap each: who is
   holding the baby is often in the next photo along (Krish, 2026-10-16).
-- Sizes: every control at least 48px, body text 18px, no text under 14px
-  (Ruling, Krish, 2026-10-11); nothing on any screen scrolls.
+- Sizes: every control at least 40px, body text 16px, no text under 14px
+  (Ruling, Krish, 2026-10-23; 48px / 18px before); one raised button per
+  screen, its next best action; nothing on any screen scrolls.
 
 ## Everything it has access to
 

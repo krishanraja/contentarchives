@@ -60,8 +60,9 @@ export async function signIn(page: Page, name = "Grandma", email?: string) {
   await page.waitForURL((u) => u.pathname === "/");
 }
 
-// The floor older users are owed on every screen: one step down from 56px
-// controls and 20px text (Krish, 2026-10-11), and no further.
+// The floor on every screen: 40px controls, 16px body text, nothing under 14px
+// (Krish, 2026-10-23: "a little bit less for old people", the approved mock;
+// it was 48px / 18px from 2026-10-11).
 export async function floor(page: Page, where: string) {
   await page.waitForLoadState("networkidle");
   const m = await page.evaluate(() => {
@@ -71,7 +72,7 @@ export async function floor(page: Page, where: string) {
     };
     const small = [...document.querySelectorAll("button, a.btn, a.chip, a.tile, input, .grid a, .pill a")]
       .filter(visible)
-      .filter((el) => el.getBoundingClientRect().height < 47.5)
+      .filter((el) => el.getBoundingClientRect().height < 39.5)
       .map((el) => (el.textContent || el.getAttribute("aria-label") || el.tagName).trim().slice(0, 30));
     const tiny = [...document.querySelectorAll("p, li, label, button, a, input, span")]
       .filter(visible)
@@ -82,9 +83,9 @@ export async function floor(page: Page, where: string) {
     return { overflow: document.documentElement.scrollWidth - window.innerWidth, small, tiny, body };
   });
   expect(m.overflow, `${where}: sideways scrolling`).toBeLessThanOrEqual(0);
-  expect(m.small, `${where}: controls under 48px`).toEqual([]);
+  expect(m.small, `${where}: controls under 40px`).toEqual([]);
   expect(m.tiny, `${where}: text under 14px`).toEqual([]);
-  expect(m.body, `${where}: body text`).toBeGreaterThanOrEqual(18);
+  expect(m.body, `${where}: body text`).toBeGreaterThanOrEqual(16);
   const axe = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21aa"])
     .exclude("nextjs-portal").analyze();
   expect(axe.violations.map((v) => `${v.id}: ${v.nodes.length}`), `${where}: accessibility`).toEqual([]);
