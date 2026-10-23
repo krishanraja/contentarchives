@@ -1680,6 +1680,23 @@ def library(out):
     check("a third answer settles it, in the spelling most used, and the face leaves the queue",
           (settled, grp["c6"] in [g for (g,) in q(db, "select group_id from queue")]),
           ([("Sunil Secretname", True, False)], False))
+    # the owner says it is spelled another way: the relatives' votes count for
+    # the spelling he kept, and nobody's answer is edited (migration 0020)
+    answers = q(db, "select count(*), string_agg(value, ',' order by at) from answers where target = 'c6'")
+    db.execute("insert into spelling_verdicts (a_key, b_key, verdict, kept, who) "
+               "select least(x, y), greatest(x, y), 'same', 'Suneel Secretname', 'krish' "
+               "from (select name_key('Sunil Secretname') x, name_key('Suneel Secretname') y) k")
+    db.commit()
+    check("a spelling the owner kept names the face, settled, from the votes already given",
+          q(db, "select name, answered, contested from group_names where group_id = %s", grp["c6"]),
+          [("Suneel Secretname", True, False)])
+    vote("krish", "Suneel Secretname")         # what the spelling screen adds: one more vote, the same answer
+    check("and his own answer joins theirs rather than tying with them",
+          q(db, "select name, answered, contested from group_names where group_id = %s", grp["c6"]),
+          [("Suneel Secretname", True, False)])
+    check("nobody's answer was rewritten",
+          q(db, "select count(*) - 1, string_agg(value, ',' order by at) filter (where who <> 'krish') "
+                "from answers where target = 'c6'"), answers)
 
     # later: the purged file turns up, the missing photo arrives, one leaves
     drive.put("dh2", "m-h2", "Media/Communal/2020/secret-again.jpg")

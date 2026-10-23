@@ -71,7 +71,10 @@ nudity in this".
   and only as answers: his own vote on each face group, and "not in it / in it"
   on each photograph the library listed under the wrong spelling. Nothing is
   edited, a relative's vote is never rewritten for them, and a pair he called
-  two people is not asked again (Krish, 2026-10-21)
+  two people is not asked again (Krish, 2026-10-21). His "same" verdict maps every
+  vote's spelling before it is counted (`group_votes`, migration 0020), so a wrong
+  spelling a RELATIVE gave is put right too, instead of his answer only tying with
+  theirs and sending the face back to the family as contested
 - a place or year the library gave is never replaced by an app answer
 - the cloud is the record, H: (Google Drive, `My Drive\ContentLibrary`) holds the
   photographs, and the external drive is only a backup (Krish, 2026-10-16: "nothing
