@@ -20,8 +20,8 @@ const version = () => process.env.SESSION_VERSION || "1";
 
 // Every token this app signs carries exactly one of these claims, and each
 // reader demands its own, so no kind of token can stand in for another: the
-// "asking" cookie a stranger is handed is never a session, and never Krish's
-// yes-or-no link.
+// "asking" cookie a stranger is handed is never a session, and never a
+// sign-in link.
 async function mint(claims: Record<string, string>, seconds: number): Promise<string> {
   return new SignJWT(claims)
     .setProtectedHeader({ alg: "HS256" })
@@ -75,7 +75,7 @@ export async function verifyMe(token: string | undefined): Promise<string | null
 }
 
 // The email a phone is signing in with, between typing it and typing the
-// emailed code (which can be days later, after Krish says yes). It opens
+// emailed code. It opens
 // nothing: it only lets the sign-in screen carry on where it left off.
 export const ASKING = "arch_ask";
 export const ASKING_AGE = 30 * 24 * 3600;
@@ -88,16 +88,15 @@ export async function verifyAsking(token: string | undefined): Promise<string | 
   return p && typeof p.pend === "string" ? p.pend : null;
 }
 
-// The link in Krish's "someone would like to come in" email. It names the
-// person; only a tap on a button on the page it opens decides anything.
-export const DECIDE_AGE = 30 * 24 * 3600;
-
-export async function signDecide(email: string): Promise<string> {
-  return mint({ ask: email }, DECIDE_AGE);
+// The link in a sign-in email: it carries the address and that email's code,
+// and runs out with the code. Opening it only shows a button; the tap posts
+// the code like one typed, so a mail scanner opening it spends nothing.
+export async function signLink(email: string, code: string, seconds: number): Promise<string> {
+  return mint({ link: email, c: code }, seconds);
 }
-export async function verifyDecide(token: string | undefined): Promise<string | null> {
+export async function verifyLink(token: string | undefined): Promise<{ email: string; code: string } | null> {
   const p = await read(token);
-  return p && typeof p.ask === "string" ? p.ask : null;
+  return p && typeof p.link === "string" && typeof p.c === "string" ? { email: p.link, code: p.c } : null;
 }
 
 export function cookieOptions(maxAge = MAX_AGE) {

@@ -40,27 +40,26 @@ new photographs from H: onto it. The app never waits for any of it.
 
 ## What it does, screen by screen
 
-- **Signing in** (`/gate`, since 2026-10-15; the shared family code no longer
-  lets anyone new in): a person types their email. Someone Krish has said yes
-  to is emailed a six-digit code (good for 30 minutes) and types it. Someone
-  new is asked their first name, and Krish (`ACCESS_ADMIN_EMAIL`) is emailed a
-  link to **Krish's page** (`/approve`), which only shows the question: a mail
-  scanner opening the link decides nothing. His tap on Yes emails
-  them a code good for 3 days; No tells them, kindly, to speak to him. Krish's
-  own address is let straight in. Every step is a plain form posted to
-  `/api/access`, so it works before the page's script arrives, and the email
-  typed is kept in a signed cookie (`arch_ask`, 30 days), so a phone that comes
-  back after Krish says yes carries on at the code. Addresses and names live
-  only in the database (`access_people`, migration 0016); a code is kept only as
-  a hash keyed by `SESSION_SECRET` (`access_codes`). Every cap is checked and
-  recorded in one transaction that holds a lock, so a burst of requests sent
-  at once meets it one at a time: a code a minute (unless none still works)
-  and six an hour per address, thirty an hour per network and two hundred in
-  all; at most two codes working at once; five wrong tries, after which every
-  code for that address stops until a new one is sent; five asks to Krish an
-  hour per network and thirty a day in all (`access_sends`). Someone still
-  waiting three days on who types their email again asks Krish again. Wrong
-  codes still count per hashed IP in `gate_attempts` and lock out, and a
+- **Signing in** (`/gate`; self-serve since 2026-10-23, Krish: "I don't need
+  to approve every new user"): a person types their email, and the first time
+  their first name too, and is emailed a link (`/in`) with a six-digit code
+  beside it, both good for 30 minutes. Nobody waits for Krish. The link's page
+  only shows a button and the tap signs in, because a mail scanner opening the
+  link must not spend the code; the code is for a phone whose link opens in
+  another browser (an installed home-screen app). Krish can still stop
+  someone (`status = 'no'`); an address left waiting for his yes from before
+  2026-10-23 is let in the next time it signs in. Every step is a plain form
+  posted to `/api/access`, so it works before the page's script arrives, and
+  the email typed is kept in a signed cookie (`arch_ask`, 30 days). Addresses
+  and names live only in the database (`access_people`, migration 0016); a
+  code is kept only as a hash keyed by `SESSION_SECRET` (`access_codes`).
+  Every cap is checked and recorded in one transaction that holds a lock, so
+  a burst of requests sent at once meets it one at a time: an email a minute
+  (unless no code still works) and six an hour per address, thirty an hour per
+  network and two hundred in all (`access_sends`), which is also what bounds
+  new sign-ups; at most two codes working at once; five wrong tries, after
+  which every code for that address stops until a new one is sent. Wrong
+  codes count per hashed IP in `gate_attempts` and lock out, and a
   lockout can alert `ALERT_WEBHOOK_URL`. Signed in by email, a phone stays in
   for **a year from its last visit**: `middleware.ts` signs the session again
   once it is a day old (a session from the retired family code carries no
@@ -103,7 +102,7 @@ identifiers are never written in this public repository.
 | Google Gemini | `gemini-3.1-flash-lite` (describe, judge videos), `gemini-embedding-001` (search by meaning) | the app's own capped key, `GOOGLE_API_KEY_ARCHIVES` | the nightly writer (spend capped per run) and the app (one embedding per words search) |
 | Supabase project "archives-london" (London, eu-west-2; moved from Sydney 2026-10-12) | Postgres: the index and the family's answers | `DATABASE_URL` (transaction pooler) | the app reads and records answers; the writer writes the index |
 | Supabase Storage | private bucket `media`: cut face crops and frames | `SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY` | the app |
-| Resend | sends the sign-in codes and Krish's "someone would like to come in" emails, from a verified krishraja.com address | `RESEND_API_KEY` (sending only), `MAIL_FROM` | the app (`web/lib/mail.ts`) |
+| Resend | sends the sign-in links and codes, from a verified krishraja.com address | `RESEND_API_KEY` (sending only), `MAIL_FROM` | the app (`web/lib/mail.ts`) |
 | Vercel project "archives" | hosting, region `lhr1` (London), root `web`, production branch `main` | deploys from GitHub on every push to `main` | the app |
 | GitHub Actions | `.github/workflows/archives-enrich.yml`, nightly 01:17 UTC (overnight in London) | repository secrets below | the writer, `stages/13_app/cloud_enrich.py` |
 
@@ -181,11 +180,8 @@ TEST_PG_DSN=postgresql://... python tests/test_app_cloud.py   # from the repo ro
   releases a genuine family moment, per file, with `share = yes`.
 - Anyone can tap **This photo shouldn't be here**: it is hidden for everyone at
   once. Bring one back in the database: `update photos set hidden = false where hash = '...'`.
-- Who can get in: Krish says yes or no from the link in each "would like to see
-  the Family Archives" email. To let someone in without asking them, add their
-  row: `insert into access_people (email, name, status, decided_at) values
-  ('their address, lower case', 'First name', 'yes', now())`; they then type their
-  email and get a code. To stop someone signing in again: `update access_people
+- Who can get in: anyone who signs in with their email (since 2026-10-23,
+  no approval). To stop someone signing in again: `update access_people
   set status = 'no' where email = '...'`. A phone already signed in stays in
   until it goes a year unused; to sign every phone out, bump `SESSION_VERSION`.
 - Answers live in `answers` (insert-only; Supabase backs it up daily); `status` says

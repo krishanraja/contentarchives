@@ -8,7 +8,7 @@ import { existsSync, readFileSync } from "node:fs";
 export const db = postgres(process.env.DATABASE_URL || "postgres://postgres:pw@127.0.0.1:54329/arch", { prepare: false, max: 2, idle_timeout: 5 });
 
 // Every email the app sends goes to this file in local tests (MAIL_SINK in
-// .env.local); the address Krish's "someone would like to come in" emails go to.
+// .env.local); the owner's address.
 export const MAIL = process.env.MAIL_SINK || "/tmp/archives-mail.jsonl";
 export const ADMIN = process.env.ACCESS_ADMIN_EMAIL || "admin@family.test";
 export const emailOf = (name: string) => `${name.toLowerCase().replace(/[^a-z]+/g, ".")}@family.test`;
@@ -29,9 +29,9 @@ export async function nextMail(to: string, before: number): Promise<Sent> {
   throw new Error(`no email arrived for ${to}`);
 }
 export const codeIn = (m: Sent) => /code is (\d{6})/.exec(m.text)![1];
-export const linkIn = (m: Sent) => /(https?:\/\/\S+\/approve\?t=\S+)/.exec(m.text)![1];
+export const linkIn = (m: Sent) => /(https?:\/\/\S+\/in\?t=\S+)/.exec(m.text)![1];
 
-// Someone Krish has already said yes to. A test signs the same person in many
+// Someone who has signed in before. A test signs the same person in many
 // times an hour, so the hourly cap on codes starts afresh for them.
 export async function letIn(name: string) {
   const email = emailOf(name);
@@ -54,7 +54,7 @@ export async function signIn(page: Page, name = "Grandma", email?: string) {
   const other = page.locator("button:has-text('Change email'), button:has-text('Use a different email')");
   if (await other.count()) await other.first().click();
   await page.fill("#email", email);
-  await page.click("button:has-text('Send me a code')");
+  await page.click("button:has-text('Email me a link')");
   await page.fill("#code", codeIn(await nextMail(email, before)));
   await page.click("button:has-text('Open')");
   await page.waitForURL((u) => u.pathname === "/");

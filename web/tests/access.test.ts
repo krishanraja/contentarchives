@@ -3,8 +3,8 @@ import { mkdtempSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { cleanCode, codeHash, newCode, normEmail, normName, stepFor } from "../lib/access";
-import { askMail, codeMail, send } from "../lib/mail";
-import { sign, signAsking, signDecide, signMe, verify, verifyAsking, verifyDecide, verifyMe } from "../lib/session";
+import { codeMail, send } from "../lib/mail";
+import { sign, signAsking, signLink, signMe, verify, verifyAsking, verifyLink, verifyMe } from "../lib/session";
 
 // Made-up people only: real addresses live only in the database.
 beforeAll(() => { process.env.SESSION_SECRET = "test-secret-0123456789abcdef"; process.env.SESSION_VERSION = "1"; });
@@ -48,60 +48,53 @@ describe("a code", () => {
 });
 
 describe("the step a phone is on", () => {
-  it("follows the email typed and what Krish said", () => {
+  it("follows the email typed: nobody waits for Krish, and only his no stops someone", () => {
     expect(stepFor(null, null)).toBe("email");
     expect(stepFor("tara@family.test", null)).toBe("name");
-    expect(stepFor("tara@family.test", "asked")).toBe("waiting");
+    expect(stepFor("tara@family.test", "asked")).toBe("code");
     expect(stepFor("tara@family.test", "no")).toBe("no");
     expect(stepFor("tara@family.test", "yes")).toBe("code");
   });
 });
 
 describe("each kind of signed token opens only its own door", () => {
-  it("the asking cookie a stranger is handed is never a session, a name, or Krish's yes-or-no link", async () => {
+  it("the asking cookie a stranger is handed is never a session, a name, or a sign-in link", async () => {
     const asking = await signAsking("stranger@family.test");
     expect(await verifyAsking(asking)).toBe("stranger@family.test");
     expect(await verify(asking)).toBeNull();
     expect(await verifyMe(asking)).toBeNull();
-    expect(await verifyDecide(asking)).toBeNull();
+    expect(await verifyLink(asking)).toBeNull();
   });
-  it("Krish's link is not a session or an asking cookie, and a session is not his link", async () => {
-    const link = await signDecide("tara@family.test");
-    expect(await verifyDecide(link)).toBe("tara@family.test");
+  it("a sign-in link is not a session or an asking cookie, and a session is not a link", async () => {
+    const link = await signLink("tara@family.test", "042917", 1800);
+    expect(await verifyLink(link)).toEqual({ email: "tara@family.test", code: "042917" });
     expect(await verify(link)).toBeNull();
     expect(await verifyAsking(link)).toBeNull();
-    expect(await verifyDecide(await sign("grandma"))).toBeNull();
-    expect(await verifyDecide(await signMe("grandma"))).toBeNull();
+    expect(await verifyMe(link)).toBeNull();
+    expect(await verifyLink(await sign("grandma"))).toBeNull();
+    expect(await verifyLink(await signMe("grandma"))).toBeNull();
   });
-  it("a forged link is refused", async () => {
-    const link = await signDecide("tara@family.test");
-    expect(await verifyDecide(link.slice(0, -3) + "abc")).toBeNull();
+  it("a forged or run-out link is refused", async () => {
+    const link = await signLink("tara@family.test", "042917", 1800);
+    expect(await verifyLink(link.slice(0, -3) + "abc")).toBeNull();
+    expect(await verifyLink(await signLink("tara@family.test", "042917", -1))).toBeNull();
   });
 });
 
-describe("the emails", () => {
-  const site = "https://archives.example";
-  it("put the code where a phone shows it first: the subject", () => {
-    const m = codeMail("tara@family.test", "Cousin Tara", "042917", { minutes: 30, approved: false, site });
+describe("the email", () => {
+  const link = "https://archives.example/in?t=abc";
+  it("carries the link to tap, and the code beside it for another browser", () => {
+    const m = codeMail("tara@family.test", "Cousin Tara", "042917", { minutes: 30, link });
     expect(m.subject).toContain("042917");
-    expect(m.text).toContain("042917");
+    expect(m.text).toContain(link);
+    expect(m.text).toContain("code is 042917");
     expect(m.text).toContain("30 minutes");
+    expect(m.html).toContain(`href="${link}"`);
   });
-  it("say Krish said yes, and for how long that code works", () => {
-    const m = codeMail("tara@family.test", "Cousin Tara", "042917", { minutes: 3 * 24 * 60, approved: true, site });
-    expect(m.subject).toMatch(/^Krish said yes!/);
-    expect(m.text).toContain("3 days");
-    expect(m.text).toContain(site);
-  });
-  it("never let a typed name write into the page of an email", () => {
-    const m = askMail("admin@family.test", "<img src=x onerror=alert(1)>", "x@family.test", `${site}/approve?t=abc`);
+  it("never lets a typed name write into the page of an email", () => {
+    const m = codeMail("x@family.test", "<img src=x onerror=alert(1)>", "042917", { minutes: 30, link });
     expect(m.html).not.toContain("<img");
     expect(m.html).toContain("&lt;img");
-  });
-  it("tell Krish that opening the link decides nothing", () => {
-    const m = askMail("admin@family.test", "Cousin Tara", "tara@family.test", `${site}/approve?t=abc`);
-    expect(m.text).toContain(`${site}/approve?t=abc`);
-    expect(m.text).toContain("Nothing happens until you tap a button");
   });
 });
 

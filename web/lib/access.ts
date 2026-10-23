@@ -3,35 +3,33 @@ import type postgres from "postgres";
 import { sql } from "./db";
 import { need } from "./env";
 import { lockState, type Lock } from "./gate";
-import { askMail, codeMail, send, type Mail } from "./mail";
-import { signDecide, verifyDecide } from "./session";
+import { codeMail, send, type Mail } from "./mail";
+import { signLink } from "./session";
 
-// Signing in (Krish, 2026-10-15): a new person gives their email and first
-// name, Krish says yes or no from a link emailed to him, and then a six-digit
-// code emailed to them opens the app. Someone Krish already said yes to just
-// types their email and gets a code. Addresses and names live only in the
+// Signing in (Krish, 2026-10-23: "I don't need to approve every new user"): a
+// person types their email (and, the first time, their first name) and is
+// emailed a link that opens the app, with the same six-digit code beside it
+// for a phone whose link opens in another browser. Nobody waits for Krish; he
+// can still stop someone (status 'no'). Addresses and names live only in the
 // database (migration 0016); a code is stored only as a keyed hash.
 //
 // EVERY LIMIT IS TAKEN, NOT JUST READ. A limit that is read and only recorded
 // afterwards lets a burst of requests sent at once all read "under the limit"
 // and all go through. So each check and its record happen in one transaction
-// that holds a lock on the address (or, for asks to Krish, on asking itself):
-// a burst queues up behind the lock and meets the limit one request at a time.
+// that holds a lock on the address: a burst queues up behind the lock and meets the limit one request at a time.
 
-export const CODE_MINUTES = 30;               // a code someone asked for
-export const APPROVED_MINUTES = 3 * 24 * 60;  // the code that comes with Krish's yes
+export const CODE_MINUTES = 30;               // a link and its code, from when it is sent
 export const MAX_TRIES = 5;                   // wrong codes, then every live code stops working
 export const LIVE_CODES = 2;                  // codes that work at once: a late email's, and the newest
 export const RESEND_SECONDS = 60;             // one code a minute to the same address
 export const CODES_PER_HOUR = 6;              // and no more than this an hour
 export const CODES_PER_IP_HOUR = 30;          // to anyone, from one network
 export const CODES_PER_HOUR_ALL = 200;        // and from everywhere
-export const ASKS_PER_IP_HOUR = 5;            // new asks to Krish from one network
-export const ASKS_PER_DAY = 30;               // and from everywhere: his inbox is not a target
-export const REMIND_AFTER_DAYS = 3;           // still waiting: Krish is asked again
 
+// "asked" is only ever an address from before 2026-10-23 that was waiting for
+// Krish: it is let in the next time it signs in.
 export type Person = { email: string; name: string; status: "asked" | "yes" | "no" };
-export type Step = "email" | "name" | "waiting" | "no" | "code";
+export type Step = "email" | "name" | "no" | "code";
 
 // Case and spaces are not part of an address; anything that is not shaped like
 // one is refused before it reaches the database.
@@ -64,10 +62,9 @@ export function codeHash(secret: string, email: string, code: string): string {
 export function stepFor(email: string | null, status: Person["status"] | null): Step {
   if (!email) return "email";
   if (!status) return "name";
-  return status === "yes" ? "code" : status === "asked" ? "waiting" : "no";
+  return status === "no" ? "no" : "code";
 }
 
-const isAdmin = (email: string) => normEmail(process.env.ACCESS_ADMIN_EMAIL) === email;
 const minutes = (n: number) => `${n} minutes`;
 type Tx = postgres.TransactionSql;
 
@@ -104,21 +101,21 @@ export async function lock(ih: string): Promise<Lock> {
   return lockState(c.ip, c.total);
 }
 
-// Krish's own address never waits for Krish.
-async function letAdminIn(p: Person): Promise<Person> {
-  if (p.status === "yes" || !isAdmin(p.email)) return p;
-  await sql()`update access_people set status = 'yes', decided_at = now() where email = ${p.email}`;
+// Someone who was waiting for Krish's yes from before 2026-10-23 no longer waits.
+export async function admit(p: Person): Promise<Person> {
+  if (p.status !== "asked") return p;
+  await sql()`update access_people set status = 'yes', decided_at = now() where email = ${p.email} and status = 'asked'`;
   return { ...p, status: "yes" };
 }
 
 export type Sent = "sent" | "wait" | "many" | "mail";
 
-// A new code, emailed. The one before it still works until it runs out, so the
-// code in an email that arrived late is not wrongly refused; any older ones
+// A new link and code, emailed. The one before it still works until it runs
+// out, so an email that arrived late is not wrongly refused; any older ones
 // stop. A new code also gives back the wrong tries.
-export async function sendCode(p: Person, ih: string, site: string, approved = false): Promise<Sent> {
+export async function sendCode(p: Person, ih: string, site: string): Promise<Sent> {
   const code = newCode();
-  const life = approved ? APPROVED_MINUTES : CODE_MINUTES;
+  const life = CODE_MINUTES;
   const made = await locked(`code:${p.email}`, async (tx) => {
     const [s] = await tx`select
         max(at) filter (where email = ${p.email}) as last,
@@ -128,11 +125,9 @@ export async function sendCode(p: Person, ih: string, site: string, approved = f
       from access_sends where kind = 'code' and at > now() - interval '1 hour'`;
     const [l] = await tx`select count(*)::int as n from access_codes
       where email = ${p.email} and used_at is null and expires_at > now()`;
-    if (!approved) {
-      // the minute's wait is for a code still on its way, not after one stopped working
-      if (l.n && s.last && Date.now() - new Date(s.last).getTime() < RESEND_SECONDS * 1000) return "wait";
-      if (s.mine >= CODES_PER_HOUR || s.net >= CODES_PER_IP_HOUR || s.total >= CODES_PER_HOUR_ALL) return "many";
-    }
+    // the minute's wait is for a code still on its way, not after one stopped working
+    if (l.n && s.last && Date.now() - new Date(s.last).getTime() < RESEND_SECONDS * 1000) return "wait";
+    if (s.mine >= CODES_PER_HOUR || s.net >= CODES_PER_IP_HOUR || s.total >= CODES_PER_HOUR_ALL) return "many";
     await tx`insert into access_sends (kind, email, ip_hash) values ('code', ${p.email}, ${ih})`;
     await tx`update access_codes set used_at = now()
       where email = ${p.email} and used_at is null and id not in (
@@ -145,81 +140,29 @@ export async function sendCode(p: Person, ih: string, site: string, approved = f
     return row.id as string;
   });
   if (made === "wait" || made === "many") return made;
-  const went = await deliver(codeMail(p.email, p.name, code, { minutes: life, approved, site }),
+  const link = `${site}/in?t=${encodeURIComponent(await signLink(p.email, code, life * 60))}`;
+  const went = await deliver(codeMail(p.email, p.name, code, { minutes: life, link }),
     () => sql()`delete from access_codes where id = ${made}`);
   return went ? "sent" : "mail";
 }
 
-// Krish is emailed "someone would like to come in", within the caps on asking.
-async function tellKrish(p: Person, ih: string, site: string, fresh: boolean): Promise<"asked" | "busy" | "known" | "mail"> {
-  const ok = await locked("ask", async (tx) => {
-    const [c] = await tx`select
-        count(*) filter (where ip_hash = ${ih} and at > now() - interval '1 hour')::int as ip,
-        count(*) filter (where at > now() - interval '1 day')::int as day
-      from access_sends where kind = 'ask'`;
-    if (c.ip >= ASKS_PER_IP_HOUR || c.day >= ASKS_PER_DAY) return "busy";
-    if (fresh) {
-      const [made] = await tx`insert into access_people (email, name) values (${p.email}, ${p.name})
-        on conflict (email) do nothing returning email`;
-      if (!made) return "known";
-    }
-    await tx`insert into access_sends (kind, email, ip_hash) values ('ask', ${p.email}, ${ih})`;
-    return "ok";
-  });
-  if (ok !== "ok") return ok;
-  const link = `${site}/approve?t=${encodeURIComponent(await signDecide(p.email))}`;
-  // Krish never heard: a new ask is forgotten, so trying again asks him again
-  const went = await deliver(askMail(need("ACCESS_ADMIN_EMAIL"), p.name, p.email, link),
-    () => fresh ? sql()`delete from access_people where email = ${p.email} and status = 'asked'` : Promise.resolve());
-  return went ? "asked" : "mail";
-}
-
-// Still waiting days later: the first email may have gone astray, or its link
-// run out. Asked again, at most once every few days.
-async function remindKrish(p: Person, ih: string, site: string): Promise<"reminded" | "waiting"> {
-  const [r] = await sql()`select max(at) as last from access_sends where kind = 'ask' and email = ${p.email}`;
-  if (r.last && Date.now() - new Date(r.last).getTime() < REMIND_AFTER_DAYS * 86_400_000) return "waiting";
-  return (await tellKrish(p, ih, site, false)) === "asked" ? "reminded" : "waiting";
-}
-
-// An email typed on the sign-in screen: someone already let in gets a code;
-// anyone else is asked their name next (or told they are still waiting).
-export async function start(email: string, ih: string, site: string): Promise<Sent | "new" | "reminded" | "waiting" | "no"> {
+// An email typed on the sign-in screen: someone known gets a link and code;
+// anyone new is asked their first name next.
+export async function start(email: string, ih: string, site: string): Promise<Sent | "new" | "no"> {
   const found = await person(email);
   if (!found) return "new";
-  const p = await letAdminIn(found);
-  if (p.status === "yes") return sendCode(p, ih, site);
-  return p.status === "asked" ? remindKrish(p, ih, site) : "no";
+  if (found.status === "no") return "no";
+  return sendCode(await admit(found), ih, site);
 }
 
-// A new person's name: Krish is emailed a link to say yes or no.
-export async function ask(email: string, name: string, ih: string, site: string): Promise<Sent | "asked" | "busy" | "known"> {
-  const found = await person(email);
-  if (found) return found.status === "yes" ? sendCode(found, ih, site) : "known";
-  if (isAdmin(email)) {
-    await sql()`insert into access_people (email, name, status, decided_at) values (${email}, ${name}, 'yes', now())
-      on conflict (email) do nothing`;
-    return sendCode({ email, name, status: "yes" }, ih, site);
-  }
-  return tellKrish({ email, name, status: "asked" }, ih, site, true);
-}
-
-// Krish's tap on the page his link opened. Only a change happens: a second
-// tap, or a scanner replaying the form, sends nothing twice.
-export async function decide(token: string, yes: boolean, ih: string, site: string):
-    Promise<"yes" | "yes-mail" | "no" | "same" | "bad"> {
-  const email = await verifyDecide(token);
-  const p = email ? await person(email) : null;
-  if (!p) return "bad";
-  if (yes) {
-    const [changed] = await sql()`update access_people set status = 'yes', decided_at = now(), tries = 0
-      where email = ${p.email} and status <> 'yes' returning email`;
-    if (!changed) return "same";
-    return (await sendCode({ ...p, status: "yes" }, ih, site, true)) === "sent" ? "yes" : "yes-mail";
-  }
-  const [changed] = await sql()`update access_people set status = 'no', decided_at = now()
-    where email = ${p.email} and status = 'asked' returning email`;
-  return changed ? "no" : "same";
+// A new person's first name: they are in, and emailed a link and code. The
+// caps on codes (per address, per network, in all) are what bound sign-ups.
+export async function join(email: string, name: string, ih: string, site: string): Promise<Sent | "no"> {
+  await sql()`insert into access_people (email, name, status, decided_at) values (${email}, ${name}, 'yes', now())
+    on conflict (email) do nothing`;
+  const p = await person(email);
+  if (!p || p.status === "no") return "no";
+  return sendCode(await admit(p), ih, site);
 }
 
 export type Checked = { ok: true; name: string } | { ok: false; why: "wrong" | "old" | "spent" };

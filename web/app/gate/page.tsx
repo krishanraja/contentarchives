@@ -12,22 +12,21 @@ const SAID: Record<string, [string, "calm" | "red"]> = {
   email: ["That doesn't look like an email address. Check it and try again.", "red"],
   name: ["Type your first name first.", "red"],
   wrong: ["That's not the code. Check the email and try again.", "red"],
-  old: ["That code has run out. Tap Send again for a new one.", "red"],
+  old: ["That link or code has run out. Tap Send again for a new one.", "red"],
   spent: ["Too many wrong tries. Tap Send again for a new code.", "red"],
   locked: ["Too many tries. Please wait an hour, or ask Krish.", "red"],
   many: ["We've sent lots of codes. Please wait an hour, or ask Krish.", "red"],
   mail: ["We couldn't send the email just now. Please try again in a minute.", "red"],
-  busy: ["Lots of people are asking right now. Please try again later, or ask Krish.", "red"],
-  wait: ["We sent you a code a moment ago. Check your email.", "calm"],
-  sent: ["We've emailed you a code. It can take a minute to arrive.", "calm"],
-  reminded: ["We've asked Krish again.", "calm"],
+  wait: ["We sent you an email a moment ago. Check your inbox.", "calm"],
+  sent: ["We've emailed you a link. It can take a minute to arrive.", "calm"],
 };
 
 const different = <Ask op="reset" label="Use a different email" busy="One moment…" tint="quiet" />;
 
-// Signing in, one step at a time (Krish, 2026-10-15): your email; if you are
-// new, your first name, so Krish can say yes; then the code we email you. The
-// email typed is kept in a signed cookie, so coming back days later carries on.
+// Signing in, one step at a time (Krish, 2026-10-23: no approving each person):
+// your email; if you are new, your first name; then tap the link we email you,
+// or type its code here. The email typed is kept in a signed cookie, so coming
+// back later carries on.
 export default async function Gate({ searchParams }: { searchParams: Promise<{ e?: string }> }) {
   const ua = (await headers()).get("user-agent") || "";
   const said = (await searchParams).e || "";
@@ -47,13 +46,12 @@ export default async function Gate({ searchParams }: { searchParams: Promise<{ e
             <strong>Tip:</strong> tap the <strong>⋯</strong> menu and choose <strong>Open in Chrome</strong> or <strong>Open in Safari</strong>. Then it will remember you next time.
           </div>
         )}
-        {step === "name" && <p className="gate-lead">New here? Krish lets each person in.</p>}
-        {step === "code" && <p className="gate-lead">We emailed a code to {addr}</p>}
-        {step === "waiting" && <p className="gate-lead">We'll email a code to {addr} when Krish says yes.</p>}
+        {step === "name" && <p className="gate-lead">New here? Welcome! Tell us your first name.</p>}
+        {step === "code" && <p className="gate-lead">We emailed a link to {addr}</p>}
       </div>
       <div className="card" style={{ flex: "none" }} data-step={step}>
         {step === "email" && <>
-          <Ask op="start" label="Send me a code" busy="Sending…" tint="tomato">
+          <Ask op="start" label="Email me a link" busy="Sending…" tint="tomato">
             <label className="big" htmlFor="email">Your email</label>
             <input id="email" name="email" type="email" className="field" required
               autoComplete="email" inputMode="email" autoCapitalize="none" autoCorrect="off" spellCheck={false}
@@ -62,18 +60,13 @@ export default async function Gate({ searchParams }: { searchParams: Promise<{ e
           {note}
         </>}
         {step === "name" && <>
-          <Ask op="ask" label="Ask Krish" busy="Asking…" tint="mint" pair>
+          <Ask op="join" label="Email me a link" busy="Sending…" tint="mint" pair>
             <label className="big" htmlFor="name">Your first name</label>
             <input id="name" name="name" className="field" required minLength={2} maxLength={40}
               autoComplete="given-name" autoCapitalize="words" enterKeyHint="send" placeholder="Your first name"
               aria-describedby="gate-msg" />
           </Ask>
           {note}
-          {different}
-        </>}
-        {step === "waiting" && <>
-          <p className="big">{said === "asked" ? `Thank you, ${p!.name}! Krish has been asked.` : "Krish hasn't said yes yet."}</p>
-          {said !== "asked" && note}
           {different}
         </>}
         {step === "no" && <>

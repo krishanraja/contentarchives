@@ -2,10 +2,10 @@ import { NextRequest, NextResponse } from "next/server";
 import { COOKIE, ME, cookieOptions, sign, signMe, stale, verify, verifyMe } from "@/lib/session";
 
 // Every page, API and image is behind signing in. Only the sign-in screen and
-// its form, Krish's yes-or-no page, robots.txt, the app's icons (a phone
+// its form, the page a sign-in email's link opens, robots.txt, the app's icons (a phone
 // fetches them without the cookie) and the build's own assets are not. The
 // cron route checks its own secret instead.
-const OPEN = [/^\/gate$/, /^\/api\/access$/, /^\/approve$/, /^\/robots\.txt$/, /^\/_next\//,
+const OPEN = [/^\/gate$/, /^\/api\/access$/, /^\/in$/, /^\/robots\.txt$/, /^\/_next\//,
   /^\/favicon/, /^\/icon/, /^\/apple-icon/, /^\/api\/cron\//, /^\/manifest/];
 
 export async function middleware(req: NextRequest) {

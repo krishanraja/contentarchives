@@ -20,8 +20,7 @@ nudity in this".
 - Google Drive's Communal folder, read by the app's service account (Viewer)
 - the owner's Personal folder, read by the same service account (Viewer), by
   the nightly writer only; its id lives in the database (`sync_state`), never here
-- Resend, through the app's own sending key: the sign-in codes and Krish's
-  "someone would like to come in" emails, and nothing else
+- Resend, through the app's own sending key: the sign-in links and codes, and nothing else
 - Gemini through the app's own capped key: describing and judging (the writer),
   one embedding per words search (the app)
 - OpenAI image moderation through its own key: an independent, free second
@@ -34,7 +33,7 @@ nudity in this".
 - `independent_moderation` and `independent_moderation_samples`: durable,
   per-sample evidence for the independent visible-site audit
 - the app's `answers` table: what the family said, the system of record until pulled
-- `access_people`: who asked to come in and what Krish said (addresses and names:
+- `access_people`: who has signed in, and anyone Krish has stopped (addresses and names:
   family data, in the database only), with `access_codes` (hashes) and `access_sends`
 - answers.csv rows under each relative's name, via `ingest_game_answers.py`
 - `D:\_PhotoAudit\app-seed\` (the bundle, holds family names: never published)
@@ -136,12 +135,13 @@ nudity in this".
   `rule:independent-unverifiable` (Krish, 2026-10-15).
   Hidden or held media is never sent to this provider. Migration 0015 holds the
   evidence, and `.github/workflows/archives-independent-moderation.yml` resumes it
-- signing in (Krish, 2026-10-15): the shared family code lets nobody new in. A
-  person gets in only with a six-digit code emailed to an address Krish said yes
-  to; a new address is asked a first name and Krish is emailed. His link only
-  SHOWS the question, and a tap on its button decides, because mail scanners
-  open every link in an email (`web/e2e/flows.spec.ts` "opening Krish's link
-  decides nothing"). A code is stored only as a hash keyed by the session secret,
+- signing in (Krish, 2026-10-23: "I don't need to approve every new user";
+  first set 2026-10-15): the shared family code lets nobody new in. A person
+  types their email (and the first time a first name) and is emailed a link
+  with a six-digit code beside it; nobody waits for Krish, and only his 'no'
+  stops someone. The link only SHOWS a button, and the tap signs in, because
+  mail scanners open every link in an email (`web/e2e/flows.spec.ts` "opening
+  a sign-in link spends nothing"). A code is stored only as a hash keyed by the session secret,
   each kind of signed token opens only its own door (`web/tests/access.test.ts`),
   and every cap on sends and wrong tries is checked and recorded in one locked
   transaction, so a burst of requests sent at once meets it one at a time
@@ -254,7 +254,7 @@ nudity in this".
 The phone app itself lives in `web/` (Next.js on Vercel, project root `web`),
 outside `stages/` because `npm install` on Windows writes `.ps1` and `.py`
 files into `node_modules` that this contract would then try to own. It holds
-signing in (emailed codes, Krish's yes or no), the screens, a read-only Drive health check, and the schema
+signing in (emailed links and codes), the screens, a read-only Drive health check, and the schema
 (`web/supabase/migrations/`). The index itself is written by `cloud_enrich.py`
 from `.github/workflows/archives-enrich.yml`. Its tests run
 under Node: `npm test` (vitest) and `npm run e2e` (Playwright, three phone

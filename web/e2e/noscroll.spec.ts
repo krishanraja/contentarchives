@@ -1,6 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 import { execSync } from "node:child_process";
-import { ADMIN, db, linkIn, mails, nextMail, signIn } from "./helpers";
+import { db, linkIn, mails, nextMail, signIn } from "./helpers";
 
 // NOTHING SCROLLS, ON ANY DEVICE (Krish, 2026-10-05: "this needs to be
 // guaranteed no scroll on all devices"). Every screen, in every state a
@@ -115,41 +115,28 @@ test("every screen, in every state, fits every screen size without scrolling", a
   await fits(wap, "gate in WhatsApp");
 
   const tara = "cousin.tara.from.the.other.side.of.the.family@family-archives.test";
-  await db`delete from access_sends where kind = 'ask'`;
   await page.fill("#email", tara);
-  await page.click("button:has-text('Send me a code')");
+  await page.click("button:has-text('Email me a link')");
   await expect(page.locator("#name")).toBeVisible();
   await fits(page, "gate, your name");
-  await page.goto("/gate?e=busy");
-  await fits(page, "gate, your name, lots asking");
-  const asked = mails(ADMIN).length;
+  const before = mails(tara).length;
   await page.fill("#name", "Cousin Tara");
-  await page.click("button:has-text('Ask Krish')");
-  await expect(page.getByText("Krish has been asked")).toBeVisible();
-  await fits(page, "gate, asked");
-  await page.goto("/gate");
-  await fits(page, "gate, still waiting");
-  await page.goto("/gate?e=reminded");
-  await fits(page, "gate, still waiting, Krish asked again");
+  await page.click("button:has-text('Email me a link')");
+  const link = linkIn(await nextMail(tara, before));
 
-  // Krish's page: the question, no, yes after all, and a link that is not right
-  const link = linkIn(await nextMail(ADMIN, asked));
+  // the page the emailed link opens, and a link that is not right
   const kp = await browser.newPage();
   await kp.goto(link);
-  await fits(kp, "approve, the question");
-  await kp.getByRole("button", { name: "No", exact: true }).click();
-  await expect(kp.getByRole("heading", { name: "You said no to Cousin Tara" })).toBeVisible();
-  await fits(kp, "approve, said no");
+  await fits(kp, "in, the link");
+  await kp.goto("/in?t=not-a-link");
+  await fits(kp, "in, a link that is not right");
+  await kp.close();
+
+  // someone Krish has stopped
+  await db`update access_people set status = 'no' where email = ${tara}`;
   await page.goto("/gate");
   await fits(page, "gate, Krish said no");
-  await kp.click("button:has-text('after all')");
-  await expect(kp.getByRole("heading", { name: "Cousin Tara can come in" })).toBeVisible();
-  await fits(kp, "approve, said yes");
-  await kp.goto(`/approve?t=${encodeURIComponent(new URL(link).searchParams.get("t")!)}&e=mail`);
-  await fits(kp, "approve, said yes, the email didn't go");
-  await kp.goto("/approve?t=not-a-link");
-  await fits(kp, "approve, a link that is not right");
-  await kp.close();
+  await db`update access_people set status = 'yes' where email = ${tara}`;
 
   // the code, with each thing it can say (the longest ones too)
   await page.goto("/gate");
