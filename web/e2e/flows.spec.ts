@@ -754,7 +754,7 @@ test("a wrong year is put right in two taps, with the photos from the same day, 
     await signIn(page);
     await page.goto(`/photo/${h}`);
     const when = page.locator("button.fact-when");
-    await expect(when).toContainText("Change");
+    await expect(when).toContainText("Edit");
     await floor(page, "photo, the year");
     await when.click();
     await expect(page.getByText("When was this photo taken?")).toBeVisible();
