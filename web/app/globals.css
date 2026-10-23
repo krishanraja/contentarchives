@@ -186,7 +186,7 @@ p { margin: 0; }
 .hello p { margin-top: 2px; font-size: 16px; }
 .pillsearch { flex: none; display: flex; align-items: center; gap: 6px; padding: 0 5px 0 18px; min-height: 50px;
   border: var(--line); border-radius: 999px; background: var(--paper); }
-.pillsearch input { flex: 1 1 auto; min-width: 0; border: 0; background: transparent; font: 400 17px var(--font-body), system-ui; color: var(--ink); padding: 8px 0; }
+.pillsearch input { flex: 1 1 auto; min-width: 0; min-height: 44px; border: 0; background: transparent; font: 400 17px var(--font-body), system-ui; color: var(--ink); padding: 0; }
 .pillsearch input::placeholder { color: #6f6580; }
 .pillsearch input:focus-visible { outline: none; }
 .pillsearch:focus-within { outline: 4px solid var(--grape); outline-offset: 2px; }
@@ -211,6 +211,12 @@ p { margin: 0; }
 .notme { flex: none; align-self: center; }
 @container screen (max-height: 700px) { .task small { display: none; } .task { min-height: 44px; } }
 @container screen (max-height: 600px) { .nextup .kicker { display: none; } }
+/* a small phone: "Not you?" moves up beside the hello, so the picture keeps its room */
+.page.home { position: relative; }
+@container screen (max-height: 560px) and (orientation: portrait) {
+  .hello { padding-right: 120px; }
+  .notme { position: absolute; top: var(--pad); right: var(--gutter); min-height: 40px; padding: 0 4px; }
+}
 @container screen (max-height: 520px) { .hello p { display: none; } }
 
 /* ---------- inputs ---------- */
