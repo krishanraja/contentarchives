@@ -119,11 +119,6 @@ Lifecycle: building.
 - 2026-09-23 **The video assigner could not run at all, and its own test had been failing on exactly that** (`234065b`). Why: it built its frozen centroids from a positional cache that does not exist on this machine; both assigners now join on `(hash, face_index)` instead, closing the same hazard learning 45 was paid for.
 - 2026-09-23 **A new cluster id landed on top of one the video assigner already owned, and six carried one of Krish's answers** (`37a3dc9`). Why: two allocators shared no floor. Repaired from backup, re-run onto a floor that is now a maximum across every allocator.
 - 2026-09-23 **The frozen-cluster rule had a hole: nothing existed for faces arriving from new photographs**, which is what every ingest produces (`3755998`). `assign_new_faces.py` closes it: 26,646 faces assigned, 7,754 inheriting a name Krish had already given.
-- 2026-09-22 **The four Communal Takeout archives are in, and the upload queue that carried them drained to zero** (`a9833bb`, `02113a4`). 163 GB, Communal 12,134 -> 23,841, 0 failed, 0 undated, refused on whole-file hash alone.
-- 2026-09-22 **Nothing in the documented ingest chain computes a content hash, and it had been true since the chain was written** (`00beed1`). A row with no hash is invisible, not merely incomplete; `hash_new_files.py` closes it.
-- 2026-09-22 **`reconcile_disk.py --write` dated nothing and called every video a photograph** (`a5286ed`). Both are now derived from the path; a third apparent defect turned out to be correct by design and was changed back after being changed once.
-- 2026-09-22 **A proposal whose `Side` column was misspelled moved all 11,707 files correctly, then reported every one as a failure** (`f673aa1`). The spelling is now refused at load, before anything moves.
-- 2026-09-22 **The 2026-09-21 flatten left the mirror journal and four placement writers describing a layout that no longer existed** (`56800cc`, `47d04a9`). 66,113 journal rows repointed rather than re-sent; one owner now builds the dated path.
 
 ## What is next and what is waiting on Krish
 

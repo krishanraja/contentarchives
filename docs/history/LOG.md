@@ -10,6 +10,15 @@ duplicate: `docs/rescues/` holds one dated record per source, and
 This log records what the steward did to the documentation and when.
 
 
+## 2026-10-23
+
+- rolled from NOW.md: bullets more than 30 days old (the steward's window):
+  - 2026-09-22 **The four Communal Takeout archives are in, and the upload queue that carried them drained to zero** (`a9833bb`, `02113a4`). 163 GB, Communal 12,134 -> 23,841, 0 failed, 0 undated, refused on whole-file hash alone.
+  - 2026-09-22 **Nothing in the documented ingest chain computes a content hash, and it had been true since the chain was written** (`00beed1`). A row with no hash is invisible, not merely incomplete; `hash_new_files.py` closes it.
+  - 2026-09-22 **`reconcile_disk.py --write` dated nothing and called every video a photograph** (`a5286ed`). Both are now derived from the path; a third apparent defect turned out to be correct by design and was changed back after being changed once.
+  - 2026-09-22 **A proposal whose `Side` column was misspelled moved all 11,707 files correctly, then reported every one as a failure** (`f673aa1`). The spelling is now refused at load, before anything moves.
+  - 2026-09-22 **The 2026-09-21 flatten left the mirror journal and four placement writers describing a layout that no longer existed** (`56800cc`, `47d04a9`). 66,113 journal rows repointed rather than re-sent; one owner now builds the dated path.
+
 ## 2026-10-22
 
 - reconciled at `9a72c37`: the only non-steward commit (`9a72c37`, harness repository administration) touched `.claude/`, `.github/` and the generated context, with no documentation consequence; `head` and `as_of` re-stamped.
