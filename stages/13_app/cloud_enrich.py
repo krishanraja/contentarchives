@@ -133,6 +133,7 @@ LIBRARY_FIELDS = ("person", "unidentifiable", "needs_identifying")
 # zone. That machine is in Brisbane, which keeps no daylight saving.
 JOURNAL_TZ = dt.timezone(dt.timedelta(hours=10))
 YEAR_DIR = re.compile(r"(?:^|/)((?:18|19|20)\d\d)(?:/|$)")
+NAME_TIME = re.compile(r"(?<!\d)((?:19|20)\d\d)(\d\d)(\d\d)[_-](\d\d)(\d\d)(\d\d)(?!\d)")
 
 
 # ---------------------------------------------------------------- logging ---
@@ -332,7 +333,8 @@ class Drive:
         cmd = ["ffmpeg", "-nostdin", "-loglevel", "error",
                "-headers", "Authorization: Bearer {}\r\n".format(token),
                "-ss", "{:.3f}".format(ms / 1000.0), "-i", url, "-frames:v", "1",
-               "-vf", "scale='min({},iw)':-2".format(px), "-q:v", "4", "-f", "image2", "-c:v", "mjpeg", "pipe:1"]
+               "-vf", "scale='min({},iw)':-2:out_range=full,format=yuvj420p".format(px),   # ffmpeg 8 refuses limited range
+               "-q:v", "4", "-f", "image2", "-c:v", "mjpeg", "pipe:1"]
         try:
             r = subprocess.run(cmd, capture_output=True, timeout=180)
         except (OSError, subprocess.SubprocessError):
@@ -597,6 +599,25 @@ def when(f: dict):
     return None, (int(m.group(1)) if m else None)
 
 
+def personal_time(f: dict):
+    """The exact moment a Personal file was taken, or None: the camera's clock
+    if Drive read one, else a timestamp in the file's name (20190421_151456,
+    VID_20231029_213732). A day alone (IMG-20251127-WA0000) is not a moment, so
+    it can never make a photograph "nearby" (migration 0019)."""
+    t, _ = when(f)
+    if t is not None:
+        return t
+    m = NAME_TIME.search((f.get("rel") or "").rsplit("/", 1)[-1])
+    if m:
+        try:
+            d = dt.datetime(*(int(x) for x in m.groups()))
+        except ValueError:
+            return None
+        if 1990 <= d.year <= dt.date.today().year + 1:
+            return d.replace(tzinfo=dt.timezone.utc)
+    return None
+
+
 # ------------------------------------------------------------------ worker --
 
 class Worker:
@@ -705,6 +726,7 @@ class Worker:
         self.bind(files + (pfiles or []))
         self.load_clusters()
         self.personal_scan(pfiles or [])
+        self.personal_times(pfiles or [])
         self.process(files + self.personal_wanted(pfiles or []))
         self.save_clusters()
         self.group()
@@ -1235,8 +1257,9 @@ class Worker:
             if rows:
                 with db.cursor() as cur:
                     cur.executemany(
-                        "insert into personal_seen (drive_id, rel_path, subjects, status) values (%s,%s,%s,%s) "
+                        "insert into personal_seen (drive_id, rel_path, subjects, status, taken_at) values (%s,%s,%s,%s,%s) "
                         "on conflict (drive_id) do update set subjects = excluded.subjects, status = excluded.status, "
+                        "taken_at = excluded.taken_at, "
                         "rel_path = excluded.rel_path, tries = personal_seen.tries + 1, at = now()", rows)
                 db.commit()
                 rows.clear()
@@ -1251,7 +1274,8 @@ class Worker:
                 fut = next(cf.as_completed(futs))
                 futs.discard(fut)
                 f, subjects = fut.result()
-                rows.append((f["id"], f["rel"], subjects or [], "seen" if subjects is not None else "error"))
+                rows.append((f["id"], f["rel"], subjects or [], "seen" if subjects is not None else "error",
+                             personal_time(f)))
                 self.c["personal_seen" if subjects is not None else "personal_error"] += 1
                 done += 1
                 if done % 200 == 0:
@@ -1265,6 +1289,21 @@ class Worker:
                 if nxt is not None:
                     futs.add(pool.submit(look, nxt))
         flush()
+
+    def personal_times(self, pfiles):
+        """When each Personal file was taken, from the listing this run already
+        has: no image is fetched and nothing is spent, so files looked at before
+        migration 0019 get their moment on the first run after it."""
+        if not pfiles:
+            return
+        have = {d for (d,) in self.db.execute("select drive_id from personal_seen where taken_at is null").fetchall()}
+        rows = [(personal_time(f), f["id"]) for f in pfiles if f["id"] in have]
+        rows = [r for r in rows if r[0] is not None]
+        if rows:
+            with self.db.cursor() as cur:
+                cur.executemany("update personal_seen set taken_at = %s where drive_id = %s and taken_at is null", rows)
+            self.db.commit()
+        self.c["personal_timed"] = len(rows)
 
     def personal_wanted(self, pfiles):
         """The Personal files that qualify now and are not in the index yet:
@@ -1284,23 +1323,30 @@ class Worker:
     # photo's people as the app shows them (photo_people - which also follows
     # the family's "not in it"), and with the switch on no face clearly in it,
     # as stored, may belong to anyone but a ticked person, the owner or his
-    # partner. It runs after group(): store() files a new face under its own
+    # partner. "Ticked" here means counted (personal_counted, migration 0019:
+    # anyone named in Communal unless the switch says the ticked list). A
+    # NEARBY photo - taken close to one of those, with nobody counted in it -
+    # shows only while no face clearly in it, as stored, is a stranger,
+    # whatever the switch says. It runs after group(): store() files a new face under its own
     # cluster until grouping, so before it a ticked person in a grouped
     # cluster is not yet among the photo's people (411 hidden on run #15).
     SHOWN = """
         with ours as materialized (select hash, drive_id from photos where rel_path like %(prefix)s and drive_id is not null),
         pp as materialized (select x.hash, x.name from photo_people x where x.hash in (select hash from ours)),
         us as (select name from private_rules where kind = 'ignore'),
+        counted as materialized (select name from personal_counted),
         stranger as (
           select distinct f.hash from faces f join ours o on o.hash = f.hash
           left join clusters c on c.cluster_id = f.cluster_id left join group_names g on g.group_id = c.group_id
           where f.share >= %(share)s and f.score >= %(det)s
-            and (g.name is null or (g.name not in (select name from personal_people) and g.name not in (select name from us)))),
+            and (g.name is null or (g.name not in (select name from counted) and g.name not in (select name from us)))),
         good as (
           select o.hash from ours o join personal_verdicts v on v.drive_id = o.drive_id and v.qualifies
-          where exists (select 1 from pp where pp.hash = o.hash and pp.name in (select name from personal_people))
-            and (coalesce((select value from sync_state where key = 'personal_strict'), 'true') <> 'true'
-                 or o.hash not in (select hash from stranger)))"""
+          where (v.why = 'family'
+                 and exists (select 1 from pp where pp.hash = o.hash and pp.name in (select name from counted))
+                 and (coalesce((select value from sync_state where key = 'personal_strict'), 'true') <> 'true'
+                      or o.hash not in (select hash from stranger)))
+             or (v.why = 'nearby' and o.hash not in (select hash from stranger)))"""
 
     def personal_show(self):
         """A Personal photograph in the index shows exactly while it qualifies:

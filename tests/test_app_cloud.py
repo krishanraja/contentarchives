@@ -262,6 +262,7 @@ def main():
     print()
     print("8e. the owner's Personal folder: in when someone he chose is clearly in it")
     personal(out)
+    personal_family(out)
 
     print()
     print("8f. a search narrows from wherever it starts, and by photo or video")
@@ -1281,13 +1282,15 @@ def independent(out):
 
 class PersonalDrive:
     """Communal under 'root', the owner's Personal folder under 'proot'."""
-    def __init__(self, communal, personal):
+    def __init__(self, communal, personal, times=None, names=None):
         self.communal, self.personal, self.seen = communal, personal, []
+        self.times, self.names = times or {}, names or {}     # file -> camera clock / file name; none by default
 
     def list_tree(self, root, prefix):
         src = self.communal if root == "root" else self.personal
-        return [{"id": i, "rel": "{}/2019/secret-{}.jpg".format(prefix, i), "mime": "image/jpeg", "md5": "m" + i,
-                 "time": "2019:06:01 12:00:00", "lat": None, "lon": None, "w": 1024, "h": 768} for i in src]
+        return [{"id": i, "rel": "{}/2019/{}".format(prefix, self.names.get(i, "secret-{}.jpg".format(i))),
+                 "mime": "image/jpeg", "md5": "m" + i, "time": self.times.get(i),
+                 "lat": None, "lon": None, "w": 1024, "h": 768} for i in src]
 
     def image(self, fid, px):
         self.seen.append(fid)
@@ -1309,6 +1312,7 @@ def personal(out):
     for n in ("Owner", "Partner"):
         db.execute("insert into private_rules (kind, name) values ('ignore', %s)", (n,))
     db.execute("insert into personal_people (name) values ('Aunt Secretname')")
+    db.execute("insert into sync_state (key, value) values ('personal_who', 'ticked')")   # the 0010 rule, by hand
     db.commit()
     face = lambda base, seed, share=.3: (unit(seed, base, .25), .9, share)      # noqa: E731
     spec = {   # file -> (faces, what the classifier says)
@@ -1459,6 +1463,97 @@ def personal(out):
     db.close()
 
 
+def personal_family(out):
+    """Who counts is anyone the family named in Communal, and a photo taken
+    within two hours of one of theirs comes in too when nobody else is in it
+    (Krish, 2026-10-23; migration 0019). Made-up names only."""
+    check("a moment from the camera's clock", CE.personal_time({"time": "2019:06:01 12:00:00", "rel": "x.jpg"}),
+          CE.dt.datetime(2019, 6, 1, 12, tzinfo=CE.dt.timezone.utc))
+    check("a moment from a file's name, photo or video",
+          [CE.personal_time({"rel": "Media/Personal/2019/" + n}) for n in ("20190421_151456.jpg", "VID_20231029_213732.mp4")],
+          [CE.dt.datetime(2019, 4, 21, 15, 14, 56, tzinfo=CE.dt.timezone.utc),
+           CE.dt.datetime(2023, 10, 29, 21, 37, 32, tzinfo=CE.dt.timezone.utc)])
+    check("a day alone, a counter or nonsense is no moment",
+          [CE.personal_time({"rel": "Media/Personal/" + n}) for n in
+           ("2025/IMG-20251127-WA0000.jpg", "NoDate/2704.jpg", "2019/20191399_250000.jpg")], [None, None, None])
+    db = fresh_db(NAME + "_fam")
+    O, P, AU, NE, CO = unit(301), unit(302), unit(303), unit(304), unit(305)  # owner, partner, aunt, neighbour, cousin
+    for cid, name, v in (("c-o", "Owner", O), ("c-p", "Partner", P), ("c-a", "Aunt Secretname", AU),
+                         ("c-n", "Neighbour Secretname", NE), ("c-c", "Cousin Secretname", CO)):
+        db.execute("insert into clusters (cluster_id, group_id, name, centroid, n) "
+                   "values (%s, %s, %s, %s::extensions.vector, 5)", (cid, cid, name, CE.vec(v)))
+    for n in ("Owner", "Partner"):
+        db.execute("insert into private_rules (kind, name) values ('ignore', %s)", (n,))
+    db.execute("insert into sync_state (key, value) values ('personal_folder', 'proot')")
+    db.commit()
+    face = lambda base, seed: (unit(seed, base, .25), .9, .3)      # noqa: E731
+    spec = {   # file -> faces; when it was taken
+        "c1": [face(AU, 1)], "c2": [face(NE, 2)], "c3": [face(O, 3)],
+        "pa": [face(AU, 4)],                    # 12:00 the aunt: family
+        "pk": [face(CO, 5)],                    # 12:00 the cousin, never named in Communal
+        "ps": [],                               # 13:30 the view, nobody in it: nearby
+        "pt": [],                               # 16:00 the view, four hours on: not nearby
+        "pu": [],                               # no moment at all
+        "pv": [face(O, 6)],                     # 13:00 the owner alone: nearby
+        "pw": [(unit(888), .9, .3)],            # 13:00 a stranger: never nearby
+        "px": [],                               # 13:00 by its file name only
+    }
+    times = {"pa": "2019:06:01 12:00:00", "pk": "2019:06:01 12:00:00", "ps": "2019:06:01 13:30:00",
+             "pt": "2019:06:01 16:00:00", "pv": "2019:06:01 13:00:00", "pw": "2019:06:01 13:00:00"}
+
+    class Faces:
+        def detect(self, jpeg):
+            return [{"bbox": [.2, .2, .5, .6], "det": d, "emb": e, "share": sh}
+                    for e, d, sh in spec[jpeg.decode().split(":")[1]]]
+
+    class Gem:
+        def classify(self, jpeg):
+            return dict(OK), 0.001
+
+        def embed(self, text):
+            return [0.01] * 768, 0.0
+
+    drive = PersonalDrive(["c1", "c2", "c3"], ["pa", "pk", "ps", "pt", "pu", "pv", "pw", "px"],
+                          times=times, names={"px": "20190601_130000.jpg"})
+
+    def go():
+        w = CE.Worker(db, drive, Gem(), Faces(), None, "root", "Media/Communal", workers=2, budget=100, personal=100)
+        with contextlib.redirect_stdout(out):
+            w.run()
+
+    def shown():
+        return sorted(r[0] for r in q(db, "select drive_id from photos where visible and rel_path like 'Media/Personal/%%'"))
+
+    go()
+    go()                                        # the second run knows who the first one named in Communal
+    check("nobody ticked: the aunt counts because the family named her in Communal; the cousin does not",
+          ("pa" in shown(), "pk" in shown()), (True, False))
+    check("taken within two hours of her, with nobody or only the owner in it, comes in",
+          [x for x in shown() if x in ("ps", "pv", "px")], ["ps", "pv", "px"])
+    check("four hours on, with no moment, or with a stranger in it, stays out",
+          [x for x in shown() if x in ("pt", "pu", "pw")], [])
+    check("the owner alone is not family on its own", q(db, "select why from personal_verdicts where drive_id = 'pv'"),
+          [("nearby",)])
+    db.execute("insert into sync_state (key, value) values ('personal_strict', 'false')")
+    db.commit()
+    go()
+    check("with the switch off a stranger still keeps a nearby photo out", "pw" in shown(), False)
+    db.execute("insert into personal_blocked (name) values ('Aunt Secretname'), ('Neighbour Secretname')")
+    db.commit()
+    go()
+    check("blocking her takes out her photo and everything that was nearby only because of it",
+          (shown(), q(db, "select count(*) from photos where hidden_by = 'rule:personal'")[0][0]), ([], 4))
+    db.execute("delete from personal_blocked")
+    db.execute("insert into personal_people (name) values ('Cousin Secretname')")
+    db.execute("insert into sync_state (key, value) values ('personal_who', 'ticked')")
+    db.commit()
+    go()
+    check("one switch goes back to the ticked list", ("pk" in shown(), "pa" in shown()), (True, False))
+    check("and nothing Personal started a face for the family to name",
+          q(db, "select count(*) from clusters where name is null"), [(0,)])
+    db.close()
+
+
 def library(out):
     db = fresh_db(NAME + "_lib")
     tmp = tempfile.mkdtemp()
@@ -1585,6 +1680,23 @@ def library(out):
     check("a third answer settles it, in the spelling most used, and the face leaves the queue",
           (settled, grp["c6"] in [g for (g,) in q(db, "select group_id from queue")]),
           ([("Sunil Secretname", True, False)], False))
+    # the owner says it is spelled another way: the relatives' votes count for
+    # the spelling he kept, and nobody's answer is edited (migration 0020)
+    answers = q(db, "select count(*), string_agg(value, ',' order by at) from answers where target = 'c6'")
+    db.execute("insert into spelling_verdicts (a_key, b_key, verdict, kept, who) "
+               "select least(x, y), greatest(x, y), 'same', 'Suneel Secretname', 'krish' "
+               "from (select name_key('Sunil Secretname') x, name_key('Suneel Secretname') y) k")
+    db.commit()
+    check("a spelling the owner kept names the face, settled, from the votes already given",
+          q(db, "select name, answered, contested from group_names where group_id = %s", grp["c6"]),
+          [("Suneel Secretname", True, False)])
+    vote("krish", "Suneel Secretname")         # what the spelling screen adds: one more vote, the same answer
+    check("and his own answer joins theirs rather than tying with them",
+          q(db, "select name, answered, contested from group_names where group_id = %s", grp["c6"]),
+          [("Suneel Secretname", True, False)])
+    check("nobody's answer was rewritten",
+          q(db, "select count(*) - 1, string_agg(value, ',' order by at) filter (where who <> 'krish') "
+                "from answers where target = 'c6'"), answers)
 
     # later: the purged file turns up, the missing photo arrives, one leaves
     drive.put("dh2", "m-h2", "Media/Communal/2020/secret-again.jpg")
