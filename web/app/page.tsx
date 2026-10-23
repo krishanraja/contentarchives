@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { browse, counts, nextFace } from "@/lib/data";
 import { me } from "@/lib/me";
-import { Search } from "@/components/icons";
+import { Face, Pin, Search } from "@/components/icons";
 import Fit from "@/components/Fit";
 
 export const dynamic = "force-dynamic";
@@ -12,9 +12,9 @@ const n = (x: number) => x.toLocaleString("en-GB");
 // Home (Krish, 2026-10-23: "I prefer the home screen having all of our faces
 // to choose from to start the exploration... a slightly more subtle way of
 // getting people to add information"): hello, a search box, then the family's
-// faces - tap one to see their photos. Asking for help is quiet: one face
-// nobody has named sits among them with a "?", and one line at the bottom
-// says what is left to name and place.
+// faces - tap one to see their photos. Asking for help is quieter: one face
+// nobody has named sits among them with a "?", and the two ways to help sit
+// under the faces as rows, with what is left.
 export default async function Home() {
   const [who, c, b] = await Promise.all([me(), counts(), browse(null)]);
   const face = who && c.faces > 0 ? await nextFace(who).catch(() => null) : null;
@@ -49,13 +49,21 @@ export default async function Home() {
       {faces.length > 0
         ? <Fit className="faces" label="People" more="More people">{faces}</Fit>
         : <Link href="/find" className="btn block sun">Look through the photos</Link>}
-      <p className="helpline">
-        {c.faces > 0 && <Link href="/help">{n(c.faces)} faces to name</Link>}
-        {c.faces > 0 && c.story > 0 && <span aria-hidden="true"> · </span>}
-        {c.story > 0 && <Link href="/story">{n(c.story)} photos to place</Link>}
-        {/* a phone or tablet passed around the family: the next person says who they are */}
-        {who && <Link href="/who?change" className="notme">Not {cap(who)}?</Link>}
-      </p>
+      {/* the ways to help keep their icon rows (Krish, 2026-10-23), under the faces */}
+      <nav className="tasks" aria-label="Help the family">
+        <Link href="/help" className="task">
+          <span className="ic" style={{ background: "var(--pink)" }}><Face /></span>
+          <span><b>Who is this?</b><small>Put names to faces</small></span>
+          <span className="n">{c.faces > 0 ? `${n(c.faces)} to name ›` : "All done ›"}</span>
+        </Link>
+        <Link href="/story" className="task">
+          <span className="ic" style={{ background: "var(--mint)" }}><Pin /></span>
+          <span><b>Where and when?</b><small>Place a photo, or its year</small></span>
+          <span className="n">{c.story > 0 ? `${n(c.story)} to place ›` : "All done ›"}</span>
+        </Link>
+      </nav>
+      {/* a phone or tablet passed around the family: the next person says who they are */}
+      {who && <Link href="/who?change" className="btn quiet notme">Not {cap(who)}?</Link>}
     </main>
   );
 }

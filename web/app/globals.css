@@ -204,10 +204,18 @@ p { margin: 0; }
   background: var(--sun); border: 2px solid var(--ink); font: 600 15px/20px var(--font-display), system-ui; text-align: center; color: var(--ink); }
 .faces .chip.turn { align-self: center; }
 @container screen (min-width: 520px) { .face { width: calc((100% - 30px) / 6); } }
-/* what is left to do, said quietly at the foot of the screen */
-.helpline { flex: none; margin-top: auto; display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 0 6px; font-size: 15px; color: var(--ink-soft); }
-.helpline a { color: var(--ink-soft); font-weight: 700; text-underline-offset: 3px; min-height: 40px; display: inline-flex; align-items: center; }
-.helpline .notme { flex-basis: 100%; justify-content: center; }
+/* the two ways to help: a row each, with what is left */
+.tasks { flex: none; margin-top: auto; display: flex; flex-direction: column; border-top: 1.5px solid var(--faint); }
+.task { display: flex; align-items: center; gap: 12px; min-height: 52px; padding: 6px 2px; color: var(--ink); text-decoration: none;
+  border-bottom: 1.5px solid var(--faint); }
+.task:last-child { border-bottom: 0; }
+.task .ic { flex: none; width: 40px; height: 40px; border-radius: 12px; border: var(--line); display: grid; place-items: center; }
+.task .ic svg { width: 22px; height: 22px; }
+.task b { display: block; font: 600 18px/1.15 var(--font-display), system-ui; }
+.task small { display: block; font-size: 15px; color: var(--ink-soft); }
+.task .n { margin-left: auto; flex: none; font-weight: 700; font-size: 15px; color: var(--ink-soft); }
+.notme { flex: none; align-self: center; }
+@container screen (max-height: 700px) { .task small { display: none; } .task { min-height: 44px; } }
 @container screen (max-height: 520px) { .hello p { display: none; } }
 
 /* ---------- inputs ---------- */
@@ -350,11 +358,12 @@ label.big { font-family: var(--font-display), system-ui; font-weight: 600; font-
   .yay { padding: 8px 14px; }
   .undo { padding: 4px 4px 4px 14px; }
   /* home: the next thing to do on the left, the rest on the right */
-  .page.home { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 3fr); grid-template-rows: auto auto minmax(0, 1fr); column-gap: 20px; max-width: 980px; }
+  .page.home { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 3fr); grid-template-rows: auto auto minmax(0, 1fr) auto; column-gap: 20px; max-width: 980px; }
   .page.home > .hello { grid-column: 1; grid-row: 1; }
   .page.home > form { grid-column: 1; grid-row: 2; }
-  .page.home > .helpline { grid-column: 1; grid-row: 3; align-self: end; justify-content: flex-start; }
-  .page.home > .fit, .page.home > .btn { grid-column: 2; grid-row: 1 / -1; min-height: 0; }
+  .page.home > .tasks { grid-column: 1; grid-row: 3; align-self: end; }
+  .page.home > .notme { grid-column: 1; grid-row: 4; justify-self: start; }
+  .page.home > .fit, .page.home > .btn.block { grid-column: 2; grid-row: 1 / -1; min-height: 0; }
   /* signing in: what is happening on the left, what to do on the right */
   .page.gate { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); column-gap: 24px; align-content: center; max-width: 980px; }
   .page.gate > .card { grid-column: 2; grid-row: 1; align-self: center; }
