@@ -449,7 +449,13 @@ export async function undoAnswer(who: string, id: string): Promise<boolean> {
 export const NAMES_KINDS = new Set(["person", "mixed", "in", "out"]);
 export async function refreshPeople() {
   await sql()`select refresh_photo_people()`;
+  forgetLists();
+}
+// a name added, taken off or respelled: the known names AND the people Find
+// and Home list both go, or a corrected name lingers for a minute (2026-10-23)
+export function forgetLists() {
   vocabMemo.clear();
+  for (const m of Object.values(browseMemo)) m.clear();
 }
 
 export async function skip(who: string, key: string) {
