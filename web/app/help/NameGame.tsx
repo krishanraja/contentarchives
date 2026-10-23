@@ -22,13 +22,13 @@ const RELATION = new Set(["nani", "nana", "dadi", "dada", "mama", "mami", "masi"
   "bhaiya", "didi", "bhabhi", "jiju", "baby", "me", "myself", "cousin", "brother", "sister"]);
 
 const faceUrl = (k: string, whole = false) => `/face/${encodeURIComponent(k)}${whole ? "?whole=1" : ""}`;
-const getFace = (after: string[]): Promise<Q | undefined> =>
-  fetch(`/api/face/next?after=${after.join(",")}`).then((x) => x.json()).catch(() => undefined);
+const getFace = (after: string[], first: string | null = null): Promise<Q | undefined> =>
+  fetch(`/api/face/next?after=${after.join(",")}${first ? `&first=${encodeURIComponent(first)}` : ""}`).then((x) => x.json()).catch(() => undefined);
 // every picture the question will show
 const pictures = (q: NonNullable<Q>) => [faceUrl(q.hero.key, true), ...q.samples.slice(0, 4).map((f) => faceUrl(f.key)),
   ...(q.ask ? [faceUrl(q.ask.face)] : []), ...q.suggestions.map((s) => faceUrl(s.face))];
 
-export default function NameGame() {
+export default function NameGame({ first = null }: { first?: string | null }) {
   const [q, setQ] = useState<Q | undefined>(undefined);
   const [mode, setMode] = useState<"ask" | "choose" | "type" | "spell">("ask");
   const [meant, setMeant] = useState<string[]>([]);
@@ -50,11 +50,11 @@ export default function NameGame() {
     if (!held?.ready) setQ(undefined);
     setErr("");
     let r = held ? await held.p : undefined;
-    if (r === undefined) r = await getFace(after);
+    if (r === undefined) r = await getFace(after, after.length ? null : first);
     if (r === undefined) { setErr("No internet connection. Your answers are safe on this phone."); setQ(null); return; }
     setQ(r); setMode(r?.ask ? "ask" : "choose"); setTyped(""); setWarn(""); setWhole(false);
     if (r) { const then = [...after, r.group]; next.current.start(then.join(","), () => getFace(then), pictures); }
-  }, []);
+  }, [first]);
 
   useEffect(() => { void load([]); fetch("/api/names").then((r) => r.json()).then((j) => setNames(j.people || [])).catch(() => undefined); }, [load]);
 

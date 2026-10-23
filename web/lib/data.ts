@@ -214,7 +214,10 @@ export async function counts() {
 //  - a face two or more people did not know goes behind the rest (it may be a
 //    friend nobody in the family knows), still asked, never dropped
 //  - otherwise the queue's own order: flagged and contested faces first
-export async function nextFace(who: string, after: string[] = []) {
+// `first`: a face to ask before the rest while it still needs this person
+// (the one Home showed). `shuffle`: any face this person could answer, not the
+// queue's first - Home shows a different one on every visit (Krish, 2026-10-23).
+export async function nextFace(who: string, after: string[] = [], opts: { first?: string | null; shuffle?: boolean } = {}) {
   const db = sql();
   const [q] = await db`
     with mine as (
@@ -232,7 +235,8 @@ export async function nextFace(who: string, after: string[] = []) {
     where not g.answered
       and q.group_id not in (select group_id from mine)
       and q.group_id <> all(${after}::text[])
-    order by (s.at is not null), s.at nulls first, coalesce(sh.n, 0) >= 2, q.rank
+    order by q.group_id = ${opts.first ?? ""} desc, (s.at is not null), s.at nulls first, coalesce(sh.n, 0) >= 2,
+      ${opts.shuffle ? db`random()` : db`q.rank`}, q.rank
     limit 1`;
   if (!q) return null;
   // a tie: the answers in the running are offered to the next person

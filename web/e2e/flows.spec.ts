@@ -544,6 +544,20 @@ test("a second search shows its own photos, never the last search's", async ({ p
   await expect(page.locator(".grid a")).toHaveCount(0);
 });
 
+test("home's unnamed face changes between visits, and tapping it asks about that same face", async ({ page }) => {
+  await signIn(page);
+  const seen = new Set<string>();
+  for (let i = 0; i < 12 && seen.size < 2; i++) {
+    await page.goto("/");
+    seen.add((await page.locator(".face.unknown").getAttribute("href"))!);
+  }
+  expect(seen.size).toBeGreaterThan(1);                   // the fixtures hold two faces to name
+  const home = (await page.locator(".face.unknown img").getAttribute("src"))!;
+  await page.click(".face.unknown");
+  await page.waitForURL("**/help?g=*");
+  await expect(page.locator("img[alt='A photo with one face circled']")).toHaveAttribute("src", `${home}?whole=1`);
+});
+
 test("tapping a person's face finds their photos", async ({ page }) => {
   await signIn(page);
   await page.goto("/find");

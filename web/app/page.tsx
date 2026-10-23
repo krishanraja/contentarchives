@@ -17,7 +17,8 @@ const n = (x: number) => x.toLocaleString("en-GB");
 // under the faces as rows, with what is left.
 export default async function Home() {
   const [who, c, b] = await Promise.all([me(), counts(), browse(null)]);
-  const face = who && c.faces > 0 ? await nextFace(who).catch(() => null) : null;
+  // a different face on every visit; tapping it asks about that same face first
+  const face = who && c.faces > 0 ? await nextFace(who, [], { shuffle: true }).catch(() => null) : null;
   const people = b.people.filter((p) => p.cover);
   const faces = people.map((p) => (
     <Link key={p.name} className="face" href={`/find?q=${encodeURIComponent(p.name)}`}>
@@ -28,7 +29,7 @@ export default async function Home() {
   ));
   // third in the list, so it is on the first page whatever the screen holds
   if (face) faces.splice(Math.min(2, faces.length), 0, (
-    <Link key="?" className="face unknown" href="/help" aria-label="Someone nobody has named yet. Who is this?">
+    <Link key="?" className="face unknown" href={`/help?g=${encodeURIComponent(face.group)}`} aria-label="Someone nobody has named yet. Who is this?">
       <img src={`/face/${encodeURIComponent(face.hero.key)}`} alt="" />
       <span>Who?</span>
     </Link>
