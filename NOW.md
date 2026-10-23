@@ -123,7 +123,6 @@ Lifecycle: building.
 ## What is next and what is waiting on Krish
 
 - Waiting on Krish: look at the faces-first home on his own phone, and sign in once from a fresh address to confirm the link email arrives.
-- North Star check (2026-10-23): holds.
 - Waiting on Krish: `gcloud auth login --enable-gdrive-access`, then emptying Drive's trash - about 31 GB of past deletions sits there for 30 days and still counts against quota. The same reauth also unblocks the stronger, server-side `verify_drive_md5.py --refresh`; the mount-based check in `verify_drive_by_mount.py` is real evidence but not a substitute for Google's own checksum. Neither Google account's token can be refreshed from a script, so this needs a human at the keyboard.
 - Waiting on Krish: a judgement call on 294 files / 1.29 GB in a video-project folder (render variants and background plates) and a podcast recording - personal, but production assets rather than camera originals, deliberately not decided by the tooling.
 - Waiting on Krish: turning on the Windows USN change journal (`fsutil usn createjournal m=32M a=8M D:`) needs an elevated shell and changes a system facility, so it is left for him rather than run unattended - seven files vanished once with no record of the deletion anywhere, and the next time the answer should come from a log rather than an investigation.
