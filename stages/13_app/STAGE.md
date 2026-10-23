@@ -151,12 +151,22 @@ nudity in this".
   stays signed in for a year from its LAST visit (`web/middleware.ts` signs
   the session again once it is a day old); a session from the retired family
   code keeps the end it was given
-- a photograph from the owner's Personal folder comes in only when a person he
-  ticked is clearly in it (Krish, 2026-10-06); he and his partner never count, so a
-  photograph of just them stays out, and with the switch on everyone clearly in it
-  must be ticked or one of them, so someone the app does not know keeps it out.
-  THE CHOICES ARE PRIVATE: the names, the folder and the switch live only in the
-  database (`personal_people`, `sync_state`), never in this public repository. Each
+- a photograph from the owner's Personal folder comes in only when the family is
+  clearly in it, or it was taken while he was with them (Krish, 2026-10-06, widened
+  2026-10-23). WHO COUNTS is anyone the family has named in a visible Communal
+  photograph (`personal_counted`, migration 0019), minus a private block list
+  (`personal_blocked`); `personal_who = 'ticked'` goes back to the ticked list. He
+  and his partner never count, so a photograph of just them stays out on its own, and
+  with the switch on everyone clearly in it must count or be one of them, so someone
+  the app does not know keeps it out. NEARBY: a photograph with nobody counted in it
+  comes in when it was taken within `personal_window_minutes` (default 120) of one
+  that qualifies by its people, and only when every face clearly in it is him or his
+  partner, or there is none - a stranger keeps a nearby photograph out whatever the
+  switch says. Only an exact moment counts (`personal_seen.taken_at`: the camera's
+  clock, or a timestamp in the file's name, `personal_time()`); a day or a year alone
+  is never nearby, and a nearby photograph hides again when its anchor goes.
+  THE CHOICES ARE PRIVATE: the names, the folder and the switches live only in the
+  database (`personal_people`, `personal_blocked`, `sync_state`), never in this public repository. Each
   file is looked at once (faces only, no spend); names are resolved in the database
   when asked (`personal_verdicts`), so a later tick or a newly named face changes the
   verdict without looking again. Only what qualifies is described, and it then meets
