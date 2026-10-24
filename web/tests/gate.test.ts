@@ -1,7 +1,7 @@
 import { describe, expect, it, beforeAll } from "vitest";
 import { clientIp, inAppBrowser, lockState, GLOBAL_FAILURES, PER_IP_FAILURES } from "../lib/gate";
 import * as gate from "../lib/gate";
-import { MAX_AGE, sign, signMe, stale, verify, verifyMe } from "../lib/session";
+import { MAX_AGE, sign, signMe, signedOut, stale, verify, verifyMe } from "../lib/session";
 
 describe("the family code", () => {
   it("is retired: nothing compares a typed phrase with a shared code any more (Krish, 2026-10-15)", () => {
@@ -57,6 +57,21 @@ describe("the session cookie", () => {
     const old = (await verify(await sign("grandma")))!;
     expect(old.via).toBeUndefined();
     expect(stale({ ...old, iat: old.iat - 30 * 86400 })).toBe(false);
+  });
+  it("signs one person out by name and leaves everyone else in (Krish, 2026-10-24)", async () => {
+    const owner = await sign("Owner Secretname", "email");
+    const gran = await sign("Gran Secretname", "email");
+    const now = Math.floor(Date.now() / 1000);
+    process.env.SESSION_SIGNED_OUT = ` owner secretname=${now + 60},Nobody=1`;
+    try {
+      expect(await verify(owner)).toBeNull();                       // any spelling case, any spaces
+      expect((await verify(gran))?.who).toBe("Gran Secretname");
+      expect(signedOut("Owner Secretname", now + 120)).toBe(false); // signing in again afterwards works
+      expect(signedOut(undefined, 0)).toBe(false);
+    } finally {
+      delete process.env.SESSION_SIGNED_OUT;
+    }
+    expect((await verify(owner))?.who).toBe("Owner Secretname");
   });
   it("signs everyone out when SESSION_VERSION changes", async () => {
     const t = await sign("grandma");

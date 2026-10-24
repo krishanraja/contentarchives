@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { COOKIE, ME, cookieOptions, sign, signMe, stale, verify, verifyMe } from "@/lib/session";
+import { COOKIE, ME, cookieOptions, sign, signMe, signedOut, stale, verify, verifyMe } from "@/lib/session";
 
 // Every page, API and image is behind signing in. Only the sign-in screen and
 // its form, the page a sign-in email's link opens, robots.txt, the app's icons (a phone
@@ -33,6 +33,12 @@ export async function middleware(req: NextRequest) {
     // signed in but the session has no name: if this phone said who it is
     // before, carry on as them rather than asking again
     const who = await verifyMe(req.cookies.get(ME)?.value);
+    // a nameless session on a phone that remembers a signed-out name is
+    // signed out too, rather than renamed into a fresh session
+    if (who && signedOut(who, s.iat)) {
+      if (api) return new NextResponse("sign in first", { status: 401 });
+      return NextResponse.redirect(new URL("/gate", req.url));
+    }
     if (who) {
       const token = await sign(who, s.via);
       req.cookies.set(COOKIE, token);                 // this request already sees the name

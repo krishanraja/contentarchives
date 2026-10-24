@@ -164,7 +164,7 @@ TEST_PG_DSN=postgresql://... python tests/test_app_cloud.py   # from the repo ro
   name, description or folder id may reach it; `tests/test_app_cloud.py` fails if one does.
 - **The app**: Vercel project `archives`, root `web`, production branch `main`.
   Environment, by name only: `DATABASE_URL`, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`,
-  `SESSION_SECRET`, `SESSION_VERSION`, `RESEND_API_KEY`, `MAIL_FROM`, `ACCESS_ADMIN_EMAIL`, `IMAGE_SOURCE=drive`,
+  `SESSION_SECRET`, `SESSION_VERSION`, `SESSION_SIGNED_OUT` (optional), `RESEND_API_KEY`, `MAIL_FROM`, `ACCESS_ADMIN_EMAIL`, `IMAGE_SOURCE=drive`,
   `GOOGLE_SERVICE_ACCOUNT_JSON`, `DRIVE_COMMUNAL_FOLDER_ID`, `DRIVE_REL_PREFIX`,
   `GOOGLE_API_KEY_ARCHIVES`, `CRON_SECRET`.
 - **Health check** (read-only): `GET /api/cron/drive-sync` with
@@ -187,6 +187,9 @@ TEST_PG_DSN=postgresql://... python tests/test_app_cloud.py   # from the repo ro
   no approval). To stop someone signing in again: `update access_people
   set status = 'no' where email = '...'`. A phone already signed in stays in
   until it goes a year unused; to sign every phone out, bump `SESSION_VERSION`.
+  To sign ONE person out and leave everyone else in, add `Name=<unix seconds now>`
+  to `SESSION_SIGNED_OUT` (comma-separated) and redeploy: their sessions signed
+  before then stop working, and signing in again by email works as ever.
 - Answers live in `answers` (insert-only; Supabase backs it up daily); `status` says
   new / undone / ingested / refused (with the reason). Only the app refuses: an
   answer the PC's journal could not take yet stays `new`, its reason beginning
