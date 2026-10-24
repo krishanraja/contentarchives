@@ -435,7 +435,10 @@ class Gemini:
                      "people stand or sit upright, the sky or ceiling is at the top and any writing reads "
                      "normally? Answer with ONE word only: UPRIGHT if it is already the right way up; "
                      "RIGHT if it must be turned a quarter turn clockwise to be the right way up; LEFT if "
-                     "it must be turned a quarter turn anticlockwise; FLIP if it is upside down.")
+                     "it must be turned a quarter turn anticlockwise; FLIP if it is upside down. If it "
+                     "has no clear right way up - taken from directly above (food on a table, someone "
+                     "lying on the floor), a close-up of a surface or pattern, or too blurred to tell - "
+                     "answer UPRIGHT: it is shown as it was taken.")
 
     def orient(self, jpeg: bytes):
         """-> (degrees clockwise that put it the right way up, or None when the
