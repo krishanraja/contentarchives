@@ -37,9 +37,15 @@ export default async function Home() {
   return (
     <main className="page home">
       <div className="hello">
-        <h1>Hello{who ? `, ${cap(who)}` : ""}!</h1>
-        {/* photos AND videos (Krish, 2026-10-11): the opening screens had only ever said photos */}
-        <p className="muted">{n(c.photos)} family photos{c.videos ? <> and {n(c.videos)} videos</> : null}</p>
+        <div>
+          <h1>Hello{who ? `, ${cap(who)}` : ""}!</h1>
+          {/* photos AND videos (Krish, 2026-10-11): the opening screens had only ever said photos */}
+          <p className="muted">{n(c.photos)} family photos{c.videos ? <> and {n(c.videos)} videos</> : null}</p>
+        </div>
+        {/* top right (Krish, 2026-10-24); a plain form, so it works before the script arrives */}
+        <form method="post" action="/api/signout" className="signout">
+          <button className="btn quiet small">Sign out</button>
+        </form>
       </div>
       {/* a real GET form: it works before the page's script arrives */}
       <form role="search" method="get" action="/find" className="pillsearch">
