@@ -24,7 +24,7 @@ export default async function Photo({ params, searchParams }: { params: Promise<
         <PhotoView q={q} type={type} p={{
           hash: p.hash, alt: p.description || "A family photo", people: p.people, where, when: when(p),
           what: p.description || null, video: p.media === "video", play: p.play, length: clock(p.seconds),
-          sameDay: p.sameDay, sameDayPlace: p.sameDayPlace, dayText: p.taken_at ? day(p.taken_at) : null,
+          sameDay: p.sameDay, sameDayPlace: p.sameDayPlace, dayText: p.taken_at ? day(p.taken_at) : null, turn: p.turn ?? 0,
         }} />
       </main>
     </>

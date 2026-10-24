@@ -62,6 +62,10 @@ on:
         description: "Most Personal files looked at for the owner's chosen people (no spend)"
         required: false
         default: "20000"
+      orient:
+        description: "Most photos asked which way is up (about $0.0002 each; each photo is asked once)"
+        required: false
+        default: "30000"
 
 permissions:
   contents: read
@@ -156,6 +160,7 @@ jobs:
           FRAMES_PER_RUN: ${{ inputs.frames || '1500' }}
           VIDEOS_PER_RUN: ${{ inputs.videos || vars.ARCHIVES_VIDEOS_PER_RUN || '3000' }}
           PERSONAL_PER_RUN: ${{ inputs.personal || '20000' }}
+          ORIENT_PER_RUN: ${{ inputs.orient || '30000' }}
           SPEND_CAP_USD: "60"
           MAX_MINUTES: "320"
         run: python stages/13_app/cloud_enrich.py

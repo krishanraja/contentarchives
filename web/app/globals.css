@@ -626,6 +626,9 @@ a:has(> .pressed) { position: relative; }
    full screen without the ring's dimming, with the rest of that day */
 .frame .badge { max-width: calc(100% - 16px); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .frame .seeall { position: absolute; top: 8px; right: 8px; min-height: 40px; }
+/* turn a photo on its side the right way up, for everyone (Krish, 2026-10-24) */
+.frame .turnit { position: absolute; right: 8px; bottom: 8px; min-height: 44px; gap: 6px; padding: 4px 12px; }
+.frame .turnit svg { width: 20px; height: 20px; }
 .whole {
   position: fixed; inset: 0; z-index: 70; background: var(--ink); color: var(--paper);
   display: flex; flex-direction: column; gap: 10px;

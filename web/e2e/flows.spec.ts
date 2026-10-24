@@ -912,6 +912,54 @@ test("Hide this photo removes it for everyone at once", async ({ page }) => {
   await db`update photos set hidden = false where hash = ${hash}`;
 });
 
+test("Turn puts a sideways photo the right way up for everyone, and Undo turns it back (Krish, 2026-10-24)", async ({ page }) => {
+  await signIn(page);
+  await page.goto("/find?q=Asha%20Raja");
+  await page.locator(".grid a").first().click();
+  await page.waitForURL("**/photo/**");
+  const hash = decodeURIComponent(new URL(page.url()).pathname.split("/").pop()!);
+  await db`update photos set turn = 0, turn_source = null where hash = ${hash}`;
+  await db`delete from turns where hash = ${hash}`;               // the fixtures do not clear the log
+  await page.reload();
+  const size = async () => page.locator(".frame img").evaluate((i: HTMLImageElement) => [i.naturalWidth, i.naturalHeight]);
+  await expect.poll(async () => (await size())[0]).toBeGreaterThan(0);
+  const [w, h] = await size();
+  await page.click(".frame button:has-text('Turn')");                          // on the picture itself
+  await expect(page.getByText("Turned for everyone")).toBeVisible();
+  await expect.poll(async () => (await size()).join("x")).toBe(`${h}x${w}`);       // on its side now
+  expect((await db`select turn, turn_source from photos where hash = ${hash}`)[0]).toEqual({ turn: 90, turn_source: "family" });
+  expect((await db`select count(*)::int n from turns where hash = ${hash} and turn = 90`)[0].n).toBe(1);
+  // anyone opening it now sees it turned: the picture itself comes turned
+  const r = await page.request.get(`/img/v/${encodeURIComponent(hash)}`);
+  const turned = await page.evaluate(async (b64) => {
+    const im = new Image(); im.src = `data:image/jpeg;base64,${b64}`; await im.decode(); return [im.naturalWidth, im.naturalHeight];
+  }, (await r.body()).toString("base64"));
+  expect(turned).toEqual([h, w]);
+  await page.click("button:has-text('Undo')");
+  await expect.poll(async () => (await db`select turn from photos where hash = ${hash}`)[0].turn).toBe(0);
+  await expect.poll(async () => (await size()).join("x")).toBe(`${w}x${h}`);
+  await db`update photos set turn = 0, turn_source = null where hash = ${hash}`;
+});
+
+test("a sideways photo is turned from Who is this?, and the ring turns with it", async ({ page }) => {
+  await signIn(page);
+  await page.goto("/help");
+  const turn = page.locator(".frame button:has-text('Turn')");
+  await expect(turn).toBeVisible();
+  const ring = async () => page.locator(".frame .ring").evaluate((r) => {
+    const f = r.parentElement!.getBoundingClientRect(), b = r.getBoundingClientRect();
+    return [(b.left + b.width / 2 - f.left) / f.width, (b.top + b.height / 2 - f.top) / f.height];
+  });
+  const [x, y] = await ring();
+  await turn.click();
+  // a quarter clockwise: what was at (x, y) is now at (1 - y, x)
+  await expect.poll(async () => (await ring()).map((v) => v.toFixed(2)).join(",")).toBe([1 - y, x].map((v) => v.toFixed(2)).join(","));
+  const [hero] = await db`select p.hash, p.turn from photos p join faces f on f.hash = p.hash where p.turn <> 0 limit 1`;
+  expect(hero.turn).toBe(90);
+  await db`update photos set turn = 0, turn_source = null where hash = ${hero.hash}`;
+  await db`delete from turns where hash = ${hero.hash}`;
+});
+
 test("an answer sent twice is stored once", async ({ page }) => {
   await signIn(page);
   const id = "11111111-2222-4333-8444-555555555555";
