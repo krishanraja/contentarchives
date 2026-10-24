@@ -8,3 +8,5 @@ export const Back = () => (<svg viewBox="0 0 24 24" aria-hidden="true" {...s}><p
 export const Share = () => (<svg viewBox="0 0 24 24" aria-hidden="true" {...s}><path d="M12 15V3.5M7.5 8 12 3.5 16.5 8" /><path d="M5 12.5V20h14v-7.5" /></svg>);
 export const Eye = () => (<svg viewBox="0 0 24 24" aria-hidden="true" {...s}><path d="M3 3l18 18" /><path d="M10.6 6.1A9.9 9.9 0 0 1 12 6c5 0 8.5 4.5 9.5 6-.5.8-1.6 2.2-3.1 3.5M6.6 7.6C4.6 9 3.2 11 2.5 12c1 1.5 4.5 6 9.5 6 1.6 0 3-.5 4.3-1.1" /></svg>);
 export const Mic = () => (<svg viewBox="0 0 24 24" aria-hidden="true" {...s}><rect x="9" y="3" width="6" height="11" rx="3" /><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21" /></svg>);
+// a quarter turn, clockwise and back (the photo screen's "Turn")
+export const TurnRight = () => (<svg viewBox="0 0 24 24" aria-hidden="true" {...s}><path d="M19 12a7 7 0 1 1-2.1-5" /><path d="M19 4v4h-4" /></svg>);

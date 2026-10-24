@@ -5,6 +5,7 @@ import { compose, describe, foldYears, parseQuery, type Media, type Parsed } fro
 import { spellAs } from "./spelling";
 import { memo } from "./memo";
 import { whenText } from "./when";
+import { turnBox } from "./turn";
 
 export type Card = {
   hash: string; media: string; year: number | null; approx_year: string | null;
@@ -151,7 +152,7 @@ export type PhotoRow = {
   year: number | null; approx_year: string | null; place: string | null;
   region: string | null; country: string | null; description: string | null;
   occasion: string | null; width: number | null; height: number | null; hidden: boolean; visible: boolean;
-  family_when: string | null; family_place: string | null; day_key: string | null;
+  family_when: string | null; family_place: string | null; day_key: string | null; turn?: number;
 };
 
 // play: a video judged whole and clear plays ('ok'); one in a format no phone
@@ -166,7 +167,7 @@ export async function photo(hash: string): Promise<(PhotoRow & { people: string[
   const db = sql();
   const [p] = await db<(PhotoRow & { play: string | null; seconds: number | null })[]>`select p.hash, p.drive_id, p.media, p.taken_at, p.year,
       p.approx_year, p.place, p.region, p.country, p.description, p.occasion, p.width, p.height, p.hidden, p.visible,
-      p.family_when, p.family_place, p.day_key, v.status as play, v.seconds
+      p.family_when, p.family_place, p.day_key, p.turn, v.status as play, v.seconds
     from photos p left join video_checks v on v.hash = p.hash and p.media = 'video'
     where p.hash = ${hash}`;
   if (!p || !p.visible) return null;
@@ -244,11 +245,13 @@ export async function nextFace(who: string, after: string[] = [], opts: { first?
     ? (await db`select name from group_contest where group_id = ${q.group_id} order by n desc, name`).map((r) => r.name as string)
     : [];
   const keys = [q.hero_face, ...(q.sample_faces as string[])];
-  const faces = await db`select f.key, f.hash, f.bbox, f.frame, f.only_face, p.media,
+  const faces = await db`select f.key, f.hash, f.bbox, f.frame, f.only_face, p.media, f.turn as fturn, p.turn,
        p.width, p.height, p.place, p.year, p.approx_year,
        p.taken_at, p.family_when, p.family_place, p.day_key
      from faces f join photos p on p.hash = f.hash
      where f.key = any(${keys}::text[]) and p.visible`;
+  // the ring is drawn on the photo as shown, the right way up (migration 0021)
+  for (const f of faces) if (!f.frame && f.bbox) f.bbox = turnBox(f.bbox as number[], Number(f.fturn) || 0, Number(f.turn) || 0);
   const byKey = new Map(faces.map((f) => [f.key as string, f]));
   const hero = byKey.get(q.hero_face);
   if (!hero) return null;
@@ -470,4 +473,18 @@ export async function skip(who: string, key: string) {
 
 export async function hidePhoto(who: string, hash: string) {
   await sql()`update photos set hidden = true, hidden_by = ${who}, hidden_at = now() where hash = ${hash}`;
+}
+
+// Anyone can turn a photo the right way up, for everyone, at once (Krish,
+// 2026-10-24; migration 0021): a quarter at a time, clockwise or back. The
+// family's turn is never overruled by the model, and each one is logged.
+// -> the photo's new turn, or null for a photo that cannot be turned.
+export async function turnPhoto(who: string, hash: string, by: 90 | -90): Promise<number | null> {
+  return sql().begin(async (tx) => {
+    const [p] = await tx`update photos set turn = ((turn + ${by} + 360) % 360), turn_source = 'family', turn_checked_at = now()
+      where hash = ${hash} and visible and media = 'photo' returning turn`;
+    if (!p) return null;
+    await tx`insert into turns (who, hash, turn) values (${who}, ${hash}, ${p.turn})`;
+    return p.turn as number;
+  });
 }

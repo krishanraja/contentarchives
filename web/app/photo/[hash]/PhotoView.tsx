@@ -11,11 +11,11 @@ import YearPicker from "@/components/YearPicker";
 import { whenLabel } from "@/lib/when";
 import { close, exact } from "@/lib/spelling";
 import { send, uuid } from "@/components/outbox";
-import { Eye, Share } from "@/components/icons";
+import { Eye, Share, TurnRight } from "@/components/icons";
 import { listKey, type Media } from "@/lib/search";
 
 type P = { hash: string; alt: string; people: string[]; where: string; when: string | null; what: string | null; video: boolean; length: string | null;
-  play: "ok" | "unplayable" | null; sameDay: string[]; sameDayPlace: string[]; dayText: string | null };
+  play: "ok" | "unplayable" | null; sameDay: string[]; sameDayPlace: string[]; dayText: string | null; turn?: number };
 type Mode = "view" | "about" | "when" | "sameWhen" | "where" | "sameWhere" | "who" | "add";
 type Last = { id: string; text: string; undo: () => void };
 
@@ -37,6 +37,7 @@ export default function PhotoView({ p, q, type = null }: { p: P; q: string; type
   const [where, setWhere] = useState(p.where);
   const [people, setPeople] = useState(p.people);
   const [last, setLast] = useState<Last | null>(null);
+  const [rot, setRot] = useState(p.turn ?? 0);
   const [err, setErr] = useState("");
   const [nav, setNav] = useState<{ prev: string | null; next: string | null } | null>(null);
   const [names, setNames] = useState<string[]>([]);
@@ -95,6 +96,16 @@ export default function PhotoView({ p, q, type = null }: { p: P; q: string; type
       const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = "family-photo.jpg"; a.click();
     } catch { /* closed the share sheet */ }
   }
+  // a quarter turn for everyone (Krish, 2026-10-24: "photos not rotated up the
+  // right way"); Undo turns it back. The picture's address carries the turn, so
+  // this phone never shows the old way round from its own cache.
+  async function turnIt(way: "right" | "left", undoing = false) {
+    const r = await fetch("/api/turn", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ hash: p.hash, way }) })
+      .then((x) => (x.ok ? x.json() : null)).catch(() => null);
+    if (!r?.ok) { setErr("That didn't work. Please try again."); return; }
+    setRot(r.turn); setErr(""); setMode("view");
+    setLast(undoing ? null : { id: "", text: "Turned for everyone", undo: () => void turnIt(way === "right" ? "left" : "right", true) });
+  }
   async function hide() {
     const r = await fetch("/api/hide", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ hash: p.hash }) });
     if (r.ok) setHidden(true);
@@ -111,6 +122,7 @@ export default function PhotoView({ p, q, type = null }: { p: P; q: string; type
   }
   async function undo() {
     if (!last) return;
+    if (!last.id) { last.undo(); setLast(null); return; }          // a turn is put back by turning it back
     await fetch("/api/answers/undo", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ id: last.id }) }).catch(() => undefined);
     last.undo(); setLast(null);
   }
@@ -186,7 +198,10 @@ export default function PhotoView({ p, q, type = null }: { p: P; q: string; type
     <div className={picking ? "game picking" : "game"}>
       {mode !== "about" ? (plays && mode === "view"
         ? <Clip hash={p.hash} alt={p.alt} onFail={fail} tag={tag} />
-        : <Shot src={`/img/v/${encodeURIComponent(p.hash)}`} alt={p.alt} tag={tag} />
+        : <Shot src={`/img/v/${encodeURIComponent(p.hash)}${p.video ? "" : `?r=${rot}`}`} alt={p.alt} tag={p.video ? tag : (
+            // on the picture itself, where a sideways photo is noticed (Krish, 2026-10-24)
+            <button type="button" className="btn small turnit" onClick={() => turnIt("right")}><TurnRight /> Turn</button>
+          )} />
       ) : (
         <div className="card about">
           {hidden ? <p className="notice">This {noun} is now hidden for everyone. Thank you.</p> : sure ? (

@@ -263,6 +263,7 @@ def main():
     print("8e. the owner's Personal folder: in when someone he chose is clearly in it")
     personal(out)
     personal_family(out)
+    orientation(out)
 
     print()
     print("8f. a search narrows from wherever it starts, and by photo or video")
@@ -1551,6 +1552,116 @@ def personal_family(out):
     check("one switch goes back to the ticked list", ("pk" in shown(), "pa" in shown()), (True, False))
     check("and nothing Personal started a face for the family to name",
           q(db, "select count(*) from clusters where name is null"), [(0,)])
+    db.close()
+
+
+def orientation(out):
+    """A photo shown the right way up (Krish, 2026-10-24; migration 0021): the
+    model is asked once, faces overrule it where there are any, a family's turn
+    is never asked about, and a turned photo's faces are read again upright,
+    keeping the name of a face found where one was. Made-up names only."""
+    check("a box turns with its picture, as the app turns it (web/lib/turn.ts)",
+          [[round(v, 5) for v in CE.turn_box([.1, .2, .3, .4], 0, t)] for t in (90, 180, 270)],
+          [[.6, .1, .8, .3], [.7, .6, .9, .8], [.2, .7, .4, .9]])
+    from PIL import Image
+    pic = io.BytesIO()
+    Image.new("RGB", (40, 20), "white").save(pic, "JPEG")
+    check("a real picture turned a quarter is as tall as it was wide",
+          Image.open(io.BytesIO(CE.turned(pic.getvalue(), 90))).size, (20, 40))
+    db = fresh_db(NAME + "_turn")
+    AU = unit(401)
+    db.execute("insert into clusters (cluster_id, group_id, name, centroid, n) "
+               "values ('c-a', 'c-a', 'Aunt Secretname', %s::extensions.vector, 5)", (CE.vec(AU),))
+    db.commit()
+    UP = [.4, .3, .6, .6]                       # where her face is, the picture the right way up
+    spec = {   # file -> (the turn that puts it upright, faces in it, what the model says)
+        "p1": (90, [AU], 90),                   # a print photographed sideways: the model is right
+        "p2": (270, [AU], 90),                  # the model says right, her face says left
+        "p3": (0, [AU], 0),                     # already upright
+        "p4": (180, [], 180),                   # a view, upside down: nobody to overrule the model
+        "p5": (0, [AU], 90),                    # the model is wrong: she reads best as it is
+    }
+
+    def look_at(jpeg):
+        fid, _, t = jpeg.decode().split(":")[1].partition("|")
+        return fid, int(t or 0)
+
+    class Faces:
+        def detect(self, jpeg):
+            fid, t = look_at(jpeg)
+            up, people, _ = spec[fid]
+            d = (t - up) % 360                      # how far from upright the picture now is
+            det = {0: .95, 180: .7}.get(d, .62)     # a face reads best upright; sideways, barely
+            # read sideways she matched her cluster; read upright, the model
+            # makes nothing of her - so only being found in the same place can
+            # keep her name (the rule under test)
+            return [{"bbox": CE.turn_box(UP, 0, d), "det": det, "share": .2,
+                     "emb": unit(600 + i) if d == 0 else unit(500 + i, p, .1)} for i, p in enumerate(people)]
+
+    class Gem:
+        def __init__(self):
+            self.asked = []
+
+        def classify(self, jpeg):
+            return dict(OK), 0.001
+
+        def embed(self, text):
+            return [0.01] * 768, 0.0
+
+        def orient(self, jpeg):
+            fid, _ = look_at(jpeg)
+            self.asked.append(fid)
+            return spec[fid][2], 0.0002
+
+    real = CE.turned
+    CE.turned = lambda jpeg, deg: jpeg if not deg % 360 else jpeg + b"|%d" % (deg % 360)
+    drive = PersonalDrive(["p1", "p2", "p3", "p4", "p5"], [])
+
+    def go(orient=100):
+        g = Gem()
+        w = CE.Worker(db, drive, g, Faces(), None, "root", "Media/Communal", workers=2, budget=100, orient=orient)
+        with contextlib.redirect_stdout(out):
+            w.run()
+        return g
+
+    def turns():
+        return dict(q(db, "select drive_id, turn from photos order by drive_id"))
+    try:
+        go(orient=0)
+        check("asked nothing while the run is told not to (it is a spend)",
+              q(db, "select count(*) from photos where turn_checked_at is not null")[0][0], 0)
+        g = go()
+        check("each photo is asked once", sorted(g.asked), ["p1", "p2", "p3", "p4", "p5"])
+        check("sideways, upside down and upright each end the right way up; faces overrule the model",
+              turns(), {"p1": 90, "p2": 270, "p3": 0, "p4": 180, "p5": 0})
+        check("who turned it is recorded", dict(q(db, "select drive_id, turn_source from photos where turn <> 0")),
+              {"p1": "model", "p2": "model", "p4": "model"})
+        check("a turned photo's faces are read again the right way up, and keep her name",
+              q(db, "select f.turn, f.cluster_id, n.name from faces f join photos p on p.hash = f.hash "
+                    "left join clusters n on n.cluster_id = f.cluster_id where p.drive_id = 'p1'"), [(90, "c-a", "Aunt Secretname")])
+        check("its face box is of the picture the right way up",
+              [[round(float(v), 3) for v in b] for (b,) in q(db, "select f.bbox from faces f join photos p "
+                                                               "on p.hash = f.hash where p.drive_id = 'p1'")], [UP])
+        check("who is in it reads the same after the turn",
+              q(db, "select name from photo_people pp join photos p on p.hash = pp.hash where p.drive_id = 'p1'"),
+              [("Aunt Secretname",)])
+        check("and the turned photo's faces are read once", q(db, "select faces_turn, faces_reread from photos where drive_id = 'p1'"),
+              [(90, True)])
+        g = go()
+        check("a second run asks nothing and reads no face again", (g.asked, q(db, "select count(*) from photos where turn <> faces_turn")[0][0]),
+              ([], 0))
+        # the family turns one the model passed as upright: theirs stands, and its faces are read again
+        db.execute("update photos set turn = 90, turn_source = 'family' where drive_id = 'p3'")
+        db.execute("update photos set turn_checked_at = null where drive_id = 'p3'")
+        db.commit()
+        g = go()
+        check("a photo the family turned is never asked, and keeps their turn",
+              ("p3" in g.asked, turns()["p3"], q(db, "select turn_source from photos where drive_id = 'p3'")[0][0]),
+              (False, 90, "family"))
+        check("its faces are read again the way the family turned it",
+              q(db, "select f.turn from faces f join photos p on p.hash = f.hash where p.drive_id = 'p3'"), [(90,)])
+    finally:
+        CE.turned = real
     db.close()
 
 

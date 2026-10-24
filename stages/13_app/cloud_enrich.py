@@ -431,6 +431,26 @@ class Gemini:
         finally:
             os.unlink(path)
 
+    ORIENT_PROMPT = ("Look at this photograph exactly as it is shown. Is it the right way up, so that "
+                     "people stand or sit upright, the sky or ceiling is at the top and any writing reads "
+                     "normally? Answer with ONE word only: UPRIGHT if it is already the right way up; "
+                     "RIGHT if it must be turned a quarter turn clockwise to be the right way up; LEFT if "
+                     "it must be turned a quarter turn anticlockwise; FLIP if it is upside down.")
+
+    def orient(self, jpeg: bytes):
+        """-> (degrees clockwise that put it the right way up, or None when the
+        answer is not one of the four words; dollars)."""
+        CL = self.CL
+        with tempfile.NamedTemporaryFile(suffix=".jpg", delete=False) as fh:
+            fh.write(jpeg)
+            path = fh.name
+        try:
+            txt, tin, tout = self._call([path], self.ORIENT_PROMPT, 8)
+            word = re.sub(r"[^A-Z]", "", (txt or "").strip().split()[0].upper()) if (txt or "").strip() else ""
+            return TURN_WORDS.get(word), (tin * CL.IN_PER_M + tout * CL.OUT_PER_M) / 1e6
+        finally:
+            os.unlink(path)
+
     API = "https://generativelanguage.googleapis.com/"
     VIDEO_PROMPT = ("This is a video, not a photograph. Watch all of it, and answer for its MOST "
                     "revealing moment: if anyone is unclothed at any point, even briefly, say so.\n\n")
@@ -618,17 +638,57 @@ def personal_time(f: dict):
     return None
 
 
+# -- the right way up (migration 0021) -------------------------------------
+TURN_WORDS = {"UPRIGHT": 0, "RIGHT": 90, "FLIP": 180, "LEFT": 270}
+
+
+def turned(jpeg: bytes, deg: int) -> bytes:
+    """The picture turned `deg` degrees clockwise (PIL turns anticlockwise)."""
+    if not deg % 360:
+        return jpeg
+    from PIL import Image
+    with Image.open(io.BytesIO(jpeg)) as im:
+        out = io.BytesIO()
+        im.convert("RGB").rotate(-deg, expand=True).save(out, "JPEG", quality=90)
+        return out.getvalue()
+
+
+def turn_box(b, frm: int, to: int) -> list:
+    """A face box measured at `frm` degrees, on the same picture turned to `to`
+    (web/lib/turn.ts turnBox, the same rule)."""
+    x1, y1, x2, y2 = [float(v) for v in b]
+    d = (to - frm) % 360
+    if d == 90:
+        return [1 - y2, x1, 1 - y1, x2]
+    if d == 180:
+        return [1 - x2, 1 - y2, 1 - x1, 1 - y1]
+    if d == 270:
+        return [y1, 1 - x2, y2, 1 - x1]
+    return [x1, y1, x2, y2]
+
+
+def overlap(a, b) -> float:
+    """Intersection over union of two boxes."""
+    ix = max(0.0, min(a[2], b[2]) - max(a[0], b[0]))
+    iy = max(0.0, min(a[3], b[3]) - max(a[1], b[1]))
+    i = ix * iy
+    u = (a[2] - a[0]) * (a[3] - a[1]) + (b[2] - b[0]) * (b[3] - b[1]) - i
+    return i / u if u > 0 else 0.0
+
+
 # ------------------------------------------------------------------ worker --
 
 class Worker:
     def __init__(self, db, drive, gemini, faces, geo, folder, prefix,
-                 budget=300, cap_usd=60.0, workers=8, max_minutes=None, frames=0, videos=0, personal=0):
+                 budget=300, cap_usd=60.0, workers=8, max_minutes=None, frames=0, videos=0, personal=0,
+                 orient=0):
         self.db, self.drive, self.gemini, self.faces, self.geo = db, drive, gemini, faces, geo
         self.folder, self.prefix = folder, prefix
         self.budget, self.cap, self.workers = budget, cap_usd, workers
         self.frames_per_run = frames
         self.videos_per_run = videos
         self.personal_per_run = personal
+        self.orient_per_run = orient
         # A DEADLINE, NOT A KILL: GitHub ends a job at 6 h, and a killed run
         # never reaches group(), rebuild() or its receipt - the parts the app
         # reads. Past the deadline nothing new starts, exactly like the cap.
@@ -728,6 +788,8 @@ class Worker:
         self.personal_scan(pfiles or [])
         self.personal_times(pfiles or [])
         self.process(files + self.personal_wanted(pfiles or []))
+        self.orient()                       # each photo asked once which way is up
+        self.reread()                       # a turned photo's faces, read again the right way up
         self.save_clusters()
         self.group()
         self.personal_show()                # after group(): a new face's group is known only then
@@ -900,6 +962,9 @@ class Worker:
               "group_id = excluded.group_id, bbox = excluded.bbox, only_face = excluded.only_face, "
               "score = excluded.score, share = excluded.share, measured_w = excluded.measured_w, "
               "measured_h = excluded.measured_h, embedding = excluded.embedding")
+        # a photo whose faces the cloud has read again the right way up keeps
+        # them: the library's own boxes are of the picture on its side (0021)
+        reread = {h for (h,) in db.execute("select hash from photos where faces_reread").fetchall()}
         batch, done, boxed = [], 0, 0
         for (key, h, cid, x1, y1, x2, y2, tw, th, det, share, only, emb) in src.execute(
                 "select key, hash, cluster_id, x1, y1, x2, y2, thumb_w, thumb_h, det, share, only_face, "
@@ -911,6 +976,9 @@ class Worker:
             sums[cid] = sums[cid] + v if cid in sums else v.copy()
             cnt[cid] += 1
             g = group_of.get(cid, cid)
+            if h in reread:
+                self.c["library_faces_kept_upright"] += 1
+                continue
             ch.add((cid, g, h))
             box = [round(float(x), 5) for x in (x1, y1, x2, y2)] if None not in (x1, y1, x2, y2) else None
             boxed += box is not None
@@ -1206,6 +1274,174 @@ class Worker:
             self.c["faces"] += len(frows)
         self.db.commit()
         self.c["added"] += 1
+
+    # -- the right way up (migration 0021) ---------------------------------
+    REREAD_PER_RUN = 5000
+
+    def _pooled(self, rows, look, each):
+        """look(row) in the thread pool (network only), each(result) here, in
+        order of finishing; stops starting work at the spend cap or deadline."""
+        with cf.ThreadPoolExecutor(max_workers=self.workers) as pool:
+            futs, it = set(), iter(rows)
+            for r in it:
+                futs.add(pool.submit(look, r))
+                if len(futs) >= self.workers * 2:
+                    break
+            while futs:
+                fut = next(cf.as_completed(futs))
+                futs.discard(fut)
+                each(fut.result())
+                if self.spent >= self.cap or (self.deadline is not None and time.time() >= self.deadline):
+                    continue
+                nxt = next(it, None)
+                if nxt is not None:
+                    futs.add(pool.submit(look, nxt))
+
+    def best_turn(self, jpeg: bytes, said: int) -> int:
+        """The turn a photo the model called crooked really needs. Where faces
+        are found, they decide: the turn under which they read best (the
+        model's answer wins a tie, then upright). Nobody in it in any turn:
+        the model's answer."""
+        if self.faces is None:
+            return said
+        score = {}
+        for t in (0, 90, 180, 270):
+            score[t] = sum(fc["det"] for fc in self.faces.detect(turned(jpeg, t)) if fc["det"] >= START)
+        top = max(score.values())
+        if top <= 0 or score[said] >= top:
+            return said
+        return 0 if score[0] >= top else max((t for t in score if t), key=lambda t: score[t])
+
+    def orient(self):
+        """Each photograph is asked once which way is up (Krish, 2026-10-24: a
+        print photographed sideways has no orientation tag to obey). The
+        model's word only marks a photo worth a closer look; best_turn()
+        decides. A photo the family has turned is never asked."""
+        if self.orient_per_run <= 0 or not hasattr(self.gemini, "orient"):
+            return
+        db = self.db
+        rows = db.execute(
+            "select hash, drive_id from photos where turn_checked_at is null and media = 'photo' "
+            "and visible and turn_source is null order by hash limit %s", (self.orient_per_run,)).fetchall()
+        if not rows:
+            return
+
+        def look(row):
+            h, fid = row
+            try:
+                jpeg = self.drive.image(fid, VIEW_PX)
+                if not jpeg:
+                    return h, None, None, 0.0
+                deg, usd = self.gemini.orient(jpeg)
+                return h, jpeg, deg, usd
+            except Exception as e:                                   # noqa: BLE001
+                self.errors["orient_" + err_name(e)] += 1
+                return h, None, None, 0.0
+
+        def each(res):
+            h, jpeg, deg, usd = res
+            self.spent += usd
+            if jpeg is None or deg is None:
+                self.c["orient_unanswered"] += 1                   # asked again next run
+                return
+            turn = self.best_turn(jpeg, deg) if deg else 0
+            db.execute("update photos set turn = %s, turn_source = case when %s <> 0 then 'model' end, "
+                       "turn_checked_at = now() where hash = %s and turn_source is null", (turn, turn, h))
+            db.commit()
+            self.c["orient_checked"] += 1
+            self.c["orient_turned"] += bool(turn)
+            self.c["orient_overruled"] += bool(deg) and turn != deg
+
+        self._pooled(rows, look, each)
+        if self.c["orient_checked"]:
+            say("orient", checked=self.c["orient_checked"], turned=self.c["orient_turned"],
+                overruled=self.c["orient_overruled"], spent_usd=self.spent)
+
+    def join(self, cid: str, emb):
+        """A face kept in its cluster moves that cluster's centre, as assign() would."""
+        import numpy as np
+        if len(getattr(self, "_idx", {})) != len(self.cid):
+            self._idx = {c: i for i, c in enumerate(self.cid)}
+        j = self._idx.get(cid)
+        if j is None:
+            return
+        self.S[j] += emb
+        self.cn[j] += 1
+        self.C[j] = self.S[j] / (float(np.linalg.norm(self.S[j])) or 1.0)
+        self.dirty.add(j)
+
+    def reread(self):
+        """A photo turned since its faces were read is read again the right way
+        up: a face read sideways matches its person badly. A face found where
+        one was keeps that face's cluster, and so its name; one found anew is
+        matched as any new face is (a Personal one starts nobody new). Faces
+        with no box (the library could not measure them) are left as they are."""
+        if self.faces is None:
+            return
+        db = self.db
+        rows = db.execute(
+            "select hash, drive_id, turn, rel_path from photos where turn <> faces_turn and media = 'photo' "
+            "and visible order by hash limit %s", (self.REREAD_PER_RUN,)).fetchall()
+        if not rows:
+            return
+
+        def look(row):
+            try:
+                return row, self.drive.image(row[1], VIEW_PX)
+            except Exception as e:                                   # noqa: BLE001
+                self.errors["reread_" + err_name(e)] += 1
+                return row, None
+
+        def each(res):
+            (h, fid, turn, rel), jpeg = res
+            if not jpeg:
+                return
+            found = self.faces.detect(turned(jpeg, turn))
+            olds = [(cid, gid, turn_box(b, ft or 0, turn)) for cid, gid, b, ft in db.execute(
+                "select cluster_id, group_id, bbox, turn from faces where hash = %s and frame is null "
+                "and bbox is not null", (h,)).fetchall()]
+            personal = (rel or "").startswith(PERSONAL_PREFIX + "/")
+            used, frows = set(), []
+            for i, fc in enumerate(found):
+                best, bi = 0.0, None
+                for j, o in enumerate(olds):
+                    v = overlap(fc["bbox"], o[2]) if j not in used and o[0] else 0.0
+                    if v > best:
+                        best, bi = v, j
+                if bi is not None and best >= 0.3:
+                    used.add(bi)
+                    cid, gid = olds[bi][0], olds[bi][1] or olds[bi][0]
+                    self.join(cid, fc["emb"])
+                    self.c["reread_kept"] += 1
+                else:
+                    cid = self.assign(fc["emb"], fc["det"], start=not personal)
+                    if cid is None:
+                        continue
+                    gid = cid
+                frows.append(("{}::t{}:{}".format(h, turn, i), h, gid, cid, [round(x, 5) for x in fc["bbox"]],
+                              len(found) == 1, fc["det"], round(fc["share"], 4), vec(fc["emb"]), turn))
+            with db.cursor() as cur:
+                cur.execute("delete from faces where hash = %s and frame is null and bbox is not null", (h,))
+                cur.executemany(
+                    "insert into faces (key, hash, group_id, cluster_id, bbox, only_face, score, share, embedding, turn) "
+                    "values (%s,%s,%s,%s,%s,%s,%s,%s,%s::extensions.vector,%s) on conflict (key) do update set "
+                    "group_id = excluded.group_id, cluster_id = excluded.cluster_id, bbox = excluded.bbox, "
+                    "only_face = excluded.only_face, score = excluded.score, share = excluded.share, "
+                    "embedding = excluded.embedding, turn = excluded.turn", frows)
+                cur.executemany("insert into clusters (cluster_id, group_id, n) values (%s, %s, 0) on conflict do nothing",
+                                sorted({(r[3], r[2]) for r in frows}))
+                cur.execute("delete from cluster_hashes where hash = %s", (h,))
+                cur.execute("insert into cluster_hashes (cluster_id, group_id, hash) select distinct cluster_id, "
+                            "group_id, hash from faces where hash = %s and cluster_id is not null "
+                            "on conflict do nothing", (h,))
+                cur.execute("update photos set faces_turn = %s, faces_reread = true where hash = %s", (turn, h))
+            db.commit()
+            self.c["reread"] += 1
+            self.c["reread_faces"] += len(frows)
+
+        self._pooled(rows, look, each)
+        if self.c["reread"]:
+            say("reread", photos=self.c["reread"], faces=self.c["reread_faces"], kept=self.c["reread_kept"])
 
     # -- the owner's Personal folder (migration 0010) ----------------------
     def nearest(self, emb):
@@ -1783,6 +2019,8 @@ def main() -> int:
                     help="most videos watched whole this run, so they can play (a spend: 0 unless asked)")
     ap.add_argument("--personal", type=int, default=int(os.environ.get("PERSONAL_PER_RUN", "0")),
                     help="most Personal files looked at for the owner's chosen people this run (no spend)")
+    ap.add_argument("--orient", type=int, default=int(os.environ.get("ORIENT_PER_RUN", "0")),
+                    help="most photos asked which way is up this run (a small spend: 0 unless asked)")
     ap.add_argument("--no-faces", action="store_true")
     a = ap.parse_args()
     need = ["DATABASE_URL", "GOOGLE_SERVICE_ACCOUNT_JSON", "GOOGLE_API_KEY_ARCHIVES",
@@ -1799,7 +2037,7 @@ def main() -> int:
                os.environ["DRIVE_COMMUNAL_FOLDER_ID"],
                os.environ.get("DRIVE_REL_PREFIX", "Media/Communal"),
                budget=a.budget, cap_usd=a.cap_usd, workers=a.workers, max_minutes=a.max_minutes,
-               frames=a.frames, videos=a.videos, personal=a.personal)
+               frames=a.frames, videos=a.videos, personal=a.personal, orient=a.orient)
     w.run()
     return 0
 

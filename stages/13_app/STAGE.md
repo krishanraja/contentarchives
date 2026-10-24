@@ -179,6 +179,18 @@ nudity in this".
   its own files. Migration 0010 holds the mechanism. It shows only while it
   qualifies AS STORED too (a face's group can move between the look and the store:
   30 of the first 1,100 did), and a family's "not in it" for the ticked person counts
+- a photograph is shown the right way up (Krish, 2026-10-24: "There are still photos
+  not rotated up the right way"). Its own orientation tag is obeyed first; a print
+  photographed sideways has none, so each photo carries a `turn` (degrees clockwise,
+  migration 0021). The worker asks the library's vision model once per photograph
+  (`orient()`), and where faces are found they decide the turn (`best_turn()`), the
+  model only marking a photo worth the look; anyone can turn a photo from its own
+  screen or from Who is this?, and that turn is never overruled (`turn_source =
+  'family'`, logged in `turns`). A face box records the turn it was measured at
+  (`faces.turn`) and is turned with its picture when drawn (`web/lib/turn.ts`); a
+  turned photo's faces are read again the right way up (`reread()`), a face found
+  where one was keeping that face's cluster and so its name, and a later library
+  import never puts the sideways boxes back (`faces_reread`)
 - when the family says when a photograph was taken, that is when it was taken
   (Krish, 2026-10-06: a file's date is often the day it was scanned or copied).
   Their settled answer (`family_when`, each person's latest answer one vote) wins

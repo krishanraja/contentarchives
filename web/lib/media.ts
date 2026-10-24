@@ -64,15 +64,19 @@ export async function deletePrefix(keys: string[]): Promise<void> {
 export const SIZES = { t: 480, v: 1600 } as const;
 export type Size = keyof typeof SIZES;
 
-async function fit(buf: Buffer, px: number): Promise<Buffer> {
-  return sharp(buf).rotate().resize(px, px, { fit: "inside", withoutEnlargement: true })
+// its own orientation tag first, then the photo's turn (migration 0021): sharp
+// applies one rotation per pipeline, so the tag is settled in a pipeline of its own
+async function fit(buf: Buffer, px: number, turn = 0): Promise<Buffer> {
+  const upright = turn ? await sharp(buf).rotate().toBuffer() : buf;
+  return sharp(upright).rotate(turn || undefined).resize(px, px, { fit: "inside", withoutEnlargement: true })
     .jpeg({ quality: 80, mozjpeg: true }).toBuffer();
 }
 
-// The bytes for one photograph at one size. Cached under its Drive id, so a
-// file replaced on Drive (a new id) is never served stale.
-export async function photoBytes(driveId: string, media: string, size: Size): Promise<Buffer | null> {
-  const key = `cache/${size}/${driveId}.jpg`;
+// The bytes for one photograph at one size, turned the right way up. Cached
+// under its Drive id and its turn, so a file replaced on Drive (a new id) or a
+// photo turned since is never served stale.
+export async function photoBytes(driveId: string, media: string, size: Size, turn = 0): Promise<Buffer | null> {
+  const key = `cache/${size}/${driveId}${turn ? `-r${turn}` : ""}.jpg`;
   const hit = await getObject(key);
   if (hit) return hit;
   let src: Buffer | null = null;
@@ -83,7 +87,7 @@ export async function photoBytes(driveId: string, media: string, size: Size): Pr
     if (!src && media === "photo") src = await download(driveId).catch(() => null);
   }
   if (!src) return null;
-  const out = await fit(src, SIZES[size]);
+  const out = await fit(src, SIZES[size], turn);
   await putObject(key, out).catch(() => undefined);
   return out;
 }

@@ -9,8 +9,10 @@ import Whole from "@/components/Whole";
 import { send, uuid } from "@/components/outbox";
 import { ahead } from "@/components/ahead";
 import { close, exact, fold } from "@/lib/spelling";
+import { turnBox } from "@/lib/turn";
+import { TurnRight } from "@/components/icons";
 
-type Face = { key: string; bbox: number[] };
+type Face = { key: string; bbox: number[]; hash?: string; media?: string; frame?: string | null; turn?: number };
 type Sugg = { name: string; face: string; score: number };
 type Q = { group: string; cluster: string; photos: number; hero: Face; samples: Face[]; suggestions: Sugg[]; ask: Sugg | null; contest: string[];
   clue?: { when: string | null; where: string | null }; day?: string[] } | null;
@@ -40,6 +42,8 @@ export default function NameGame({ first = null }: { first?: string | null }) {
   const [skipped, setSkipped] = useState(0);
   const [err, setErr] = useState("");
   const [whole, setWhole] = useState(false);
+  // turned on this screen, for everyone (Krish, 2026-10-24); null: as it came
+  const [rot, setRot] = useState<number | null>(null);
   const closeWhole = useCallback(() => setWhole(false), []);
   const next = useRef(ahead<Q>());
   // an answer still on its way: undo waits for it, or it would arrive after the undo
@@ -52,7 +56,7 @@ export default function NameGame({ first = null }: { first?: string | null }) {
     let r = held ? await held.p : undefined;
     if (r === undefined) r = await getFace(after, after.length ? null : first);
     if (r === undefined) { setErr("No internet connection. Your answers are safe on this phone."); setQ(null); return; }
-    setQ(r); setMode(r?.ask ? "ask" : "choose"); setTyped(""); setWarn(""); setWhole(false);
+    setQ(r); setMode(r?.ask ? "ask" : "choose"); setTyped(""); setWarn(""); setWhole(false); setRot(null);
     if (r) { const then = [...after, r.group]; next.current.start(then.join(","), () => getFace(then), pictures); }
   }, [first]);
 
@@ -152,17 +156,30 @@ export default function NameGame({ first = null }: { first?: string | null }) {
 
   const others = q.suggestions.filter((s) => !q.contest.some((n) => fold(n) === fold(s.name)));
   const typedNow = typed.trim().replace(/\s+/g, " ");
+  // a photo on its side is turned where it is noticed: the picture and the
+  // ring round the face turn together, and the photo stays turned for everyone
+  const turnable = q.hero.media === "photo" && !q.hero.frame && !!q.hero.hash;
+  const heroSrc = faceUrl(q.hero.key, true) + (rot === null ? "" : `&r=${rot}`);
+  const heroBox = rot === null ? q.hero.bbox : turnBox(q.hero.bbox, q.hero.turn ?? 0, rot);
+  async function turnHero() {
+    if (!q?.hero.hash) return;
+    const r = await fetch("/api/turn", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ hash: q.hero.hash, way: "right" }) })
+      .then((x) => (x.ok ? x.json() : null)).catch(() => null);
+    if (r?.ok) setRot(r.turn); else setErr("That didn't work. Please try again.");
+  }
+
   return (
     <>
     {/* beside the game, not in it: the game is put out of reach while it is open */}
-    {whole && <Whole src={faceUrl(q.hero.key, true)} day={q.day || []} onClose={closeWhole} />}
+    {whole && <Whole src={heroSrc} day={q.day || []} onClose={closeWhole} />}
     <div className={`game ${mode}`}>
-      <Shot src={faceUrl(q.hero.key, true)} bbox={q.hero.bbox} alt="A photo with one face circled" tag={<>
+      <Shot src={heroSrc} bbox={heroBox} alt="A photo with one face circled" tag={<>
         {/* a clue to when and where (Krish, 2026-10-16) */}
         {(q.clue?.when || q.clue?.where) && <span className="badge">{[q.clue.when, q.clue.where].filter(Boolean).join(" · ")}</span>}
         <button type="button" className="btn small seeall" onClick={() => setWhole(true)}>
           {q.day?.length ? "See that day" : "See all of it"}
         </button>
+        {turnable && <button type="button" className="btn small turnit" onClick={turnHero}><TurnRight /> Turn</button>}
       </>} />
       {q.samples.length > 0 && mode !== "type" && (
         <div className="samples">
