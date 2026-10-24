@@ -225,6 +225,25 @@ test("signing in again brings your name with your email; \"Not you?\" hands a sh
   await expect(page.getByRole("heading", { name: "Hello, Grandpa!" })).toBeVisible();
 });
 
+test("Sign out, top right of home, leaves this phone at the sign-in screen (Krish, 2026-10-24)", async ({ page, context }) => {
+  await signIn(page, "Grandma");
+  const out = page.getByRole("button", { name: "Sign out" });
+  await expect(out).toBeVisible();
+  const box = (await out.boundingBox())!;
+  const width = page.viewportSize()!.width;
+  expect(box.x + box.width).toBeGreaterThan(width * 0.75);       // in the top right
+  expect(box.y).toBeLessThan(120);
+  expect(box.height).toBeGreaterThanOrEqual(44);                 // big enough for a thumb
+  await out.click();
+  await page.waitForURL("**/gate");
+  const left = (await context.cookies()).map((c) => c.name);
+  expect(left.filter((n) => ["arch", "arch_me", "arch_ask"].includes(n))).toEqual([]);
+  await page.goto("/");
+  await page.waitForURL("**/gate");                              // nothing is reachable until signing in again
+  await signIn(page, "Grandma");
+  await expect(page.getByRole("heading", { name: "Hello, Grandma!" })).toBeVisible();
+});
+
 test("a phone named before it was remembered is remembered on its next visit", async ({ page, context }) => {
   await signIn(page, "Grandma");
   await context.clearCookies({ name: "arch_me" });            // as if named before arch_me existed

@@ -182,7 +182,10 @@ p { margin: 0; }
 .photo-panel[data-fit="4"]:has(.undo) .facts { display: none; }
 
 /* ---------- home: say hello, search, then the one next thing to do ---------- */
-.hello { flex: none; }
+.hello { flex: none; display: flex; flex-wrap: wrap; align-items: flex-start; column-gap: 12px; }
+/* top right beside the greeting; on its own line, still on the right, when they do not fit side by side */
+.signout { flex: none; margin-left: auto; }
+.signout .btn { min-height: 44px; padding: 4px 8px; }
 .hello p { margin-top: 2px; font-size: 16px; }
 .pillsearch { flex: none; display: flex; align-items: center; gap: 6px; padding: 0 5px 0 18px; min-height: 50px;
   border: var(--line); border-radius: 999px; background: var(--paper); }
@@ -364,6 +367,11 @@ label.big { font-family: var(--font-display), system-ui; font-weight: 600; font-
   .page.home > .tasks { grid-column: 1; grid-row: 3; align-self: end; }
   .page.home > .notme { grid-column: 1; grid-row: 4; justify-self: start; }
   .page.home > .fit, .page.home > .btn.block { grid-column: 2; grid-row: 1 / -1; min-height: 0; }
+  /* Sign out stays top right: in the corner above the faces, which start below
+     it, so the short left column is not made taller by it */
+  .page.home { position: relative; }
+  .page.home .signout { position: absolute; top: var(--pad); right: var(--gutter); margin: 0; }
+  .page.home:has(.signout) > .fit, .page.home:has(.signout) > .btn.block { margin-top: calc(44px + var(--gap)); }
   /* signing in: what is happening on the left, what to do on the right */
   .page.gate { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); column-gap: 24px; align-content: center; max-width: 980px; }
   .page.gate > .card { grid-column: 2; grid-row: 1; align-self: center; }
