@@ -21,10 +21,10 @@ to: its Lessons table names the learnings that stage owns and the exact code or
 test enforcing each. `tests/test_stage_contracts.py` fails if a file has no stage,
 a learning has no owner, or a cited enforcement no longer exists.
 
-<!-- krish-canon:start release=v2026.10.22.1 sha=9d6e2a968746 rendered=2026-10-23 -->
+<!-- krish-canon:start release=v2026.10.24.1 sha=e7f2b8a6236e rendered=2026-10-24 -->
 ## Krish canon
 
-Rendered from `krishanraja/ai-harness` at release v2026.10.22.1. Nothing inside these
+Rendered from `krishanraja/ai-harness` at release v2026.10.24.1. Nothing inside these
 markers is hand-maintained: an edit here is detected and proposed back to the canon,
 never silently overwritten, and never lost. This sync preserves all other text.
 Separately approved repository administration owns only its declared regions and context file.
