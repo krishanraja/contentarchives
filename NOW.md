@@ -1,7 +1,7 @@
 ---
 repo: krishanraja/contentarchives
 product: contentarchives
-as_of: 2026-10-23
+as_of: 2026-10-24
 head: a18d542
 lifecycle: building
 production_url: none
@@ -39,7 +39,7 @@ Stories a writer can carry without asking Krish:
 
 Objection it answers: "AI agents will quietly wreck our data." Here is the record of one doing exactly that, once, and the rules that made it unrepeatable, plus the newer record of one auditing its own honesty about how much it has actually learned, and finding the answer wanting.
 
-## Where it is right now (as of 2026-10-23)
+## Where it is right now (as of 2026-10-24)
 
 <!-- north-star-state {"week_of": "2026-10-26", "week_target": 25.0, "current": null, "current_as_of": null, "current_source": null, "urgency": 4, "urgency_reason": "not measured yet"} --> **North Star number: U4, far behind.** Share of new photos and videos in the verified library within 7 days of being taken: not measured yet, against 25% this week, on the way to 100% by 16 November 2026. A bold swing every day; work that does not move the number waits.
 
@@ -128,6 +128,7 @@ Lifecycle: building.
 
 ## What is next and what is waiting on Krish
 
+- Waiting on Krish: merge branch `ccr-126afea0-tde75m` (`f45c803`) to `main`, or ask for a pull request; until it is on `main` the nightly run ignores the three Home-face pins (Krish, Jyoti, Bhasker) and the covers revert, and then reload Home to check the three faces.
 - Waiting on Krish: sign in once from a fresh address to confirm the link email arrives.
 - Waiting on Krish: `gcloud auth login --enable-gdrive-access`, then emptying Drive's trash - about 31 GB of past deletions sits there for 30 days and still counts against quota. The same reauth also unblocks the stronger, server-side `verify_drive_md5.py --refresh`; the mount-based check in `verify_drive_by_mount.py` is real evidence but not a substitute for Google's own checksum. Neither Google account's token can be refreshed from a script, so this needs a human at the keyboard.
 - Waiting on Krish: a judgement call on 294 files / 1.29 GB in a video-project folder (render variants and background plates) and a podcast recording - personal, but production assets rather than camera originals, deliberately not decided by the tooling.
@@ -136,7 +137,7 @@ Lifecycle: building.
 - Settled, no longer waiting: the identity documents that used to sit unflagged in the chronology are found and moved (eleven, `f67166d`); the four staged source zips are deleted, verified by the mount-based check (`d38e973`).
 - Next, per `docs/ROADMAP.md`: **the consolidation of scattered sources is finished** - the library is 85,480 files / 926.5 GB on both D: and H: with zero internal duplicates, a chronology one level deep, and it can now be searched and grouped into events. Phase B is the front line: three sources are still arriving, VHS captures, ten old communal phones, and photographs of old albums - two of the three carry no EXIF at all, so naming the folders with their year before ingesting is the single highest-value minute available. This session closed sixteen defects the same shape as ones those sources would otherwise have hit first (learnings 70 to 77), and wrote all of them down this time.
 - Still open: Bharti's naming game itself (the mobile app; her data queue, 1,192 clusters, already exists and is not the same thing); whether `_Review` is ever emptied and by what rule; Phase D (a second local copy on E:, not started) and Phase E's onward plan once Phase B adds more to mirror.
-- North Star check (2026-10-23): holds.
+- North Star check (2026-10-24): holds.
 
 ## Read next
 
