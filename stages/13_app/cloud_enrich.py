@@ -1994,7 +1994,13 @@ class Worker:
         counts = dict(db.execute(
             "select pp.name, count(distinct pp.hash)::int from photo_people pp "
             "join photos p on p.hash = pp.hash and p.visible group by pp.name").fetchall())
-        people = [(name, cover_of[name][0] if name in cover_of else None, counts[name])
+        # a cover Krish chose by hand wins while its face is still on a photograph
+        # anyone can see; otherwise the automatic pick stands (migration 0022)
+        pinned = dict(db.execute(
+            "select c.name, c.face_key from cover_pins c join faces f on f.key = c.face_key "
+            "join photos p on p.hash = f.hash and p.visible "
+            "where f.bbox is not null and not (p.source = 'seed' and p.media = 'video' and f.frame is null)").fetchall())
+        people = [(name, pinned.get(name) or (cover_of[name][0] if name in cover_of else None), counts[name])
                   for name in sorted(set(names.values()) | set(counts)) if counts.get(name)]
 
         db.execute("delete from queue")

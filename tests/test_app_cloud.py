@@ -1770,6 +1770,28 @@ def library(out):
     check("so the face whose best frame was held is asked on its next one",
           q(db, "select hero_face from queue where group_id = %s", grp["c8"]), [("b8:b8_t6000:0",)])
 
+    # a cover chosen by hand (migration 0022) survives the nightly rebuild, but never
+    # shows a face the app would not draw
+    auto = q(db, "select cover_face from people where name = 'Asha Secretname'")[0][0]
+    other = [k for (k,) in q(db, "select f.key from faces f join photos p on p.hash = f.hash and p.visible "
+                                 "where f.bbox is not null and f.key <> %s and f.frame is null "
+                                 "and p.media = 'photo' order by f.key", auto)][0]
+
+    def cover_after(face_key):
+        db.execute("delete from cover_pins")
+        if face_key:
+            db.execute("insert into cover_pins (name, face_key, pinned_by) values ('Asha Secretname', %s, 'test')",
+                       (face_key,))
+        db.commit()
+        go()
+        return q(db, "select cover_face from people where name = 'Asha Secretname'")[0][0]
+    check("a hand-picked cover replaces the automatic one, and the next rebuild keeps it",
+          (cover_after(other), cover_after(other)), (other, other))
+    check("a pin on a face that no longer exists falls back to the automatic cover",
+          cover_after("gone::0"), auto)
+    check("a pin on a face with no box falls back to the automatic cover", cover_after("b2::1"), auto)
+    check("with no pin the automatic cover is what it was", cover_after(None), auto)
+
     # two relatives name the same face differently, at once: both answers count,
     # neither replaces the other, and the face stays asked - first - until a
     # third breaks the tie (Krish, 2026-10-05)

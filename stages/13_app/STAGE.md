@@ -199,6 +199,10 @@ nudity in this".
   column (`when_year`, migration 0011). The year under every photo is a button: a
   decade, then a year, and the photos the file dates to the same day can be put
   right in the same answer
+- a person's Home face can be pinned by hand (Krish, 2026-10-24): `cover_pins` (migration 0022) is read by
+  `cloud_enrich.py` `rebuild()` after it refills `people` each night, so a pin outlives the rebuild. A pin is used
+  only while its face is on a visible photograph with a box (a missing or hidden face would break the
+  `people.cover_face` key); otherwise the automatic pick stands. Pins are set by hand in the database, never by the app
 - the family's WHERE and WHO win the same way (Krish, 2026-10-06): their settled
   place (`family_place`) shows and is searched instead of the library's, and each
   person's latest "in it" / "not in it" on one photograph is a vote that adds or
