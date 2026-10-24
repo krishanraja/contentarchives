@@ -42,13 +42,30 @@ export async function sign(who?: string, via?: string): Promise<string> {
   return mint({ v: version(), ...(who ? { who } : {}), ...(via ? { via } : {}) }, MAX_AGE);
 }
 
-// null for absent, forged, expired, or signed under an older SESSION_VERSION
-// (bumping it signs everyone out).
+// One person signed out, everyone else left in (Krish, 2026-10-24: "log Krish
+// out. Keep Bharti logged in"): SESSION_SIGNED_OUT lists name=unix-seconds
+// pairs ("Krish=1761300000"), and a session for that name signed before that
+// moment is no session. Signing in again by email works as ever; to stop
+// someone for good, their access row says 'no'. The names live only in the
+// environment, never in this public repository.
+export function signedOut(who: string | undefined, iat: number): boolean {
+  if (!who) return false;
+  const name = who.trim().toLowerCase();
+  for (const pair of (process.env.SESSION_SIGNED_OUT || "").split(",")) {
+    const i = pair.lastIndexOf("=");
+    if (i > 0 && pair.slice(0, i).trim().toLowerCase() === name && iat < Number(pair.slice(i + 1))) return true;
+  }
+  return false;
+}
+
+// null for absent, forged, expired, signed under an older SESSION_VERSION
+// (bumping it signs everyone out), or signed out by name (above).
 export async function verify(token: string | undefined): Promise<Session | null> {
   const p = await read(token);
   if (!p || p.v !== version()) return null;
-  return { v: String(p.v), who: p.who ? String(p.who) : undefined, via: p.via ? String(p.via) : undefined,
+  const s = { v: String(p.v), who: p.who ? String(p.who) : undefined, via: p.via ? String(p.via) : undefined,
     iat: Number(p.iat) || 0 };
+  return signedOut(s.who, s.iat) ? null : s;
 }
 
 // An emailed-code session signed more than a day ago is signed again on the next visit.
