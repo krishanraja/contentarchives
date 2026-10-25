@@ -2,7 +2,7 @@
 repo: krishanraja/contentarchives
 product: contentarchives
 as_of: 2026-10-24
-head: a18d542
+head: cb00542
 lifecycle: building
 production_url: none
 state_doc: RESUME.md
@@ -121,10 +121,6 @@ Lifecycle: building.
 - 2026-09-24 **An append-only journal read as a set cannot be appended to** (`ceaaf70`). Why: `build_game.py` decided what to ask by checking "does this cluster have any answer" and excluding it if so, which makes a chronological record behave like a set - a later correction routing 57 declined rows to Bharti's game would have looked applied and done nothing. Fixed so the last answer for a merge group decides; 57 rerouted, her queue now 1,192 clusters.
 - 2026-09-24 **The naming seams on the new material are worked out, and Bharti's queue is no longer empty** (`8b31235`). Why: three gated rounds on 82 Communal photographs and 117 Personal videos added 1,117 answers and 12 new people, ending by measurement (round 29 built, timed, and withheld at 29 minutes for 58 videos) rather than by running out. The same session corrected a 212.5 GB undecodable-file figure to 9.7 GB once checked against disk rather than a log that still counted deleted files.
 - 2026-09-24 **The identity-document check could only fail on what something else had already found** (`f67166d`). Why: it read a one-row list and asked only whether those named files remained, so it passed every session while real identity documents sat unflagged. The file's own comment already named this exact failure, about a different check. Fixed to sweep the chronology by filename; proved able to fail before being trusted, then moved eleven documents.
-- 2026-09-23 **The video assigner worked once, then would have silently renamed people on a second run** (`ba0d821`). Why: `assign_video_faces.py` recomputed every video-only cluster from scratch, so a second run would have given the same people different ids; fixed to read the previous assignment back and honour it. Result: 57,565 video faces placed, 5,172 videos now carrying a named person.
-- 2026-09-23 **The video assigner could not run at all, and its own test had been failing on exactly that** (`234065b`). Why: it built its frozen centroids from a positional cache that does not exist on this machine; both assigners now join on `(hash, face_index)` instead, closing the same hazard learning 45 was paid for.
-- 2026-09-23 **A new cluster id landed on top of one the video assigner already owned, and six carried one of Krish's answers** (`37a3dc9`). Why: two allocators shared no floor. Repaired from backup, re-run onto a floor that is now a maximum across every allocator.
-- 2026-09-23 **The frozen-cluster rule had a hole: nothing existed for faces arriving from new photographs**, which is what every ingest produces (`3755998`). `assign_new_faces.py` closes it: 26,646 faces assigned, 7,754 inheriting a name Krish had already given.
 
 ## What is next and what is waiting on Krish
 
