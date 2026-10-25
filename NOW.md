@@ -124,7 +124,7 @@ Lifecycle: building.
 
 ## What is next and what is waiting on Krish
 
-- Waiting on Krish: merge branch `ccr-126afea0-tde75m` (`f45c803`) to `main`, or ask for a pull request; until it is on `main` the nightly run ignores the three Home-face pins (Krish, Jyoti, Bhasker) and the covers revert, and then reload Home to check the three faces.
+- Waiting on Krish: reload Home and check the three pinned faces (Krish, Jyoti, Bhasker); the pins are on `main` (migration `0022` is applied live), so the nightly run keeps them.
 - Waiting on Krish: sign in once from a fresh address to confirm the link email arrives.
 - Waiting on Krish: `gcloud auth login --enable-gdrive-access`, then emptying Drive's trash - about 31 GB of past deletions sits there for 30 days and still counts against quota. The same reauth also unblocks the stronger, server-side `verify_drive_md5.py --refresh`; the mount-based check in `verify_drive_by_mount.py` is real evidence but not a substitute for Google's own checksum. Neither Google account's token can be refreshed from a script, so this needs a human at the keyboard.
 - Waiting on Krish: a judgement call on 294 files / 1.29 GB in a video-project folder (render variants and background plates) and a podcast recording - personal, but production assets rather than camera originals, deliberately not decided by the tooling.
