@@ -6,7 +6,9 @@ them, because the second is the part with a future and the first is the part
 that makes the second credible.
 
 Written 2026-09-12, from a library of 82,194 files across 844 GB, classified end
-to end for about $27.
+to end for about $27. The figures are as of that date. Three statements were
+overtaken and are corrected in place below (2026-10-27): the folder depth, the
+query layer and the enrichment loop.
 
 ---
 
@@ -77,7 +79,11 @@ So the library is chronological and four levels deep, for ever:
 Library/Media/<side>/<year>/<year-month>/<file>
 ```
 
-87.4% of this library already sits exactly there. Its only job is that a human
+(Since 2026-09-21 the month level is gone, by Krish's decision: the live shape is
+`Media/<side>/<year>/<file>`, three levels, `guards/paths.py`. The principle is
+unchanged. The 87.4% below is the 2026-09-12 measurement of the old shape.)
+
+87.4% of this library already sat exactly there. Its only job is that a human
 with no tools, on any OS, in twenty years, can find things by date and never
 lose them. Everything else — who, where, what, when-really — lives in an index,
 and *asking* is a query layer over that index.
@@ -181,9 +187,13 @@ Honest list, in order.
    The bake-off harness proves the comparison method is already there.
 3. **The query layer.** SQLite + FTS5 exists now. Natural-language-to-SQL over a
    small fixed schema is a thin layer on top, and semantic search over the
-   `subject` text already generated for 97,484 files is another.
+   `subject` text already generated for 97,484 files is another. (Semantic search
+   has since been built: `stages/08_index/embed_descriptions.py --ask` embeds 85,368
+   descriptions, and `build_events.py --ask` answers in events; `NOW.md`.)
 4. **The enrichment loop as a UI**, scheduled on leverage, writing to the
-   journal. A swipe prototype exists in `stages/07_people/swipe/`.
+   journal. A swipe prototype exists in `stages/07_people/swipe/`. (The working
+   version since 2026-10-04 is the family app, `stages/13_app/STAGE.md`: it asks
+   who, where and roughly when, and writes the answers back to the journal.)
 5. **Packaging.** It is a set of scripts sharing conventions, not a library with
    an installable surface.
 

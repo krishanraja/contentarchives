@@ -3,8 +3,10 @@
 The family's photographs and videos on a phone: find them, and tell us who, where
 and roughly when. Built for grandparents. Owned by `stages/13_app/STAGE.md`.
 
-As of 2026-10-11 the live app shows 18,726 photographs and 6,718 videos (read
-from the live database the day this was written; `photos where visible`).
+A snapshot, not a current figure: on 2026-10-11 the live app showed 18,726
+photographs and 6,718 videos (read from the live database that day; `photos where
+visible`). The count has changed since. Home shows the current numbers, and the
+health check under "Running it" reports what is indexed, held and queued.
 
 ## How it fits together
 
@@ -68,9 +70,13 @@ new photographs from H: onto it. The app never waits for any of it.
   ...? Tap here" on Home, for a phone passed round the family, and the phone
   remembers that name in its own signed cookie (`arch_me`). Every other route is
   behind signing in (`middleware.ts`).
-- **Home**: hello, a search box, then the one next thing this person can help
-  with (a face to name, else a photo to place), shown with its picture and one
-  button; "Who is this?" and "Where and when?" sit under it with what is left.
+- **Home** (faces first since 2026-10-23, Krish: "I prefer the home screen having
+  all of our faces to choose from to start the exploration"): hello, a Sign out
+  button top right, a search box, then the family's faces, each one a link to that
+  person's photos. One face nobody has named sits among them with a "?" and
+  "Who?", a different one on every visit, and it opens the naming game on that
+  same face. "Who is this?" and "Where and when?" sit under the faces as two rows
+  with what is left (`app/page.tsx`).
 - **Find photos & videos** (`/find`): one search box (typed, or said with the
   phone browser's own speech recognition where it has one), All / Photos /
   Videos as one joined switch, and Who / Where / When / Say as four buttons
@@ -81,7 +87,11 @@ new photographs from H: onto it. The app never waits for any of it.
 - **A photo or video** (`/photo/[hash]`): Who, Where and When, each a button
   that puts it right (the family's answer wins); a video plays only once it has
   been watched whole and judged clear (`video_checks`), otherwise its still.
-  Anyone can hide a photo for everyone.
+  Anyone can hide a photo for everyone, and anyone can tap **Turn** on a photo
+  shown sideways (for everyone, and the model never overrules it; migration 0021).
+- **Spelling** (`/spelling`, owner only, 404 for anyone else): each pair of known
+  names that look like one person saved two ways, one at a time, for the owner to
+  call the same person or two (migrations 0018 and 0020).
 - **Who is this?** (`/help`) and **Where and when?** (`/story`): the naming
   games; every answer is one person's vote in `answers`. Who is this? shows
   when and where the photo was taken as a badge on it (the photo page's own
@@ -102,6 +112,8 @@ identifiers are never written in this public repository.
 |---|---|---|---|
 | Google Drive | the Communal folder | service account, **Viewer**, that folder | the app (images, video, health check) and the nightly writer |
 | Google Drive | the owner's Personal folder | the same service account, **Viewer**; the folder id is kept in the database (`sync_state`), not in env | the nightly writer only: a Personal photo is shown only while someone the owner chose is clearly in it (migration 0010) |
+| Google Drive | the folder "ContentArchives record" in the owner's My Drive | the same service account, **Editor on that one folder only**: it replaces the three files Krish owns there each night and can create, move or delete nothing | the nightly writer (`stages/13_app/export_record.py`) |
+| OpenAI | image moderation, a pinned model, free | `OPENAI_API_KEY` (GitHub Actions secret) | the independent audit (`stages/13_app/independent_moderation.py`, `.github/workflows/archives-independent-moderation.yml`) over already-visible stills and playable-video frames only |
 | Google Gemini | `gemini-3.1-flash-lite` (describe, judge videos), `gemini-embedding-001` (search by meaning) | the app's own capped key, `GOOGLE_API_KEY_ARCHIVES` | the nightly writer (spend capped per run) and the app (one embedding per words search) |
 | Supabase project "archives-london" (London, eu-west-2; moved from Sydney 2026-10-12) | Postgres: the index and the family's answers | `DATABASE_URL` (transaction pooler) | the app reads and records answers; the writer writes the index |
 | Supabase Storage | private bucket `media`: cut face crops and frames | `SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY` | the app |
@@ -120,7 +132,10 @@ be read back, even by the owner):** `DATABASE_URL`, `SUPABASE_URL`,
 **The writer's secrets (GitHub Actions):** `DATABASE_URL`,
 `GOOGLE_SERVICE_ACCOUNT_JSON`, `GOOGLE_API_KEY_ARCHIVES`,
 `DRIVE_COMMUNAL_FOLDER_ID`; repository variables `ARCHIVES_ENRICH` (`off`
-pauses the nightly run) and `ARCHIVES_VIDEOS_PER_RUN`.
+pauses the nightly run) and `ARCHIVES_VIDEOS_PER_RUN`. The independent audit
+workflow also needs `OPENAI_API_KEY` and `DATABASE_URL` and
+`GOOGLE_SERVICE_ACCOUNT_JSON`, and its scheduled run is off until the repository
+variable `ARCHIVES_INDEPENDENT_AUDIT` is `on`.
 
 **Database functions the app calls:** `search_photos` (nine arguments since
 0013; `q_media` last and optional) and `search_facets`. Neither can be run by
@@ -171,8 +186,10 @@ TEST_PG_DSN=postgresql://... python tests/test_app_cloud.py   # from the repo ro
   `Authorization: Bearer $CRON_SECRET` returns the folder's file count on Drive,
   what is indexed, held and queued, and the last run's receipt.
 - **The Drive shares**: the service account is a **Viewer** on the Communal
-  folder and on the owner's Personal folder, and nothing else; both folders'
-  general access is **Restricted**.
+  folder and on the owner's Personal folder, and an **Editor** on exactly one
+  other folder, "ContentArchives record" (the nightly copy of the family's
+  record); it has no other access. The Communal and Personal folders' general
+  access is **Restricted**.
 - Retire Bharti's claude.ai artifact game, so two front ends never answer the same faces.
 
 ## Safety, in one place

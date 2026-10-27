@@ -4,6 +4,14 @@
 > current; only the paths were wrong, because they named a directory that no
 > longer held any code. The swipe server lives in stage 07 people, with the
 > rest of the asking-a-human machinery.
+>
+> **Status (2026-10-27): the design is current; the classifier named in it is not
+> the one that ran.** The library was classified with Gemini 3.1 Flash-Lite through
+> `classify_live.py` (chosen by `bakeoff.py` and `consensus.py`, `GOOGLE_API_KEY`),
+> and Krish turned Anthropic access off on 2026-09-13 (`RESUME.md`). `classify.py`,
+> described below, is the original Haiku classifier and needs `ANTHROPIC_API_KEY`;
+> read "Haiku" and "the cheap model" below as the design, and use `classify_live.py`
+> to run a pass.
 
 Point it at any tree of photographs and video. It works out what each file is,
 who is in it, and what it shows - and asks a human only the questions a machine

@@ -5,13 +5,26 @@ anything. Figures are counted from artefacts on disk by `track.py`, not asserted
 from memory.
 
 **This repo is the canon.** Read `state/STATE.json` before anything here — it is
-generated, so it cannot have drifted. [ARCHITECTURE.md](ARCHITECTURE.md) has the
-storage model and the read/write protocol for sessions.
+counted from disk, so it cannot be misremembered (check its `generated` stamp for
+how old it is). [ARCHITECTURE.md](ARCHITECTURE.md) has the storage model and the
+read/write protocol for sessions.
 
     python tools/track.py            # recount state from disk
     python tools/publish_state.py    # redact it and update state/
 
-**Last verified:** 2026-09-06
+> **Status (2026-10-27): the narrative and the tables below are a 2026-09-06
+> snapshot, partly overtaken.** Still current: the data-loss record, the hardlinks
+> warning and the compression findings. Overtaken: the library counts and layout
+> tables, "Stage status", the origin-map figures and "Known outstanding items".
+> Since then the library was restructured under `D:\ContentLibrary`, the chronology
+> was flattened to one level per year, `H:` became a verified cloud mirror
+> (2026-09-19), the consolidation of the scattered sources finished (85,480 files,
+> 926.5 GB on both copies at 2026-09-24), and the family app (stage 13) went live
+> with the cloud as system of record. For where things stand read
+> [`NOW.md`](../NOW.md), then [`RESUME.md`](../RESUME.md); the layout is in
+> `guards/paths.py`.
+
+**Last verified:** 2026-09-06 (the tables were not re-verified against disk since)
 
 **How it got here, from the commits.** On 2026-09-06 the toolkit was extracted from a
 live consolidation together with the learnings that produced it, and the same day the
@@ -45,7 +58,8 @@ WhatsApp files) were evicted from the chronology into `_Review`, not deleted. Th
 day a second coverage bug was found: the dedup index had covered only `Library\` and
 `NoDate\`, 12% of the library, so every one of the 21,649 duplicate pairs found so far
 had compared a staged copy against a settled copy it could not see (`e4812dc`). Also on
-2026-09-08, the enrichment engine (`engine/`, see `engine/README.md`) was added to work
+2026-09-08, the enrichment engine (`engine/`; its README is now
+`stages/05_enrich/README.md`) was added to work
 through `_Review` with metadata, a cheap vision model, then a human (`1a6a2ed`), and
 `AGENTS.md` arrived carrying the fleet's shared canon block rendered from
 `krishanraja/ai-harness` (`ed45d5e`). A vision pass over 15,689 `_Review` files then
@@ -61,7 +75,7 @@ The "Library layout" tables below, and the layout diagram in
 
 ---
 
-## What has been consolidated
+## What has been consolidated (2026-09-06)
 
 | Source | Files | Size | How |
 |---|---|---|---|
@@ -112,7 +126,7 @@ Consequences anyone touching this must know:
 
 ---
 
-## Stage status
+## Stage status (2026-09-06; see the status note at the top)
 
 | Stage | State |
 |---|---|
@@ -158,10 +172,10 @@ Every file in the library is traceable to the folder it came from. `tools/origin
 reads the ingest manifest and produces two views; the folder view is the one decisions
 are made at.
 
-| | rows | where |
+| | rows on 2026-09-06 | where |
 |---|---|---|
 | per-file map | 59,504 | library machine only — filenames leak, see ARCHITECTURE.md |
-| folder view | 637 | [`state/origin-folders.csv`](../state/origin-folders.csv), redacted |
+| folder view | 637 | [`state/origin-folders.csv`](../state/origin-folders.csv), redacted; the file holds the current count |
 
 Largest origins, which is where a quarantine pass should start:
 
@@ -214,9 +228,19 @@ the per-file gate.
 
 ---
 
-## Known outstanding items
+## Known outstanding items (2026-09-06)
 
-In rough priority order:
+This list is the 2026-09-06 list, kept for the record. By the later records,
+items 1 (no backup: `H:` is a verified mirror, `RESUME.md` 2026-09-19), 3 (the
+2026-09-07 Takeout export was fully ingested, `RESUME.md` "Where things stand
+(2026-09-11)"), 4 (`from-lorimer` is in, same section), 5 (`ContentProduction\`
+holds 27.3 GB, `docs/ROADMAP.md`), 6 (`NOW.md` records the identity documents as
+found and moved on 2026-09-24) and 7
+(`NoDate\` is down to a few dozen files, `state/PROGRESS.md`) are closed. What
+became of item 2's ingest after 2026-09-11 is not recorded in a state document.
+What is open now is in `NOW.md`, "What is next and what is waiting on Krish".
+
+In rough priority order (on 2026-09-06):
 
 1. **No backup exists.** The library lives on one external drive that logged 14 disk
    controller errors in a single day. This is the largest open risk. The mirror to

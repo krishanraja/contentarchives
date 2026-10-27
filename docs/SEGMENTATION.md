@@ -4,6 +4,17 @@ The next major checkpoint after the Takeout ingest. Specified by Krish
 2026-09-07; this file is the record of it, so the requirement does not decay into
 whatever the next session remembers of it.
 
+> **Status (2026-10-27): done; the decisions in section 3 are settled.** Read this as
+> the 2026-09-07 requirement, not as open work. What happened: the split was applied
+> by origin folder and then by Krish's path rule for material with no origin folder
+> (2026-09-18, `stages/09_segment/STAGE.md`); everything now sits under one root,
+> `D:\ContentLibrary`, with `Archive\` and `ContentProduction\` beside `Media\`, which
+> answers 3(a) (`guards/paths.py`); non-memories go to `_Review\` and Krish emptied it
+> himself on 2026-09-21, which is the 3(b) reconciliation (`RESUME.md`); the end state
+> is `D:\ContentLibrary` and `H:\My Drive\ContentLibrary`, identical and verified
+> (`docs/MIRROR.md`), not the `PhotoLibrary` and `_photo-consolidation` paths drawn in
+> section 2. The applied rule and its exceptions are in `stages/09_segment/STAGE.md`.
+
 ---
 
 ## 1. The requirement

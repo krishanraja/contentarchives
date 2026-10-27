@@ -5,7 +5,9 @@ nothing can ever overwrite it.
 
 ## Inputs
 - face clusters and merges from 06 faces
-- Krish's pasted answers; later, the game on a krishraja.com subdomain
+- Krish's pasted answers; the phone naming games, first as artifacts and then as
+  the family app on archives.krishraja.com (`stages/13_app/STAGE.md`), whose
+  answers come back through `ingest_game_answers.py` and `pull_answers.py`
 
 ## Outputs
 - `D:\_enrichment\answers.csv`: the append-only journal, the only data in the

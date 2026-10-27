@@ -4,6 +4,17 @@
 sessions, on multiple machines, read and write it. Nothing about project state lives
 only in a conversation.
 
+> **Status (checked against `guards/paths.py` and `RESUME.md` on 2026-10-27).** The
+> storage model below was written on 2026-09-06 as a plan and has since been carried
+> out. What changed: the library root is `D:\ContentLibrary` (the chronology under
+> `Media\`, one level per year, with `Archive\`, `ContentProduction\`, `_Review\` and
+> `_Catalog\` beside it), not `PhotoLibrary\`; `H:\My Drive\ContentLibrary` is now the
+> cloud mirror of it, complete and verified against Google's own checksum on
+> 2026-09-19; and the family app (`web/`, [stage 13](../stages/13_app/STAGE.md)) made
+> the cloud, not any local drive, the system of record for the family's answers
+> (Krish, 2026-10-05 and 2026-10-16). The hazards about Drive mounts and the
+> session protocol below still hold. Current position: [`NOW.md`](../NOW.md).
+
 ---
 
 ## Storage model
@@ -34,12 +45,13 @@ than when it arrived. `D:` is the source of truth for what has been consolidated
 The schema and the retention rules are in [ORGANISING.md](ORGANISING.md), written to
 be applied to every other machine, drive and cloud account in turn.
 
-**`H:` — staging now, mirror later.** Two distinct roles, in sequence:
+**`H:`: staging first, then the mirror.** Two distinct roles, in sequence (the second
+has happened, see the status note above):
 
-1. *Now:* the place for anything oversized, or anything moving between machines.
+1. *First:* the place for anything oversized, or anything moving between machines.
    Two machines both mount it, so it is the transfer channel as well as the overflow
    valve. Working files a session needs another session to see go here.
-2. *Later:* once `D:` has been audited in full, `H:` becomes the cloud mirror of `D:`.
+2. *Then:* once `D:` had been audited in full, `H:` became the cloud mirror of `D:`.
    **Not before.** Mirroring an unaudited library propagates its mistakes, and a
    sync is not a backup — deletions and corruption replicate.
 
@@ -103,7 +115,9 @@ safe to erase. See [LEARNINGS.md](LEARNINGS.md) rule 25.
   consolidate  ──►  audit  ──►  mirror D: to H:  ──►  quarantine into batches
 ```
 
-- **Consolidate** every source into `D:`. In progress.
+- **Consolidate** every source into `D:`. Done for the sources that existed on
+  2026-09-24 (`NOW.md`); new material (VHS captures, old phones, album photographs)
+  is still arriving and goes through the same sequence.
 - **Audit** before mirroring: segmentation correct, `NoDate` reviewed, origins
   verified, nothing personal misfiled as work or vice versa.
 - **Mirror** only after the audit. Back up `PhotoLibrary/` and `ContentProduction/`
@@ -126,18 +140,21 @@ State is *derived from artefacts*, then committed:
 | `state/PROGRESS.md` | the same, human-readable | `tools/track.py` |
 | `state/origin-folders.csv` | every origin folder, file counts, sizes, year spans | `tools/origin_map.py` |
 
-`tools/refresh.py` runs all three in the right order; `--check` verifies without
-writing.
-| `docs/HANDOVER.md` | narrative handover for a new session | a human or session, by hand |
+| `docs/HANDOVER.md` | narrative handover for a new session (a 2026-09-06 snapshot now, see its status note) | a human or session, by hand |
 | `docs/LEARNINGS.md` | rules, each with the incident that produced it | append when something is learned the hard way |
+
+`tools/refresh.py` regenerates them in the right order (origin map, recount, redacted
+publish, then `MASTER.csv`); `--check` verifies without writing. A generated file is
+only as fresh as the `generated` stamp inside it.
 
 ### Protocol for a session picking this up
 
-Start at [`RESUME.md`](../RESUME.md) — it carries the current position and the open
-work. This section is the underlying discipline.
+Start at [`NOW.md`](../NOW.md) for the current position, then [`RESUME.md`](../RESUME.md)
+for the rules and the dated session records. This section is the underlying discipline.
 
 1. `git pull`
-2. Read `state/STATE.json` first — it is generated, so it cannot have drifted.
+2. Read `state/STATE.json`. It is counted from disk, so it cannot be misremembered;
+   check its `generated` stamp for how old it is.
 3. Read `docs/HANDOVER.md` for context the numbers do not carry.
 4. Read `docs/LEARNINGS.md` **before changing any exclusion or deletion rule.**
 5. Do the work.
@@ -164,7 +181,7 @@ This repo is public, so it carries the folder-level view only:
 
 | | where | why |
 |---|---|---|
-| `state/origin-folders.csv` | committed here | 637 folders — the level decisions are actually made at |
+| `state/origin-folders.csv` | committed here | one row per origin folder (637 on 2026-09-06; the file holds the current count); the level decisions are actually made at |
 | `ORIGIN-MAP.csv` (per file) | library machine only | regenerable at any time with `tools/origin_map.py` |
 | `SENSITIVE-FILES.csv` | library machine only | names the documents themselves |
 | `redaction-key.json` | library machine only | reverses the pseudonyms below |
@@ -182,7 +199,7 @@ not published.
 New sources will bring new names. The tripwire turns that from a silent leak into a
 failed run. **If it fires, add the term to the key — never weaken the pattern.**
 
-### A finding worth acting on
+### A finding worth acting on (2026-09-06)
 
 The same scan flagged **34 files in the library whose own filenames describe identity
 or financial documents** — passports, OCI cards, visas, birth certificates. They were

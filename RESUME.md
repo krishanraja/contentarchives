@@ -2,9 +2,15 @@
 
 **You have been asked to resume the media consolidation.**
 
-> **Machine state first.** Read **RIGHT NOW** below before running any command in
-> this file, including the ones directly below. It is the handover point, and it
-> says what is running unattended at this moment.
+> **Where things stand first.** Read [`NOW.md`](NOW.md), "Where it is right now",
+> before running any command in this file, including the ones directly below. This
+> file is a stack of dated session records, newest first, with the standing rules
+> at the bottom; a section is current only up to its own date. The newest section
+> below is dated 2026-09-24, so it does not know about the family app, the cloud as
+> the system of record, or anything after that date: for those read
+> [`stages/13_app/STAGE.md`](stages/13_app/STAGE.md), [`web/README.md`](web/README.md)
+> and `NOW.md`. (An older note here pointed at a "RIGHT NOW" section that no longer
+> exists; "see RIGHT NOW above" further down means the same pointer.)
 
 ```bash
 cd C:\Users\krish\dev\contentarchives
@@ -28,30 +34,35 @@ complete when only the documentation had been produced. `docs/ORGANISING.md` def
 an Archive layout; `D:\Archive` did not exist. Documenting a structure and applying
 it are different acts, and only one of them is visible on disk.
 
-Then read [`state/PROGRESS.md`](state/PROGRESS.md) — generated, so it cannot have
-drifted — and [`docs/LEARNINGS.md`](docs/LEARNINGS.md) **before changing any
-exclusion, deletion or classification rule.**
+Then read [`state/PROGRESS.md`](state/PROGRESS.md) (counted from disk, so it
+cannot be misremembered, but only as fresh as its own `Generated` stamp; `NOW.md`
+records the last one) and [`docs/LEARNINGS.md`](docs/LEARNINGS.md) **before
+changing any exclusion, deletion or classification rule.**
 
 ----
 
 ## THE REPO IS A CONVEYOR OF STAGES (since 2026-09-15)
 
 Work is organised by the part of the process it serves, not by when it was
-written: `stages/01_sources` through `stages/12_canon`, plus `guards/`. Each
+written: `stages/01_sources` through `stages/13_app` (thirteen stages; `13_app`,
+the family app, was added on 2026-10-04 to the twelve this section was first
+written for), plus `guards/`. Each
 `STAGE.md` names the stage's inputs, outputs, invariants, code, tests, and the
 learnings it OWNS - with the exact function or test that enforces each one.
 
 **Adding or changing machinery:** find its stage, read that `STAGE.md`'s Lessons
-table (not all fifty learnings from memory), use `guards/` rather than
+table (not every learning from memory), use `guards/` rather than
 re-implementing a check, and add your file to the stage's Code table.
 `tests/test_stage_contracts.py` fails the build if a code file has no stage, a
 learning has no owner, or an enforcement a table cites has stopped existing.
 **A new learning fails the build until a stage claims it.**
 
-Run the whole suite before trusting a change - twelve Python files and three
-under PowerShell. The PowerShell three are easy to forget and cover the
-supervisor itself, re-arming, and the guard that refuses a chain which cannot
-parse:
+Run the whole suite before trusting a change - every `tests/test_*.py` and the
+three under PowerShell. `tests/test_app_cloud.py` needs a
+Postgres (`TEST_PG_DSN`, see `stages/13_app/STAGE.md`); the web app's own tests
+run under Node (`web/README.md`). The PowerShell three are easy to forget and
+cover the supervisor itself, re-arming, and the guard that refuses a chain which
+cannot parse:
 
 ```powershell
 Get-ChildItem tests\test_*.py  | ForEach-Object { python -u $_.FullName }
@@ -62,12 +73,12 @@ Get-ChildItem tests\test_*.ps1 | ForEach-Object { pwsh -NoProfile -File $_.FullN
 checkpoints, so the full run takes a couple of minutes rather than seconds.
 
 Current debt, printed by the contracts test - **read it from the test, never from
-here**: 13 stages, **125 of 125** code files owned, 56 learnings, 51 enforced by
-a named function or test, **5 enforced only in prose: 8, 13, 17, 24, 29**. This
-paragraph carried three stale numbers for a week because it was written from
-memory instead of from the run - and then carried them again, reading 114/55/50
-on 2026-09-18 while the test printed 125/56/51. Copy them from the run or delete
-the sentence.
+here**: `python tests/test_stage_contracts.py` prints the stage count, how many
+code files are owned, how many learnings there are, how many are enforced by a
+named function or test and which are enforced only in prose. This paragraph
+carried stale numbers twice because it was written from memory instead of from
+the run (114/55/50 on 2026-09-18 while the test printed 125/56/51), so the
+numbers are deleted from here; `NOW.md` quotes the last run with its date.
 
 **Migration, not finished.** The `STAGE.md` files list code where it lives today.
 
@@ -114,7 +125,7 @@ the sentence.
 
 ----
 
-## THE INDEX IS DESCRIBED, AND THE NEXT THING IS EMBEDDINGS (2026-09-24)
+## THE INDEX IS DESCRIBED, AND THE LIBRARY CAN NOW BE ASKED IN WORDS (2026-09-24)
 
 **Krish's objective, recorded so the next session builds toward it:** *"the
 objective should be to be able to build a tool that allows me to 'talk' the
@@ -213,6 +224,10 @@ stripped in transit. `redate_videos.py` can recover container clocks for video;
 for stripped stills there is nothing to read.
 
 ### THE STEP AFTER THAT, AND WHY IT IS THE RIGHT ONE
+
+(Written before the embeddings ran. All of it was done later on 2026-09-24: see
+the two DONE sections above. Grouping into events became `build_events.py`, and
+reporting its own coverage is what every `--ask` now prints.)
 
 `search` is FTS5 over 15 fields and works, but it matches SPELLING.
 `search MATCH 'beach'` cannot answer *"the afternoon everyone was squinting
@@ -2043,10 +2058,11 @@ differently-named people at threshold 0.68.
    MUST exit 0 before Krish sees it: it checks every crop's `data-face` against
    the assignment files. Then give him round 4.
 
-### Decided by Krish on 2026-09-15 (full text: `docs/ROADMAP.md`, Phase 8)
+### Decided by Krish on 2026-09-15 (full text was in `docs/ROADMAP.md` Phase 8, before the 2026-09-18 rewrite replaced it)
 
 - **The game is a hosted page on a subdomain of krishraja.com** (Vercel project
-  `krish-raja`), access-controlled. Not built yet.
+  `krish-raja`), access-controlled. Not built yet. (Built since, on 2026-10-04: the
+  family app at archives.krishraja.com, `stages/13_app/STAGE.md`.)
 - **Bharti enriches the Communal side only.** Her queue is every cluster whose
   newest answer is `needs_identifying = Bharti` (9 clusters, 449 Communal
   photographs); she is shown the Communal ones.
@@ -2054,6 +2070,10 @@ differently-named people at threshold 0.68.
 - **Every video gets faces**, which is the chain running now.
 
 ### Next, in order
+
+(The 2026-09-16 list, overtaken: the naming rounds ended by measurement on
+2026-09-24, the game is the family app, and segmentation, reclaim and the mirror
+are done. The live next step is in `NOW.md`.)
 
 1. Finish naming: record Krish's round 10 answers, then keep the loop turning.
 2. Build the game (roadmap Phase 8), starting with Bharti's queue.
@@ -2375,7 +2395,7 @@ D:\ContentLibrary\                     73,198 files    844.1 GB total
   Media\NoDate\                         2,876          109.8 GB   date never established
   Archive\ ContentProduction\ _Review\  ~8,400           38.3 GB
 
-D: 26.9 GB free of 931.5   (full, by design - see RIGHT NOW above)
+D: 26.9 GB free of 931.5   (full, by design - the old `D:` disk, before the 2026-09-11 drive-letter swap)
 ```
 
 **`NoDate\` has grown to 109.8 GB across 2,876 files** and is now the second largest
@@ -2476,6 +2496,11 @@ stop being true once one measurement came back good.
 ---
 
 ## The remaining work
+
+> Written 2026-09-11 and overtaken. The segmentation (item 2) was applied on
+> 2026-09-18, the consumed `H:` sources were cleared the same day, and the backup
+> (item 3) exists: `H:` is a verified mirror (2026-09-19). What remains is in
+> `docs/ROADMAP.md` (its status table) and `NOW.md`.
 
 The phased plan through to the end state is [`docs/ROADMAP.md`](docs/ROADMAP.md). The sections below are the near-term detail.
 
@@ -2617,6 +2642,16 @@ better posture than two.
 
 ## Waiting on the user — do not act unprompted
 
+> **This list is the state of 2026-09-11 and is partly overtaken; the live list is
+> `NOW.md`, "What is next and what is waiting on Krish".** Since then: the
+> identity documents were found and moved (eleven, 2026-09-24, `NOW.md`);
+> `Media\Pending-Segmentation\` was split on 2026-09-18 (11 files left, see "The
+> split itself"); and `_Review\` and `Archive\` were emptied by Krish on 2026-09-21
+> (see the 2026-09-21 section; the identity documents later went into `Archive\`).
+> Whether `_Review\` holds anything awaiting review now, or
+> `Archive\99-Unsorted\` still holds unsided origins, cannot be seen from this
+> repository.
+
 - **Five identity documents are still in the chronology**, all in `Media\NoDate\`,
   flagged by `passport` x3, `citizenship` x1 and `visa` x1 (50-230 KB scans). The
   schema puts these in `Archive\Personal\01-Identity\` and `move_identity_docs.py`
@@ -2639,6 +2674,16 @@ better posture than two.
 ---
 
 ## Decisions already made — do not reopen
+
+> Dated 2026-09-09 to 2026-09-11. Some rows were overtaken by later work and are
+> kept as the record. The rows on keeping the old `E:` disk untouched were followed by the purge of
+> 2026-09-20, which reclaimed 1,094.3 GB across four sources (`E:`, `G:`, `H:` and
+> OneDrive) after every deleted file was proven held in the library and in the
+> cloud (see the 2026-09-19 section). The row on `H:` becoming D:'s mirror only
+> after the audit has happened (the mirror is complete and verified, 2026-09-19).
+> The path rule for unsided material (2026-09-18, `stages/09_segment/STAGE.md`)
+> refines the first row. Later rulings are in `NOW.md` and the `STAGE.md` of the
+> stage they belong to.
 
 | Decision | Why |
 |---|---|
@@ -2691,10 +2736,12 @@ python tools/check_manifest.py
 git add -A && git commit -m "Update state" && git push
 ```
 
-Commit state even mid-task — **especially** then. And **update the "Where things
-stand" section above**, or the next session starts from a description that has
-already drifted. That is not hypothetical: this file described `_Staging` as holding
-194 files awaiting judgement hours after it had been emptied and deleted.
+Commit state even mid-task, **especially** then. And **update `NOW.md`** ("Where it
+is right now", "What changed recently", "What is next"; the "Where things stand
+(2026-09-11)" section above is a dated record, not the live one), or the next
+session starts from a description that has already drifted. That is not
+hypothetical: this file described `_Staging` as holding 194 files awaiting
+judgement hours after it had been emptied and deleted.
 
 If something was learned the hard way, add it to `LEARNINGS.md` with the incident
 that produced it. The incident is what makes the rule stick.

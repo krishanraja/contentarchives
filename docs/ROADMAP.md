@@ -16,7 +16,25 @@ ingest over the coming weeks.
 
 ---
 
-## Where this actually is
+## Status of each phase on 2026-10-27
+
+The phases below are the plan as rewritten on 2026-09-18. This table is what the
+later records say happened; the plan text is left as written, so read it for the
+reasoning and the order, and this table for the state. Live items on Krish's
+machines cannot be checked from this repository.
+
+| Phase | Status | Evidence |
+|---|---|---|
+| A. Make the engine safe | A1, A2, A4 done 2026-09-18. A3 (arm the fortnightly ingest) is not recorded as done. A5 (USN journal) waits on Krish | A1, A2, A4 below; `NOW.md` "What is next" for A5 |
+| B. Ingest the new material | The front line. The 2026-09-22 Communal Takeout batch (163 GB) is in. VHS captures, ten old communal phones and album photographs are still to come | `NOW.md`, `RESUME.md` 2026-09-22 |
+| C. Segment and enrich | Done for what has arrived: the path rule was applied 2026-09-18, the naming rounds ended by measurement on 2026-09-24, the new material is described (99.9%) and embedded. "Bharti's game is still unbuilt" below is overtaken: the naming game is part of the family app (stage 13) | `RESUME.md` 2026-09-24, `web/README.md` |
+| D. A second local copy | Not started | `NOW.md` "What is next" |
+| E. The cloud copy | Done. `H:\My Drive\ContentLibrary` was verified against Google's own `md5Checksum` on 2026-09-19 (82,100 of 82,100) and both copies held 85,480 files / 926.5 GB path for path on 2026-09-22 and 2026-09-24. "Stage 11 has no tests" below is overtaken: `tests/test_mirror_to_h.py` exists | `stages/11_mirror/STAGE.md`, `RESUME.md` |
+| F. The app | Built as the family app (`web/`, stage 13), Communal photographs only, reading from Google Drive and Supabase rather than `library.db`. The query tools on the library machine are `embed_descriptions.py --ask` and `build_events.py --ask` | `stages/13_app/STAGE.md`, `NOW.md` |
+
+---
+
+## Where this actually is (2026-09-18)
 
 **The library.** `D:\ContentLibrary`, **82,106 files / 925.4 GB** on disk;
 82,112 rows in the index (six paths are hardlink siblings). Media 887.1 GB,
@@ -235,7 +253,8 @@ Then the naming game: `stages/07_people/build_game.py --who krish --batch N`,
 gated by `verify_people_sheet.py` **and** `check_repeats.py`, published as a
 private artifact with `capabilities {db:{}}`, answers back via
 `ingest_game_answers.py --apply`. **Bharti's game is still unbuilt** (~31
-batches at the 0.12 face-share floor; her answers must carry `who=bharti`).
+batches at the 0.12 face-share floor; her answers must carry `who=bharti`)
+(overtaken, see the status table at the top: the family app is the game).
 
 `person` at 30.9% is the single biggest gap in "richest possible knowledge", and
 it is the one only a human can close.
@@ -303,9 +322,11 @@ phase should not assume.
    `cloud_has()` - is the pattern to extend.
 
 **Done when** every row in `MASTER.csv` carries a matching server-side MD5 and
-the mismatch count is zero. **Stage 11 currently has no tests and its own
-`STAGE.md` says the H: upload "is not built". This phase is where the remaining
-engineering actually is.**
+the mismatch count is zero. **On 2026-09-18 stage 11 had no tests and its own
+`STAGE.md` said the H: upload "is not built". This phase was where the remaining
+engineering was.** It has since been built (`mirror_to_h.py`,
+`verify_drive_md5.py`, `tests/test_mirror_to_h.py`) and the phase is done; see the
+status table at the top.
 
 ---
 
@@ -337,8 +358,8 @@ has to reach.
 
 - **Phase A before B.** Unattended ingest with an inert blocklist re-admits
   purged content, and a stale path index manufactures duplicates. A1 is done -
-  the blocklist is enforced in `autopilot.py` - but three other ingest paths
-  still do not call it, so that much of A is not finished.
+  the blocklist is enforced in `autopilot.py` and `ingest_tree.py`, and the other
+  two ingest paths delegate to `ingest_tree.py`, so all four are covered (see A1).
 - **B before C.** Segmentation decides Personal/Communal from enrichment, and
   enrichment needs thumbnails, which need the files.
 - **C before D.** Segmentation moves files; a mirror taken first must be

@@ -16,8 +16,8 @@ Read `NOW.md` first.
 
 Rules: `RESUME.md`.
 
-The code is a conveyor of stages (`stages/01_sources` ... `stages/12_canon`, plus
-`guards/`). Before changing anything, read the `STAGE.md` of the stage it belongs
+The code is a conveyor of thirteen stages (`stages/01_sources` ... `stages/13_app`,
+plus `guards/`). Before changing anything, read the `STAGE.md` of the stage it belongs
 to: its Lessons table names the learnings that stage owns and the exact code or
 test enforcing each. `tests/test_stage_contracts.py` fails if a file has no stage,
 a learning has no owner, or a cited enforcement no longer exists.

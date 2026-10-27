@@ -3,9 +3,23 @@
 How `D:` and `H:` end up holding the same library, what order the work happens in,
 and where the human gets to look at it before any of it becomes permanent.
 
-There is no second copy of this library today. That is the largest open risk in the
-project, on a drive that has already logged controller errors. This document exists so
-that fixing it does not become its own accident.
+> **Status (2026-10-27): executed.** This is the plan as written on 2026-09-07, when
+> there was no second copy of the library. The mirror has since been built and
+> proven: `H:\My Drive\ContentLibrary` was completed and checked against Google's
+> own `md5Checksum` on 2026-09-19 (82,100 of 82,100, 0 missing, 0 mismatched), and
+> on 2026-09-22 and 2026-09-24 `D:` and `H:` both held 85,480 files / 926.5 GB, path
+> for path (`RESUME.md`, `stages/11_mirror/STAGE.md`). The library is
+> `D:\ContentLibrary`, not `PhotoLibrary\`, and its chronology is one level per year.
+> Sections 1 to 6 are the reasoning for the order and are kept as the record; the
+> rules in section 8 still bind. Section 9's questions: 1 (the quota) was answered
+> by Krish as 2 TB and is not locally verifiable (`docs/ROADMAP.md`); 4 (where the
+> mirror lives) was answered in practice by placing it at `My Drive\ContentLibrary`,
+> and whether the Drive-root exception was recorded in the OS architecture document
+> is not visible from this repository.
+
+On 2026-09-07 there was no second copy of this library. That was the largest open risk in the
+project, on a drive that had already logged controller errors. This document exists so
+that fixing it did not become its own accident.
 
 ---
 
