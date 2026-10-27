@@ -169,7 +169,8 @@ A three-tier approach that is both fast and safe:
 
 Never skip to a verdict on filename plus size. In testing, two different files sharing
 a name and an exact byte count are rare but real, and the failure mode is silent loss.
-`tests/test_dedupe.py` encodes exactly this case.
+`tests/test_safety_and_dedupe.py` encodes exactly this case
+(`test_same_name_same_size_different_content_is_not_a_duplicate`).
 
 **Same-recording-different-bytes is a real category.** Files can share an exact byte
 count, an identical duration to the microsecond, and an identical creation timestamp,
@@ -1282,7 +1283,7 @@ previously a decision?*
 
 ## 41. `if not os.path.exists(X): return {}` is how 12,988 videos lost their metadata
 
-`scripts/build_inventory.py` looked for ffprobe at
+`scripts/build_inventory.py` (now `stages/04_inventory/build_inventory.py`) looked for ffprobe at
 `C:\Users\user\AppData\...` — one machine's username, hardcoded — and this
 machine's user is `krish`. `probe_video()` opened with a guard that returned an
 empty dict when the binary was missing, so a missing tool was indistinguishable

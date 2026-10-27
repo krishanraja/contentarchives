@@ -44,6 +44,15 @@ PhotoLibrary\
   _Catalog\manifest.csv       every file mapped to where it came from
 ```
 
+> **This is the general method, not this library's live tree.** The live library
+> (checked against `guards/paths.py` on 2026-10-27) has one root,
+> `D:\ContentLibrary`, with the chronology under `Media\`
+> (`Media\Personal\YYYY\`, `Media\Communal\YYYY\`, `Media\NoDate\`) and
+> `Archive\`, `ContentProduction\`, `_Review\` and `_Catalog\` beside it. The
+> month level is gone: Krish flattened `YYYY\YYYY-MM\` to `YYYY\` on both copies
+> on 2026-09-21. The `PhotoLibrary\` name and the month folders in the diagrams
+> below are the pre-restructure shape.
+
 **Split early.** Personal and communal material arrives mixed and gets more mixed with
 every ingest. Once a shared family archive, a partner's phone backup and your own
 camera roll are interleaved across the same month folders, separating them means
@@ -218,7 +227,7 @@ they buy the space to work in.
 ## Applying this to a new drive
 
 1. **Audit before touching anything.** Walk the volume counting *inodes*, not names.
-   Hardlinked files appear twice and are not duplicates — `tools/space_audit.py`
+   Hardlinked files appear twice and are not duplicates; `stages/10_reclaim/space_audit.py`
    splits bytes into library-only, hardlinked, and genuinely freeable.
 
    **Reconcile the audit against the volume's used bytes before believing it.** On an
