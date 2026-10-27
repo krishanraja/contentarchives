@@ -2680,7 +2680,7 @@ better posture than two.
 > 2026-09-20, which reclaimed 1,094.3 GB across four sources (`E:`, `G:`, `H:` and
 > OneDrive) after every deleted file was proven held in the library and in the
 > cloud (see the 2026-09-19 section). The row on `H:` becoming D:'s mirror only
-> after the audit has happened (the mirror is complete and verified, 2026-09-19).
+> after the audit has happened (the mirror is complete and proven, 2026-09-19).
 > The path rule for unsided material (2026-09-18, `stages/09_segment/STAGE.md`)
 > refines the first row. Later rulings are in `NOW.md` and the `STAGE.md` of the
 > stage they belong to.

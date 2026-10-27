@@ -125,7 +125,7 @@ Lifecycle: building.
 - Settled, no longer waiting: the identity documents that used to sit unflagged in the chronology are found and moved (eleven, `f67166d`); the four staged source zips are deleted, verified by the mount-based check (`d38e973`).
 - Next, per `docs/ROADMAP.md`: **the consolidation of scattered sources is finished** - the library is 85,480 files / 926.5 GB on both D: and H: with zero internal duplicates, a chronology one level deep, and it can now be searched and grouped into events. Phase B is the front line: three sources are still arriving, VHS captures, ten old communal phones, and photographs of old albums - two of the three carry no EXIF at all, so naming the folders with their year before ingesting is the single highest-value minute available. The sessions of 2026-09-22 to 2026-09-24 closed sixteen defects the same shape as ones those sources would otherwise have hit first (learnings 70 to 77), and wrote all of them down.
 - Still open: whether Bharti's earlier claude.ai artifact game has been retired now that the family app's naming game (stage 13) asks the same faces of every relative (`web/README.md`, "Running it"; her queue of 1,192 clusters is among its inputs); whether `_Review` should ever be emptied by a rule rather than by hand (Krish emptied it by hand on 2026-09-21); Phase D (a second local copy on E:, not started) and Phase E's onward plan once Phase B adds more to mirror.
-- North Star check (2026-10-24): holds.
+- North Star check (2026-10-27): holds.
 
 ## Read next
 
