@@ -10,6 +10,10 @@ duplicate: `docs/rescues/` holds one dated record per source, and
 This log records what the steward did to the documentation and when.
 
 
+## 2026-10-31
+
+- re-stamped NOW.md to `85b1d56`: the only commits since `0388bb9` were two canon-block syncs in `AGENTS.md`. No document moved.
+
 ## 2026-10-29
 
 - re-stamped NOW.md to `0388bb9`: the two commits since (`c1c3eb0` canon sync, `0388bb9` repository administration) touched only `AGENTS.md`, the closeout hook and its workflow, with no documentation consequence for NOW.md.
