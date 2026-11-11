@@ -1,7 +1,7 @@
 ---
 repo: krishanraja/contentarchives
 product: contentarchives
-as_of: 2026-11-10
+as_of: 2026-11-11
 head: 9eaa10f
 lifecycle: building
 production_url: none
@@ -30,7 +30,7 @@ Stories a writer can carry without asking Krish:
 
 Objection it answers: "AI agents will quietly wreck our data." Here is the record of one doing exactly that, once, and the rules that made it unrepeatable, plus the newer record of one auditing its own honesty about how much it has actually learned, and finding the answer wanting.
 
-## Where it is right now (as of 2026-11-10)
+## Where it is right now (as of 2026-11-11)
 
 <!-- north-star-state {"week_of": "2026-10-26", "week_target": 25.0, "current": null, "current_as_of": null, "current_source": null, "urgency": 4, "urgency_reason": "not measured yet"} --> **North Star number: U4, far behind.** Share of new photos and videos in the verified library within 7 days of being taken: not measured yet, against 25% this week, on the way to 100% by 16 November 2026. A bold swing every day; work that does not move the number waits.
 
