@@ -1,8 +1,8 @@
 ---
 repo: krishanraja/contentarchives
 product: contentarchives
-as_of: 2026-11-14
-head: 9eaa10f
+as_of: 2026-11-15
+head: 47e6f23
 lifecycle: building
 production_url: none
 state_doc: RESUME.md
@@ -30,7 +30,7 @@ Stories a writer can carry without asking Krish:
 
 Objection it answers: "AI agents will quietly wreck our data." Here is the record of one doing exactly that, once, and the rules that made it unrepeatable, plus the newer record of one auditing its own honesty about how much it has actually learned, and finding the answer wanting.
 
-## Where it is right now (as of 2026-11-14)
+## Where it is right now (as of 2026-11-15)
 
 <!-- north-star-state {"week_of": "2026-10-26", "week_target": 25.0, "current": null, "current_as_of": null, "current_source": null, "urgency": 4, "urgency_reason": "not measured yet"} --> **North Star number: U4, far behind.** Share of new photos and videos in the verified library within 7 days of being taken: not measured yet, against 25% this week, on the way to 100% by 16 November 2026. A bold swing every day; work that does not move the number waits.
 
@@ -56,16 +56,13 @@ Lifecycle: building.
 - 2026-10-23 **The family app takes from Krish's Personal folder only what is with family, or was taken while he was with them** (this commit; migration `0019_personal_family.sql`, `stages/13_app/cloud_enrich.py`).
 - 2026-10-23 **The North Star now has a number, a weekly ladder and an urgency rating, so every session knows how far behind it is and how hard to push.** Ruling (Krish, 2026-10-23): every repository chases one aggressive number on a weekly ladder, and ...
 - 2026-10-23 **New people sign in to the family app on their own, from an emailed link, with no approval from Krish** (this commit; `web/lib/access.ts`, `web/app/in/page.tsx`, `web/app/api/access/route.ts`, `web/app/gate/page.tsx`
-- 2026-10-21 **Once one person is chosen on Find, the app offers a second straight away, and a name saved two ways can be put right once, by Krish, everywhere** (`c585ac9`
-- 2026-10-18 **Krish set a North Star for the repository: by 18 November 2026, every photo and video he has ever taken lives in one verified, deduplicated library, with nothing lost and nothing scattered, and new ones land there on their own** (`e40ea10`, ...
-- 2026-10-16 **The external drive sync has a stored prompt, to run whenever Krish wants the backup drive refreshed** (this commit; `stages/13_app/EXTERNAL-DRIVE-SYNC.md`).
 
 ## What is next and what is waiting on Krish
 
-- Waiting on Krish (as of 2026-11-14, no non-steward commit since 2026-10-31, so unchanged from the 2026-10-29 record): reload Home and check the three pinned faces (Krish, Jyoti, Bhasker); migration `0022` is applied live.
-- Waiting on Krish (as of 2026-11-14, no non-steward commit since 2026-10-31, so unchanged from the 2026-10-29 record): sign in once from a fresh address to confirm the link email arrives.
-- Waiting on Krish (as of 2026-11-14, no non-steward commit since 2026-10-31, so unchanged from the 2026-10-29 record): `gcloud auth login --enable-gdrive-access`, then emptying Drive's trash (about 31 GB, still counted against quota) and the server-side `verify_drive_md5.py --refresh`. Needs a human at the keyboard.
-- Waiting on Krish (as of 2026-11-14, no non-steward commit since 2026-10-31, so unchanged from the 2026-10-29 record): a judgement call on 294 files / 1.29 GB of render variants and a podcast recording; and turning on the Windows USN change journal (`fsutil usn createjournal m=32M a=8M D:`, elevated shell).
+- Waiting on Krish (as of 2026-11-15, no product commit since 2026-10-27, so unchanged from the 2026-10-29 record): reload Home and check the three pinned faces (Krish, Jyoti, Bhasker); migration `0022` is applied live.
+- Waiting on Krish (as of 2026-11-15, no product commit since 2026-10-27, so unchanged from the 2026-10-29 record): sign in once from a fresh address to confirm the link email arrives.
+- Waiting on Krish (as of 2026-11-15, no product commit since 2026-10-27, so unchanged from the 2026-10-29 record): `gcloud auth login --enable-gdrive-access`, then emptying Drive's trash (about 31 GB, still counted against quota) and the server-side `verify_drive_md5.py --refresh`. Needs a human at the keyboard.
+- Waiting on Krish (as of 2026-11-15, no product commit since 2026-10-27, so unchanged from the 2026-10-29 record): a judgement call on 294 files / 1.29 GB of render variants and a podcast recording; and turning on the Windows USN change journal (`fsutil usn createjournal m=32M a=8M D:`, elevated shell).
 - Waiting on Krish (as of 2026-11-14, from the 2026-09-11 list in `RESUME.md`; no non-steward commit since 2026-10-31): the origins in `Archive\99-Unsorted\` and whatever `_Review\` holds. Krish emptied both on 2026-09-21, so whether either holds anything is unverified.
 - Next, per `docs/ROADMAP.md`: Phase B, the front line of new material (VHS captures, ten old communal phones, photographs of old albums); naming folders with their year before ingesting is the highest-value minute. Still open: whether Bharti's claude.ai game is retired, Phase D (second local copy on E:, not started).
 - North Star check (2026-10-27): holds.

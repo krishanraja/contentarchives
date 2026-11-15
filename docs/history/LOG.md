@@ -10,6 +10,14 @@ duplicate: `docs/rescues/` holds one dated record per source, and
 This log records what the steward did to the documentation and when.
 
 
+## 2026-11-15
+
+- re-stamped NOW.md to `47e6f23`: the only commit since `9eaa10f` was a canon-block sync in `AGENTS.md`. No document moved.
+- shortened NOW.md to meet the audit limit of 16000 characters (it was 16002): the three oldest "What changed recently" bullets were rolled here, nothing deleted.
+- rolled from NOW.md: 2026-10-21 **Once one person is chosen on Find, the app offers a second straight away, and a name saved two ways can be put right once, by Krish, everywhere** (`c585ac9`
+- rolled from NOW.md: 2026-10-18 **Krish set a North Star for the repository: by 18 November 2026, every photo and video he has ever taken lives in one verified, deduplicated library, with nothing lost and nothing scattered, and new ones land there on their own** (`e40ea10`, ...
+- rolled from NOW.md: 2026-10-16 **The external drive sync has a stored prompt, to run whenever Krish wants the backup drive refreshed** (this commit; `stages/13_app/EXTERNAL-DRIVE-SYNC.md`).
+
 ## 2026-10-31
 
 - re-stamped NOW.md to `85b1d56`: the only commits since `0388bb9` were two canon-block syncs in `AGENTS.md`. No document moved.
