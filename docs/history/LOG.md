@@ -10,6 +10,19 @@ duplicate: `docs/rescues/` holds one dated record per source, and
 This log records what the steward did to the documentation and when.
 
 
+## 2026-11-25
+
+- re-stamped NOW.md to `b15bd18`: the only commit since `2861e37` was a canon-block sync in `AGENTS.md`. No document moved.
+- rolled the eight "What changed recently" bullets older than 30 days (audit rule `recent_too_old`); nothing deleted.
+- rolled from NOW.md: 2026-10-24 **A person's Home face can be chosen by hand, and survives the nightly rebuild** (migration `0022_cover_pins.sql`, `stages/13_app/cloud_enrich.py` `rebuild()`). Why: Krish: "Pick more flattering cover photos for Jyoti, Krish, and Bhasker"
+- rolled from NOW.md: 2026-10-24 **Photos are shown the right way up, even a print photographed sideways** (migration `0021_turn.sql`, `stages/13_app/cloud_enrich.py` `orient()` / `reread()`, `web/lib/turn.ts`). Why: Krish: "There are still photos not rotated up the right way".
+- rolled from NOW.md: 2026-10-24 **One person can be signed out of the family app while everyone else stays in** (`web/lib/session.ts`, `web/middleware.ts`). Why: Krish: "log Krish out. Keep Bharti logged in".
+- rolled from NOW.md: 2026-10-23 **Video stills work on ffmpeg 8, and the video workflows run on Ubuntu 26.04** (`bf9dd46`, `c10bcce`). Why: `ubuntu-latest` moved to 26.04, whose ffmpeg 8.0.1 refuses a phone video's limited-range colour as a JPEG, so run 38 stopped at its own ...
+- rolled from NOW.md: 2026-10-23 **Putting a spelling right now works when a relative gave the wrong one** (this commit; migration `0020_spelling_map.sql`). Why: Krish asked for two misspellings and one second name to be put right, and all three were a relative's answers
+- rolled from NOW.md: 2026-10-23 **The family app takes from Krish's Personal folder only what is with family, or was taken while he was with them** (this commit; migration `0019_personal_family.sql`, `stages/13_app/cloud_enrich.py`).
+- rolled from NOW.md: 2026-10-23 **The North Star now has a number, a weekly ladder and an urgency rating, so every session knows how far behind it is and how hard to push.** Ruling (Krish, 2026-10-23): every repository chases one aggressive number on a weekly ladder, and ...
+- rolled from NOW.md: 2026-10-23 **New people sign in to the family app on their own, from an emailed link, with no approval from Krish** (this commit; `web/lib/access.ts`, `web/app/in/page.tsx`, `web/app/api/access/route.ts`, `web/app/gate/page.tsx`
+
 ## 2026-11-15
 
 - re-stamped NOW.md to `47e6f23`: the only commit since `9eaa10f` was a canon-block sync in `AGENTS.md`. No document moved.

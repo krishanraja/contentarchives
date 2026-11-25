@@ -1,8 +1,8 @@
 ---
 repo: krishanraja/contentarchives
 product: contentarchives
-as_of: 2026-11-20
-head: 2861e37
+as_of: 2026-11-25
+head: b15bd18
 lifecycle: building
 production_url: none
 state_doc: RESUME.md
@@ -30,7 +30,7 @@ Stories a writer can carry without asking Krish:
 
 Objection it answers: "AI agents will quietly wreck our data." Here is the record of one doing exactly that, once, and the rules that made it unrepeatable, plus the newer record of one auditing its own honesty about how much it has actually learned, and finding the answer wanting.
 
-## Where it is right now (as of 2026-11-20)
+## Where it is right now (as of 2026-11-25)
 
 <!-- north-star-state {"week_of": "2026-10-26", "week_target": 25.0, "current": null, "current_as_of": null, "current_source": null, "urgency": 4, "urgency_reason": "not measured yet"} --> **North Star number: U4, far behind.** Share of new photos and videos in the verified library within 7 days of being taken: not measured yet, against 25% this week, on the way to 100% by 16 November 2026. A bold swing every day; work that does not move the number waits.
 
@@ -48,14 +48,6 @@ Lifecycle: building.
 ## What changed recently
 
 - 2026-10-27 **The narrative documents had fallen behind the code, and a cold reader would have been told with confidence that the library has no second copy and that the next step is embeddings** (documentation sweep
-- 2026-10-24 **A person's Home face can be chosen by hand, and survives the nightly rebuild** (migration `0022_cover_pins.sql`, `stages/13_app/cloud_enrich.py` `rebuild()`). Why: Krish: "Pick more flattering cover photos for Jyoti, Krish, and Bhasker"
-- 2026-10-24 **Photos are shown the right way up, even a print photographed sideways** (migration `0021_turn.sql`, `stages/13_app/cloud_enrich.py` `orient()` / `reread()`, `web/lib/turn.ts`). Why: Krish: "There are still photos not rotated up the right way".
-- 2026-10-24 **One person can be signed out of the family app while everyone else stays in** (`web/lib/session.ts`, `web/middleware.ts`). Why: Krish: "log Krish out. Keep Bharti logged in".
-- 2026-10-23 **Video stills work on ffmpeg 8, and the video workflows run on Ubuntu 26.04** (`bf9dd46`, `c10bcce`). Why: `ubuntu-latest` moved to 26.04, whose ffmpeg 8.0.1 refuses a phone video's limited-range colour as a JPEG, so run 38 stopped at its own ...
-- 2026-10-23 **Putting a spelling right now works when a relative gave the wrong one** (this commit; migration `0020_spelling_map.sql`). Why: Krish asked for two misspellings and one second name to be put right, and all three were a relative's answers
-- 2026-10-23 **The family app takes from Krish's Personal folder only what is with family, or was taken while he was with them** (this commit; migration `0019_personal_family.sql`, `stages/13_app/cloud_enrich.py`).
-- 2026-10-23 **The North Star now has a number, a weekly ladder and an urgency rating, so every session knows how far behind it is and how hard to push.** Ruling (Krish, 2026-10-23): every repository chases one aggressive number on a weekly ladder, and ...
-- 2026-10-23 **New people sign in to the family app on their own, from an emailed link, with no approval from Krish** (this commit; `web/lib/access.ts`, `web/app/in/page.tsx`, `web/app/api/access/route.ts`, `web/app/gate/page.tsx`
 
 ## What is next and what is waiting on Krish
 
