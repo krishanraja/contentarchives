@@ -10,6 +10,13 @@ duplicate: `docs/rescues/` holds one dated record per source, and
 This log records what the steward did to the documentation and when.
 
 
+## 2026-11-27
+
+- re-stamped NOW.md (`as_of`); no non-steward commit since `b15bd18`. No document moved.
+- rolled the one "What changed recently" bullet older than 30 days (audit rule `recent_too_old`); nothing deleted.
+- rolled from NOW.md: 2026-10-27 **The narrative documents had fallen behind the code, and a cold reader would have been told with confidence that the library has no second copy and that the next step is embeddings** (documentation sweep
+- left: audit warning `north_star_check` (check dated 2026-10-27); only a session that re-reads the North Star can re-date it, and the steward never writes `holds`.
+
 ## 2026-11-25
 
 - re-stamped NOW.md to `b15bd18`: the only commit since `2861e37` was a canon-block sync in `AGENTS.md`. No document moved.
