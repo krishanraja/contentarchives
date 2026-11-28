@@ -1,7 +1,7 @@
 ---
 repo: krishanraja/contentarchives
 product: contentarchives
-as_of: 2026-11-27
+as_of: 2026-11-28
 head: b15bd18
 lifecycle: building
 production_url: none
